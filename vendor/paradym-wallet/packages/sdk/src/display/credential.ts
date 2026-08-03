@@ -209,7 +209,7 @@ export function getCredentialForDisplay(credentialRecord: CredentialRecord): Cre
       verificationMethod?: string
     }>
     const firstProof = Array.isArray(proof) ? proof[0] : proof
-    const isAnonCreds = firstProof.cryptosuite === 'anoncreds-2023'
+    const isAnonCreds = firstProof?.cryptosuite === 'anoncreds-2023'
 
     let type = firstCredential.type[firstCredential.type.length - 1]
     if (isAnonCreds) {

@@ -39,6 +39,7 @@
 		"@hyperledger/anoncreds-react-native": "catalog:",
 		"@openid4vc/oauth2": "catalog:",
 		"@openid4vc/openid4vp": "catalog:",
+		"@openid4vc/utils": "catalog:",
 		"@openwallet-foundation/askar-react-native": "catalog:",
 		"@owf/eudi-sca": "0.2.0-alpha-20260506130404",
 		"@shopify/react-native-skia": "catalog:",

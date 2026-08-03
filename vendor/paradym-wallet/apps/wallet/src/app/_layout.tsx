@@ -1,7 +1,7 @@
 import { isGetCredentialActivity } from '@animo-id/expo-digital-credentials-api'
 import { paradymWalletSdkOptions } from '@app/config/paradym'
 import { BackgroundLockProvider, NoInternetToastProvider, Provider } from '@package/app'
-import { ParadymWalletSdk } from '@paradym/wallet-sdk'
+import { allowInsecureOpenId4VcUrlsForDevelopment, ParadymWalletSdk } from '@paradym/wallet-sdk'
 import { Slot } from 'expo-router'
 import { DefaultTheme, ThemeProvider } from 'expo-router/react-navigation'
 import * as SplashScreen from 'expo-splash-screen'
@@ -11,6 +11,12 @@ import tamaguiConfig from '../../tamagui.config'
 import { useStoredLocale } from '../hooks/useStoredLocale'
 
 void SplashScreen.preventAutoHideAsync()
+
+// Allows testing an OID4VCI issuer served over plain http (e.g. a local
+// docker-compose stack), which the OID4VC libraries otherwise reject outright.
+if (__DEV__) {
+  allowInsecureOpenId4VcUrlsForDevelopment()
+}
 
 export const unstable_settings = {
   // Ensure any route can link back to `/`

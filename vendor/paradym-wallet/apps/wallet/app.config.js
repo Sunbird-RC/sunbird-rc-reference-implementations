@@ -27,6 +27,12 @@ const config = createBaseConfig({
     mediatorDid: mediatorDids[process.env.APP_VARIANT || 'production'],
     // paradymwallet.app is fallback domain, to allow for better universal linking if both Paradym and Paradym Wallet are used (both on paradym.id)
     allowedRedirectBaseUrls: ['https://paradym.id/invitation/redirect', 'https://paradymwallet.app/oauth2/redirect'],
+    // Comma-separated list of OID4VCI credential issuer base urls to show in the
+    // issuer directory. Empty by default, which hides the directory entirely.
+    credentialIssuerUrls: (process.env.CREDENTIAL_ISSUER_URLS ?? '')
+      .split(',')
+      .map((url) => url.trim())
+      .filter(Boolean),
   },
 })
 

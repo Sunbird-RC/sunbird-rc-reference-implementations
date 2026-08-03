@@ -72,6 +72,9 @@ catalogs:
     '@openid4vc/openid4vp':
       specifier: ^0.4.6
       version: 0.4.6
+    '@openid4vc/utils':
+      specifier: ^0.5.4
+      version: 0.5.4
     '@openwallet-foundation/askar-react-native':
       specifier: 0.6.1-alpha-20260609123727
       version: 0.6.1-alpha-20260609123727
@@ -597,6 +600,9 @@ importers:
       '@openid4vc/openid4vp':
         specifier: 'catalog:'
         version: 0.4.6
+      '@openid4vc/utils':
+        specifier: 'catalog:'
+        version: 0.5.4
       '@openwallet-foundation/askar-react-native':
         specifier: 'catalog:'
         version: 0.6.1-alpha-20260609123727(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)

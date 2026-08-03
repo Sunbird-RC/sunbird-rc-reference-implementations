@@ -20,6 +20,7 @@ import { useRefreshedDeferredCredentials } from '@paradym/wallet-sdk'
 import { useRouter } from 'expo-router'
 import { FadeIn } from 'react-native-reanimated'
 import { useRefreshPaymentTransactionStatuses } from '../../hooks/useRefreshPaymentTransactionStatuses'
+import { GetCardCard } from '../issuers/GetCardCard'
 import { ActionCard } from './components/ActionCard'
 import { AllCardsCard } from './components/AllCardsCard'
 import { InboxIcon } from './components/InboxIcon'
@@ -81,6 +82,7 @@ export function WalletScreen() {
             </YStack>
             <YStack gap="$4" jc="space-around" fg={1} f={1}>
               <YStack gap="$4">
+                <GetCardCard />
                 <LatestActivityCard />
                 <AllCardsCard />
               </YStack>

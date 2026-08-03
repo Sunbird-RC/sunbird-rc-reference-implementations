@@ -19,6 +19,7 @@ export type { ResolveOutOfBandInvitationResult } from './invitation/resolver'
 export { LogLevel, ParadymWalletSdkConsoleLogger, ParadymWalletSdkLogger } from './logging'
 export type { OpenId4VcCredentialMetadata } from './metadata/credentials'
 export type { CredentialsForProofRequest } from './openid4vc/func/resolveCredentialRequest'
+export { allowInsecureOpenId4VcUrlsForDevelopment } from './openid4vc/allowInsecureUrls'
 export type { FormattedTransactionData, FormattedTransactionDataPaymentSingle, QtspInfo } from './openid4vc/transaction'
 export { ParadymWalletSdk, type SetupParadymWalletSdkOptions } from './ParadymWalletSdk'
 export type {

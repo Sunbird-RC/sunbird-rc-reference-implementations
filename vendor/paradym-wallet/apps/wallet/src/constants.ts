@@ -5,6 +5,11 @@ export const mediatorDid = ExpoConstants.expoConfig?.extra?.mediatorDid
 export const appScheme = ExpoConstants.expoConfig?.scheme as string
 export const allowedRedirectBaseUrls = ExpoConstants.expoConfig?.extra?.allowedRedirectBaseUrls as string[] | undefined
 
+// Base urls of OID4VCI credential issuers the wallet lists in the issuer
+// directory, so a user can start issuance without scanning an offer QR. Each
+// url must serve `/.well-known/openid-credential-issuer`.
+export const credentialIssuerUrls = (ExpoConstants.expoConfig?.extra?.credentialIssuerUrls ?? []) as string[]
+
 export const EASYPID_WALLET_PID_PIN_KEY_ID = 'EASYPID_WALLET_PID_PIN_KEY_ID_NO_BIOMETRICS'
 export const EASYPID_WALLET_INSTANCE_LONG_TERM_AES_KEY_ID = 'EASYPID_WALLET_INSTANCE_LONG_TERM_AES_KEY_ID'
 
