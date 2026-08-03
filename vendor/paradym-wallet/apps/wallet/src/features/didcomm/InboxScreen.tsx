@@ -1,12 +1,11 @@
 import { Trans, useLingui } from '@lingui/react/macro'
 import { InboxNotificationRowCard, TextBackButton, useScrollViewPosition } from '@package/app'
 import { commonMessages } from '@package/translations'
-import { AnimatedStack, FlexPage, HeaderContainer, Heading, Paragraph, ScrollView, YStack } from '@package/ui'
+import { AnimatedStack, FlexPage, fadeInUp, HeaderContainer, Heading, Paragraph, ScrollView, YStack } from '@package/ui'
 import { fetchAndProcessDeferredCredentials, useInboxNotifications, useParadym } from '@paradym/wallet-sdk'
 import { useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { RefreshControl } from 'react-native'
-import { FadeInDown } from 'react-native-reanimated'
 
 export function InboxScreen() {
   const inboxNotifications = useInboxNotifications()
@@ -45,14 +44,7 @@ export function InboxScreen() {
         contentContainerStyle={{ flexGrow: 1 }}
       >
         {inboxNotifications.length === 0 ? (
-          <AnimatedStack
-            flexDirection="column"
-            entering={FadeInDown.delay(300).springify().mass(1).damping(16).stiffness(140).restSpeedThreshold(0.1)}
-            gap="$2"
-            jc="center"
-            p="$4"
-            fg={1}
-          >
+          <AnimatedStack flexDirection="column" entering={fadeInUp(150)} gap="$2" jc="center" p="$4" fg={1}>
             <Heading ta="center" heading="h3" fontWeight="$semiBold">
               <Trans id="inbox.emptyTitle" comment="Heading shown when the inbox is empty">
                 You're all caught up

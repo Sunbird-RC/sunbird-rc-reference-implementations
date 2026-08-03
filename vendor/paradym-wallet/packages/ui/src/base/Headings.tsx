@@ -9,11 +9,11 @@ export const Heading = styled(THeading, {
   userSelect: 'auto',
   accessibilityRole: 'header',
   letterSpacing: '$2',
-  color: '$grey-900',
+  color: '$ink',
   variants: {
     light: {
       true: {
-        color: '$grey-900',
+        color: '$ink',
       },
     },
     dark: {
@@ -72,7 +72,7 @@ export const Heading = styled(THeading, {
         lineHeight: '$4',
       },
       sub2: {
-        fontSize: 15,
+        size: '$2',
         fontFamily: '$body',
         fontWeight: '$bold',
         textTransform: 'uppercase',

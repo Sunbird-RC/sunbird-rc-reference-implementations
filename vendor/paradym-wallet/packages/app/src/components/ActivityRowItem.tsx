@@ -57,7 +57,7 @@ export const activityInteractions: ActivityInteractions = {
   signed: {
     success: {
       icon: HeroIcons.PenFilled,
-      color: '#008FFF',
+      color: '$feature-500',
       text: commonMessages.documentSigned,
     },
     stopped: {
@@ -74,7 +74,7 @@ export const activityInteractions: ActivityInteractions = {
   payment: {
     success: {
       icon: HeroIcons.CreditCard,
-      color: '#008FFF',
+      color: '$feature-500',
       text: commonMessages.paid,
     },
     stopped: {

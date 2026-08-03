@@ -67,7 +67,7 @@ export function IdCard({ icon, userName, onPress, hideUserName }: IdCardProps) {
         p="$5"
         borderRadius="$8"
         overflow="hidden"
-        borderColor="#D8DAC8"
+        borderColor="$grey-300"
         bw="$0.5"
         onPress={onPress}
         onPressIn={handlePressIn}
@@ -91,7 +91,7 @@ export function IdCard({ icon, userName, onPress, hideUserName }: IdCardProps) {
           <XStack justifyContent="flex-start" alignItems="flex-end">
             {IconComponent && (
               <AnimatedStack style={animatedStyle}>
-                <Circle m="$-1" size="$3.5" backgroundColor="#282C3740">
+                <Circle m="$-1" size="$3.5" backgroundColor="$darkTranslucent">
                   <IconComponent strokeWidth={2} color="$white" size={22} />
                 </Circle>
               </AnimatedStack>

@@ -135,8 +135,7 @@ catalog:
   expo-web-browser: ~56.0.5
   expo-build-properties: ~56.0.19
   expo-localization: ~56.0.6
-  "@expo-google-fonts/open-sans": ^0.4.2
-  "@expo-google-fonts/raleway": ^0.4.2
+  "@expo-google-fonts/rubik": ^0.4.2
 
   # Tamagui
   "@tamagui/animations-react-native": 2.3.3

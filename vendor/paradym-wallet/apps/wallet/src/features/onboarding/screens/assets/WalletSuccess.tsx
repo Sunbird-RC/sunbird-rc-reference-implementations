@@ -3,11 +3,11 @@ import { useTheme } from 'tamagui'
 
 export function WalletSuccess() {
   const theme = useTheme()
-  const _p100 = theme['primary-100'].val as string
+  const p100 = theme['primary-100'].val as string
   const p200 = theme['primary-200'].val as string
   const p300 = theme['primary-300'].val as string
-  const _p400 = theme['primary-400'].val as string
-  const _p500 = theme['primary-500'].val as string
+  const p400 = theme['primary-400'].val as string
+  const p500 = theme['primary-500'].val as string
   const p700 = theme['primary-500'].val as string
   return (
     <Svg width="100%" height="100%" style={{ aspectRatio: 1 }} viewBox="0 0 300 262" fill="none">
@@ -191,7 +191,7 @@ export function WalletSuccess() {
           y2="252.31"
           gradientUnits="userSpaceOnUse"
         >
-          <Stop stopColor="#EEF0FE" />
+          <Stop stopColor={p100} />
           <Stop offset="1" stopColor={p200} />
         </LinearGradient>
         <LinearGradient
@@ -202,8 +202,8 @@ export function WalletSuccess() {
           y2="143.322"
           gradientUnits="userSpaceOnUse"
         >
-          <Stop stopColor="#7A88FF" />
-          <Stop offset="1" stopColor="#5A33F6" />
+          <Stop stopColor={p400} />
+          <Stop offset="1" stopColor={p500} />
         </LinearGradient>
         <LinearGradient
           id="paint2_linear_3268_4458"
@@ -213,8 +213,8 @@ export function WalletSuccess() {
           y2="218.863"
           gradientUnits="userSpaceOnUse"
         >
-          <Stop stopColor="#7A88FF" />
-          <Stop offset="1" stopColor="#5A33F6" />
+          <Stop stopColor={p400} />
+          <Stop offset="1" stopColor={p500} />
         </LinearGradient>
       </Defs>
     </Svg>

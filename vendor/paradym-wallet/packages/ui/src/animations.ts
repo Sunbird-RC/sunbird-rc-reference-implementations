@@ -1,5 +1,18 @@
 import { createAnimations } from '@tamagui/animations-react-native'
-import type { ComplexAnimationBuilder } from 'react-native-reanimated'
+import { type ComplexAnimationBuilder, Easing, FadeInUp } from 'react-native-reanimated'
+
+// Sunbird Spark motion: gentle and quick, no bounce, no infinite loops.
+export const MOTION_EASE = Easing.bezier(0.4, 0, 0.2, 1)
+export const MOTION_DURATION = {
+  interaction: 200,
+  card: 300,
+  progress: 500,
+} as const
+
+// Shared entrance for cards/lists — a plain fade-up on the `card` duration,
+// deliberately not a spring (the design system calls for a soft fade-in-up,
+// not a bounce).
+export const fadeInUp = (delay = 0) => FadeInUp.duration(MOTION_DURATION.card).easing(MOTION_EASE).delay(delay)
 
 export const animations = createAnimations({
   bouncy: {

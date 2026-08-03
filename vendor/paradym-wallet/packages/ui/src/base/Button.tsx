@@ -29,9 +29,13 @@ const Btn = styled(TButton, {
 
 export const SolidButton = styled(Btn, {
   name: 'SolidButton',
-  backgroundColor: '$grey-900',
+  backgroundColor: '$primary-500', // Brick
   color: '$white',
   fontWeight: '$semiBold',
+  pressStyle: {
+    opacity: 1,
+    backgroundColor: '$primary-600', // Brick-shade
+  },
   variants: {
     small: {
       true: {
@@ -44,6 +48,10 @@ export const SolidButton = styled(Btn, {
       true: {
         bg: '$grey-100',
         color: '$grey-900',
+        pressStyle: {
+          opacity: 0.8,
+          backgroundColor: '$grey-100',
+        },
       },
     },
   },
@@ -55,6 +63,11 @@ export const OutlineButton = styled(Btn, {
   color: '$grey-900',
   borderColor: '$grey-200',
   fontWeight: '$semiBold',
+  pressStyle: {
+    opacity: 1,
+    backgroundColor: '$primary-50', // amber-tinted ghost press, per the design system
+    borderColor: '$primary-200',
+  },
 })
 
 export const TextButton = styled(Btn, {

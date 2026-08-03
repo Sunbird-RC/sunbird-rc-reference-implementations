@@ -4,6 +4,7 @@ import { ActivityRowItem, TextBackButton, useScrollViewPosition } from '@package
 import {
   AnimatedStack,
   FlexPage,
+  fadeInUp,
   HeaderContainer,
   Heading,
   Loader,
@@ -15,7 +16,6 @@ import {
 } from '@package/ui'
 import { useActivities } from '@paradym/wallet-sdk'
 import React, { useMemo } from 'react'
-import { FadeInDown } from 'react-native-reanimated'
 
 const activityMessages = {
   screenTitle: defineMessage({
@@ -60,14 +60,7 @@ export function ActivityScreen({ entityId }: { entityId?: string }) {
       <HeaderContainer title={t(activityMessages.screenTitle)} isScrolledByOffset={isScrolledByOffset} />
 
       {activities.length === 0 ? (
-        <AnimatedStack
-          flexDirection="column"
-          entering={FadeInDown.delay(300).springify().mass(1).damping(16).stiffness(140).restSpeedThreshold(0.1)}
-          gap="$2"
-          jc="center"
-          p="$4"
-          fg={1}
-        >
+        <AnimatedStack flexDirection="column" entering={fadeInUp(150)} gap="$2" jc="center" p="$4" fg={1}>
           <Heading ta="center" heading="h3" fontWeight="$semiBold">
             {t(activityMessages.noActivityTitle)}
           </Heading>

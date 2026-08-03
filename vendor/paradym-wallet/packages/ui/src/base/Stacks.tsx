@@ -1,5 +1,6 @@
 import Animated from 'react-native-reanimated'
 import { ScrollView, type ScrollViewProps, styled, View as TStack, type ViewProps } from 'tamagui'
+import { shadows } from '../config/shadows'
 
 export const Stack = styled(TStack, {
   name: 'Stack',
@@ -9,21 +10,15 @@ export const Stack = styled(TStack, {
         flex: 1,
       },
     },
+    // Soft, warm, low-contrast shadows per the Sunbird Spark design system.
+    // `true` defaults to `glow` — the symmetric shadow the spec calls for on
+    // mobile cards — so existing `shadow` (boolean) call sites keep working.
     shadow: {
-      sm: {
-        elevation: 3,
-        shadowOffset: { width: 0, height: 4 },
-        shadowColor: 'grey',
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-      },
-      true: {
-        elevation: 4,
-        shadowOffset: { width: 3, height: 3 },
-        shadowColor: 'grey',
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-      },
+      sm: shadows.sm,
+      md: shadows.md,
+      lg: shadows.lg,
+      glow: shadows.glow,
+      true: shadows.glow,
     },
     bordered: {
       true: {

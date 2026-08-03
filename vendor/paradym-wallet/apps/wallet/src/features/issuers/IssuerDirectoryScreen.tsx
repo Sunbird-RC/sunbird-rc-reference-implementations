@@ -2,7 +2,9 @@ import { Trans, useLingui } from '@lingui/react/macro'
 import { TextBackButton, useHaptics, useScrollViewPosition } from '@package/app'
 import {
   AnimatedStack,
+  Circle,
   FlexPage,
+  fadeInUp,
   HeaderContainer,
   Heading,
   HeroIcons,
@@ -16,7 +18,6 @@ import {
   YStack,
 } from '@package/ui'
 import { useRouter } from 'expo-router'
-import { FadeInDown } from 'react-native-reanimated'
 import { buildCredentialOfferUri, type IssuerDirectoryIssuer, useCredentialIssuers } from './useCredentialIssuers'
 
 export function IssuerDirectoryScreen() {
@@ -50,14 +51,7 @@ export function IssuerDirectoryScreen() {
           <Spacer size="$12" />
         </YStack>
       ) : !hasCredentials ? (
-        <AnimatedStack
-          flexDirection="column"
-          entering={FadeInDown.delay(300).springify().mass(1).damping(16).stiffness(140).restSpeedThreshold(0.1)}
-          gap="$2"
-          jc="center"
-          p="$4"
-          fg={1}
-        >
+        <AnimatedStack flexDirection="column" entering={fadeInUp(150)} gap="$2" jc="center" p="$4" fg={1}>
           <Heading ta="center" heading="h3" fontWeight="$semiBold">
             <Trans id="issuers.emptyTitle" comment="Shown when no issuers could be loaded">
               No issuers available
@@ -75,13 +69,15 @@ export function IssuerDirectoryScreen() {
             {issuers
               .filter((issuer) => issuer.credentials.length > 0)
               .map((issuer) => (
-                <YStack key={issuer.credentialIssuer} gap="$3">
+                <AnimatedStack key={issuer.credentialIssuer} entering={fadeInUp()} flexDirection="column" gap="$3">
                   <XStack ai="center" gap="$3">
-                    {issuer.logoUri ? (
-                      <Image src={issuer.logoUri} width={28} height={28} />
-                    ) : (
-                      <HeroIcons.BuildingOffice size={24} color="$grey-700" />
-                    )}
+                    <Circle size="$4" bg="$grey-100">
+                      {issuer.logoUri ? (
+                        <Image src={issuer.logoUri} width={22} height={22} />
+                      ) : (
+                        <HeroIcons.BuildingOffice size={20} color="$grey-700" />
+                      )}
+                    </Circle>
                     <Heading heading="sub1" numberOfLines={1} fg={1} f={1}>
                       {issuer.name}
                     </Heading>
@@ -93,11 +89,12 @@ export function IssuerDirectoryScreen() {
                         noIcon
                         title={credential.name}
                         description={credential.description}
+                        badge={credential.format ? { label: credential.format } : undefined}
                         onPress={() => startIssuance(issuer, credential.configurationId)}
                       />
                     ))}
                   </YStack>
-                </YStack>
+                </AnimatedStack>
               ))}
           </YStack>
         </ScrollView>

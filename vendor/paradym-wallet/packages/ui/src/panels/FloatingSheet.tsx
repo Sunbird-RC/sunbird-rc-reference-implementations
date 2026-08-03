@@ -3,6 +3,7 @@ import { Modal, Pressable, StyleSheet } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { scheduleOnRN } from 'react-native-worklets'
+import { hexColors } from '../config/tamagui.config'
 
 export interface FloatingSheetProps {
   isOpen: boolean
@@ -67,7 +68,7 @@ export function FloatingSheet({
       onRequestClose={() => setIsOpen(false)}
       statusBarTranslucent
     >
-      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)' }, backdropStyle]}>
+      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: hexColors.darkTranslucent }, backdropStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleBackdropPress} />
       </Animated.View>
       <Animated.View

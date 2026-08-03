@@ -4,9 +4,9 @@ import { type CreateTamaguiProps, createTamagui, createTokens } from 'tamagui'
 
 import { animations } from '../animations'
 
-import { fontInter, fontOpenSans, fontRaleway } from './font'
+import { fontInter, fontOpenSans, fontRaleway, fontRubik } from './font'
 
-export { fontInter, fontOpenSans, fontRaleway }
+export { fontInter, fontOpenSans, fontRaleway, fontRubik }
 
 export const absoluteFill = {
   position: 'absolute',
@@ -40,11 +40,11 @@ export const hexColors = {
   'feature-500': '#3B82F6',
   'feature-600': '#1D4ED8',
   'feature-700': '#1E40AF',
-  'positive-300': '#E8FFF1',
-  'positive-400': '#7EE3A6',
-  'positive-500': '#31C66C',
-  'positive-600': '#34AA63',
-  'positive-700': '#1B7641',
+  'positive-300': '#DCEEE2',
+  'positive-400': '#8FC7A4',
+  'positive-500': '#4D8F68', // Moss
+  'positive-600': '#3A7355',
+  'positive-700': '#2F5F45', // Forest
   'warning-300': '#FEF3C7',
   'warning-400': '#FCD34D',
   'warning-500': '#FBBF24',
@@ -60,6 +60,12 @@ export const hexColors = {
   darkTranslucent: 'rgba(0,0,0,0.4)',
   lightTranslucent: 'rgba(255, 255, 255,  0.2)',
   borderTranslucent: 'rgba(224, 227, 232, 0.5)', // grey-300 with opacity
+  // Named, rather than bare hex literals, for the two "invisible" spinner
+  // track colors in Loader.tsx (raw RN `style` props, so these are consumed
+  // as plain values, not `$token` strings).
+  blackFaint: 'rgba(0,0,0,0.15)',
+  blackNearZero: 'rgba(0,0,0,0.004)',
+  overlayTint: 'rgba(0,0,0,0.10)',
 }
 
 export const tokensInput = {

@@ -3,6 +3,7 @@ import { AnimatedStack, Heading, Paragraph, Stack, XStack, YStack } from '../bas
 import { HeroIcons, Image } from '../content'
 import { useScaleAnimation } from '../hooks'
 import type { StatusVariant } from '../utils/variants'
+import { Badge } from './Badge'
 
 const infoButtonVariants = {
   default: {
@@ -57,6 +58,8 @@ interface InfoButtonProps {
   }
   title: string
   description?: string
+  // Small tinted label shown under the description, e.g. a credential format.
+  badge?: { label: string }
   onPress?: () => void
   routingType?: 'push' | 'modal' | 'external'
   noIcon?: boolean
@@ -68,6 +71,7 @@ export function InfoButton({
   image,
   title,
   description,
+  badge,
   onPress,
   routingType = 'push',
   noIcon,
@@ -83,7 +87,7 @@ export function InfoButton({
       onPressOut={handlePressOut}
       flexDirection="row"
       gap="$4"
-      br="$8"
+      br="$card"
       bg={isPressable ? '$grey-50' : '$white'}
       p="$3.5"
       bw="$0.5"
@@ -103,7 +107,12 @@ export function InfoButton({
           <Heading maxFontSizeMultiplier={1.3} numberOfLines={1} heading="sub1">
             {title}
           </Heading>
-          {description && <Paragraph fontSize={15}>{description}</Paragraph>}
+          {description && <Paragraph size="$2">{description}</Paragraph>}
+          {badge && (
+            <XStack mt="$1">
+              <Badge label={badge.label} />
+            </XStack>
+          )}
         </YStack>
         {isPressable && (
           <Stack>

@@ -1,6 +1,6 @@
 import { radius, size, space, zIndex } from '@tamagui/themes'
 import { createTamagui, createTokens } from 'tamagui'
-import { configInput, fontOpenSans, fontRaleway, hexColors } from '../../packages/ui/src/config/tamagui.config'
+import { configInput, fontRubik, hexColors } from '../../packages/ui/src/config/tamagui.config'
 import { APP_THEME } from './src/config/themes'
 
 const themeColors = APP_THEME
@@ -9,7 +9,9 @@ export const tokensInput = {
   color: hexColors,
   radius: {
     ...radius,
-    button: 16,
+    button: 10,
+    card: 14,
+    tile: 20,
   },
   size,
   zIndex,
@@ -24,17 +26,17 @@ const tokens = createTokens({
   },
   color: {
     ...hexColors, // Re-use existing colors for positive/warnings etc.
-    background: hexColors.white,
-    'grey-50': '#F5F7F8',
-    'grey-100': '#EBF1F3',
-    'grey-200': '#E5E9EC',
-    'grey-300': '#D7DCE0',
-    'grey-400': '#BFC5CB',
-    'grey-500': '#839196',
-    'grey-600': '#6D7581',
-    'grey-700': '#656974',
-    'grey-800': '#464B56',
-    'grey-900': '#222222',
+    background: '#FFFEF4', // Ivory — Sunbird Spark's mobile page background
+    'grey-50': '#FAF9F3',
+    'grey-100': '#F3F1E7',
+    'grey-200': '#E7E3D3',
+    'grey-300': '#D6D0BC',
+    'grey-400': '#B8B096',
+    'grey-500': '#8C8570',
+    'grey-600': '#6B6656',
+    'grey-700': '#4A4638',
+    'grey-800': '#322F26',
+    'grey-900': '#1F1D17',
     ...themeColors,
   },
 })
@@ -43,17 +45,17 @@ const config = createTamagui({
   ...configInput,
   tokens,
   fonts: {
-    default: fontOpenSans,
-    heading: fontRaleway,
-    // Somehow adding body font gives build errors?!
-    body: fontOpenSans,
+    // Rubik everywhere per the Sunbird Spark design system.
+    default: fontRubik,
+    heading: fontRubik,
+    body: fontRubik,
   },
   themes: {
     light: {
       ...tokens.color,
       tableBackgroundColor: tokens.color['grey-50'],
       tableBorderColor: '#ffffff',
-      idCardBackground: '#F1F2F0',
+      idCardBackground: tokens.color['grey-100'],
     },
   },
 })

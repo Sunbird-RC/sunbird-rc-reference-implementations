@@ -32,7 +32,7 @@ export const TableRow = ({ attributes, values, isLastRow = false, onPress, image
           <YStack
             key={`attribute-${attr}-${index}`}
             borderRightWidth={2}
-            borderRightColor={index === attributesArray.length - 1 ? 'transparent' : '$white'}
+            borderRightColor={index === attributesArray.length - 1 ? 'transparent' : '$tableBackgroundColor'}
             my="$-2"
             py="$2"
             px="$2.5"

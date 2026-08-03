@@ -63,7 +63,7 @@ export function CredentialCard({
   return (
     <AnimatedStack
       shadow={shadow}
-      br="$8"
+      br="$card"
       bg={backgroundImage?.url ? 'transparent' : bgColorValue} // Only set bg color if no background image
       borderWidth="$0.5"
       borderColor="$borderTranslucent"
@@ -73,7 +73,7 @@ export function CredentialCard({
     >
       <Card
         f={1}
-        br="$8"
+        br="$card"
         p="$5"
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
@@ -111,7 +111,16 @@ export function CredentialCard({
           </Card.Background>
         )}
         {isLoading && (
-          <XStack overflow="hidden" bg="#0000001A" br="$12" ai="center" gap="$2" bottom="$5" left="$5" pos="absolute">
+          <XStack
+            overflow="hidden"
+            bg="$overlayTint"
+            br="$12"
+            ai="center"
+            gap="$2"
+            bottom="$5"
+            left="$5"
+            pos="absolute"
+          >
             <BlurView intensity={20} tint="light" style={StyleSheet.absoluteFill} />
             <Loader variant="dark" />
           </XStack>

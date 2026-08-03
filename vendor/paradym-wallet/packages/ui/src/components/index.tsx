@@ -1,3 +1,4 @@
+export * from './Badge'
 export * from './BetaTag'
 export * from './IdCard'
 export * from './InfoButton'

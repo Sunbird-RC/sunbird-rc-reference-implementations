@@ -25,11 +25,11 @@ export function ActionCard({ icon, title, onPress, variant = 'primary' }: Action
       onPressOut={qrHandlePressOut}
       onPress={onPress}
       jc="center"
-      bg={variant === 'primary' ? '$grey-900' : '$white'}
+      bg={variant === 'primary' ? '$primary-500' : '$white'}
       p="$3"
       fg={1}
       gap="$3"
-      br="$6"
+      br="$card"
     >
       <XStack jc="space-between" ai="center">
         <Stack />

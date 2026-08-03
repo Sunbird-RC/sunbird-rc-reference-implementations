@@ -4,6 +4,7 @@ import { commonMessages } from '@package/translations'
 import {
   AnimatedStack,
   FlexPage,
+  fadeInUp,
   HeaderContainer,
   Heading,
   HeroIcons,
@@ -25,7 +26,6 @@ import type { DisplayImage } from '@paradym/wallet-sdk'
 import { useCredentials } from '@paradym/wallet-sdk'
 import { useRouter } from 'expo-router'
 import { useMemo, useState } from 'react'
-import { FadeInDown } from 'react-native-reanimated'
 
 export function CredentialsScreen() {
   const { credentials, isLoading: isLoadingCredentials } = useCredentials()
@@ -56,14 +56,7 @@ export function CredentialsScreen() {
       />
 
       {credentials.length === 0 ? (
-        <AnimatedStack
-          flexDirection="column"
-          entering={FadeInDown.delay(300).springify().mass(1).damping(16).stiffness(140).restSpeedThreshold(0.1)}
-          gap="$2"
-          jc="center"
-          p="$4"
-          fg={1}
-        >
+        <AnimatedStack flexDirection="column" entering={fadeInUp(150)} gap="$2" jc="center" p="$4" fg={1}>
           <Heading ta="center" heading="h3" fontWeight="$semiBold">
             <Trans id="credentials.emptyTitle" comment="Shown when the user has no credentials">
               There's nothing here, yet

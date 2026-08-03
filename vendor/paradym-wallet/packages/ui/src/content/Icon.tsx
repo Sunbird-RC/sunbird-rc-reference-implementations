@@ -1,6 +1,8 @@
 import {
   AlertOctagon,
   ArrowLeft,
+  Award,
+  BookOpen,
   CornerDownRight,
   FileBadge,
   History,
@@ -108,6 +110,8 @@ export const LucideIcons = {
   X,
   RefreshCw,
   History,
+  BookOpen,
+  Award,
 }
 
 export interface HeroIconProps extends SvgProps {
