@@ -2,6 +2,7 @@ import { type OnboardingStep, pidSetupMessages } from '@app/utils/sharedPidSetup
 import { defineMessage } from '@lingui/core/macro'
 import { OnboardingBiometrics } from './screens/biometrics'
 import { OnboardingDataProtection } from './screens/data-protection'
+import { OnboardingName } from './screens/name'
 import OnboardingPinEnter from './screens/pin'
 import OnboardingWelcome from './screens/welcome'
 
@@ -22,6 +23,18 @@ const pinReenterTitle = defineMessage({
   id: 'onboarding.pinReenter.title',
   message: 'Repeat your PIN',
   comment: 'Heading when user repeats their PIN',
+})
+
+const nameTitle = defineMessage({
+  id: 'onboarding.name.title',
+  message: "What's your name?",
+  comment: 'Heading when user enters their name during onboarding',
+})
+
+const nameSubtitle = defineMessage({
+  id: 'onboarding.name.subtitle',
+  message: "This is how we'll greet you in the app.",
+  comment: 'Explanation of why the name is requested in onboarding',
 })
 
 const biometricsTitle = defineMessage({
@@ -71,6 +84,17 @@ export const onboardingSteps = [
       animationKey: 'pin',
     },
     Screen: OnboardingPinEnter,
+  },
+  {
+    step: 'name',
+    alternativeFlow: false,
+    progress: 40,
+    page: {
+      type: 'content',
+      title: nameTitle,
+      subtitle: nameSubtitle,
+    },
+    Screen: OnboardingName,
   },
   {
     step: 'biometrics',

@@ -19,6 +19,7 @@ import {
 import { useRefreshedDeferredCredentials } from '@paradym/wallet-sdk'
 import { useRouter } from 'expo-router'
 import { FadeIn } from 'react-native-reanimated'
+import { useDeviceUserName } from '../../hooks/useDeviceUserName'
 import { useRefreshPaymentTransactionStatuses } from '../../hooks/useRefreshPaymentTransactionStatuses'
 import { GetCardCard } from '../issuers/GetCardCard'
 import { ActionCard } from './components/ActionCard'
@@ -36,6 +37,7 @@ export function WalletScreen() {
     withHaptics(() => push('/offline'))()
   }
   const { t } = useLingui()
+  const [deviceUserName] = useDeviceUserName()
 
   useRefreshedDeferredCredentials()
   useRefreshPaymentTransactionStatuses()
@@ -57,7 +59,11 @@ export function WalletScreen() {
             <YStack fg={1} f={1} gap="$4">
               <YStack ai="center" jc="center" gap="$2">
                 <Heading heading="h1" fontSize={38} lineHeight={40} ta="center" numberOfLines={2}>
-                  <Trans id="home.helloWithoutName">Hello!</Trans>
+                  {deviceUserName ? (
+                    <Trans id="home.helloWithName">Hello, {deviceUserName}!</Trans>
+                  ) : (
+                    <Trans id="home.helloWithoutName">Hello!</Trans>
+                  )}
                 </Heading>
                 <Paragraph>
                   <Trans id="home.receiveOrShare">Receive or share from your wallet</Trans>{' '}

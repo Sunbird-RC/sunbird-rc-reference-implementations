@@ -70,7 +70,7 @@ export const pidSetupMessages = {
     subtitle: defineMessage({
       id: 'pidSetup.enableBiometrics.subtitle',
       message:
-        'To continue, make sure your device has biometric protection enabled, and that Paradym Wallet is allowed to use biometrics.',
+        'To continue, make sure your device has biometric protection enabled, and that Sunbird Wallet is allowed to use biometrics.',
     }),
   },
   idCardComplete: {

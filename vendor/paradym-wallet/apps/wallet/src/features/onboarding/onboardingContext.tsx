@@ -19,6 +19,7 @@ import { useRouter } from 'expo-router'
 import type React from 'react'
 import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { Linking } from 'react-native'
+import { useDeviceUserName } from '../../hooks/useDeviceUserName'
 import { useHasFinishedOnboarding } from './hasFinishedOnboarding'
 import { onboardingSteps } from './steps'
 
@@ -62,6 +63,7 @@ export function OnboardingContextProvider({
   const [currentStepName, setCurrentStepName] = useState<OnboardingStep['step']>(initialStep ?? 'welcome')
   const router = useRouter()
   const [, setHasFinishedOnboarding] = useHasFinishedOnboarding()
+  const [, setDeviceUserName] = useDeviceUserName()
   const { t } = useLingui()
 
   const currentStep = onboardingSteps.find((step) => step.step === currentStepName)
@@ -153,6 +155,11 @@ export function OnboardingContextProvider({
       reset({ error: e, resetToStep: 'welcome' })
       throw e
     }
+  }
+
+  const onNameEnter = async (name: string) => {
+    setDeviceUserName(name)
+    goToNextStep()
   }
 
   const onEnableBiometricsDisabled = async () => {
@@ -254,6 +261,8 @@ export function OnboardingContextProvider({
         goToNextStep={currentStep.step === 'pin' ? onPinEnter : onPinReEnter}
       />
     )
+  } else if (currentStep.step === 'name') {
+    screen = <currentStep.Screen goToNextStep={onNameEnter} />
   } else if (currentStep.step === 'biometrics') {
     screen = (
       <currentStep.Screen

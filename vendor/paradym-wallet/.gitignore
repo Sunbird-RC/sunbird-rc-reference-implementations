@@ -104,4 +104,4 @@ android
 dist/
 packages/ui/types
 
-apps/easypid/.maestro/.maestro/screenshots
+apps/easypid/.maestro/.maestro/screenshots*.apk

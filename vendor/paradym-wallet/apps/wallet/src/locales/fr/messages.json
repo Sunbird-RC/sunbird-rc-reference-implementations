@@ -44,7 +44,7 @@
 			"baseLabel": ["baseLabel"]
 		},
 		"comments": ["Label like \"Card from X\" or \"Request from Y\""],
-		"origin": [["src/features/didcomm/InboxScreen.tsx", 90]],
+		"origin": [["src/features/didcomm/InboxScreen.tsx", 82]],
 		"translation": "{baseLabel} de {0}"
 	},
 	"dateFormatting.mulitpleDays": {
@@ -204,14 +204,14 @@
 		"message": "Activate Biometrics",
 		"placeholders": {},
 		"comments": [],
-		"origin": [["src/features/onboarding/onboardingContext.tsx", 261]],
+		"origin": [["src/features/onboarding/onboardingContext.tsx", 270]],
 		"translation": "Activer la biométrie"
 	},
 	"onboarding.biometrics.subtitle": {
 		"message": "Activate the biometrics functionality of your phone to make sure only you can enter your wallet and share data.",
 		"placeholders": {},
 		"comments": ["Subtitle explaining purpose of biometrics"],
-		"origin": [["src/features/onboarding/steps.ts", 33]],
+		"origin": [["src/features/onboarding/steps.ts", 46]],
 		"translation": "Activez la biométrie sur votre téléphone pour que vous seul puissiez accéder à votre portefeuille et partager des données."
 	},
 	"menu.item.activity": {
@@ -595,6 +595,15 @@
 		"origin": [["../../packages/translations/src/commonMessages.ts", 517]],
 		"translation": "Né(e)"
 	},
+	"issuers.homeDescription": {
+		"message": "Browse available issuers",
+		"placeholders": {},
+		"comments": [
+			"Subtext of the home screen button that opens the issuer directory"
+		],
+		"origin": [["src/features/issuers/GetCardCard.tsx", 29]],
+		"translation": "Parcourir les émetteurs disponibles"
+	},
 	"common.deleteDeferredCredentialDescription": {
 		"message": "By deleting {name}, you will no longer be able to retrieve your card from the issuer.",
 		"placeholders": {
@@ -617,7 +626,7 @@
 		"message": "Card",
 		"placeholders": {},
 		"comments": ["Label for a notification about a received credential"],
-		"origin": [["src/features/didcomm/InboxScreen.tsx", 78]],
+		"origin": [["src/features/didcomm/InboxScreen.tsx", 70]],
 		"translation": "Carte"
 	},
 	"common.cardAdded": {
@@ -790,7 +799,7 @@
 		"message": "Choose a 6-digit PIN",
 		"placeholders": {},
 		"comments": ["Heading when user chooses a PIN"],
-		"origin": [["src/features/onboarding/steps.ts", 9]],
+		"origin": [["src/features/onboarding/steps.ts", 10]],
 		"translation": "Choisissez un code PIN à 6 chiffres"
 	},
 	"onboardingIntroduction.step1.description": {
@@ -926,7 +935,7 @@
 		"message": "Credentials will appear here once you receive them.",
 		"placeholders": {},
 		"comments": ["Subtext explaining that credentials will appear later"],
-		"origin": [["src/features/wallet/CredentialsScreen.tsx", 73]],
+		"origin": [["src/features/wallet/CredentialsScreen.tsx", 66]],
 		"translation": "Les cartes apparaîtront ici une fois que vous les aurez reçues."
 	},
 	"noContentWallet.message": {
@@ -1154,7 +1163,7 @@
 		"message": "Error occurred during onboarding",
 		"placeholders": {},
 		"comments": [],
-		"origin": [["src/features/onboarding/onboardingContext.tsx", 233]],
+		"origin": [["src/features/onboarding/onboardingContext.tsx", 240]],
 		"translation": "Une erreur s'est produite pendant la configuration."
 	},
 	"notification.errorParsingInvitation": {
@@ -1274,6 +1283,24 @@
 		"origin": [["src/features/menu/AboutScreen.tsx", 33]],
 		"translation": "Pour plus d'informations, contactez"
 	},
+	"issuers.homeTitle": {
+		"message": "Get a card",
+		"placeholders": {},
+		"comments": [
+			"Title of the home screen button that opens the issuer directory"
+		],
+		"origin": [["src/features/issuers/GetCardCard.tsx", 22]],
+		"translation": "Obtenir une carte"
+	},
+	"issuers.title": {
+		"message": "Get a card",
+		"placeholders": {},
+		"comments": [
+			"Heading for the list of issuers the user can request a credential from"
+		],
+		"origin": [["src/features/issuers/IssuerDirectoryScreen.tsx", 40]],
+		"translation": "Obtenir une carte"
+	},
 	"onboardingWalletExplanation.getStarted": {
 		"message": "Get Started",
 		"placeholders": {},
@@ -1353,11 +1380,20 @@
 		"origin": [["src/utils/formatePredicate.ts", 10]],
 		"translation": "supérieur ou égal à"
 	},
+	"home.helloWithName": {
+		"message": "Hello, {deviceUserName}!",
+		"placeholders": {
+			"deviceUserName": ["deviceUserName"]
+		},
+		"comments": [],
+		"origin": [["src/features/wallet/WalletScreen.tsx", 63]],
+		"translation": "Bonjour, {deviceUserName} !"
+	},
 	"home.helloWithoutName": {
 		"message": "Hello!",
 		"placeholders": {},
 		"comments": [],
-		"origin": [["src/features/wallet/WalletScreen.tsx", 59]],
+		"origin": [["src/features/wallet/WalletScreen.tsx", 65]],
 		"translation": "Bonjour !"
 	},
 	"credentials.hideMetadata": {
@@ -1449,7 +1485,7 @@
 		"message": "Inbox",
 		"placeholders": {},
 		"comments": ["Header title for the inbox screen"],
-		"origin": [["src/features/didcomm/InboxScreen.tsx", 34]],
+		"origin": [["src/features/didcomm/InboxScreen.tsx", 33]],
 		"translation": "Boîte de réception"
 	},
 	"invalidTxCode.title": {
@@ -1593,7 +1629,7 @@
 			"0": ["formatDate(issuedAt, { includeTime: false })"]
 		},
 		"comments": ["Label before the date a credential was issued"],
-		"origin": [["src/features/wallet/CredentialsScreen.tsx", 195]],
+		"origin": [["src/features/wallet/CredentialsScreen.tsx", 188]],
 		"translation": "Émise le {0}"
 	},
 	"common.fields.issuer": {
@@ -1768,7 +1804,7 @@
 			"searchQuery": ["searchQuery"]
 		},
 		"comments": ["Shown when search yields no results; includes query string"],
-		"origin": [["src/features/wallet/CredentialsScreen.tsx", 128]],
+		"origin": [["src/features/wallet/CredentialsScreen.tsx", 121]],
 		"translation": "Aucune carte trouvée pour \"{searchQuery}\""
 	},
 	"credentials.noCardsMessage": {
@@ -1840,6 +1876,13 @@
 		],
 		"origin": [["src/features/didcomm/DidCommNotificationScreen.tsx", 32]],
 		"translation": "Aucune invitation n'a été trouvée. Veuillez réessayer."
+	},
+	"issuers.emptyTitle": {
+		"message": "No issuers available",
+		"placeholders": {},
+		"comments": ["Shown when no issuers could be loaded"],
+		"origin": [["src/features/issuers/IssuerDirectoryScreen.tsx", 56]],
+		"translation": "Aucun émetteur disponible"
 	},
 	"verifyPartySlide.hasNoPreviousInteractionsDescription": {
 		"message": "No previous interactions found",
@@ -2025,7 +2068,7 @@
 		"message": "Pending",
 		"placeholders": {},
 		"comments": ["Label for a notification about a pending credential"],
-		"origin": [["src/features/didcomm/InboxScreen.tsx", 72]],
+		"origin": [["src/features/didcomm/InboxScreen.tsx", 64]],
 		"translation": "En attente"
 	},
 	"activity.latest.pendingCard": {
@@ -2068,7 +2111,7 @@
 		"message": "Pin entries do not match",
 		"placeholders": {},
 		"comments": [],
-		"origin": [["src/features/onboarding/onboardingContext.tsx", 123]],
+		"origin": [["src/features/onboarding/onboardingContext.tsx", 125]],
 		"translation": "Les codes PIN ne correspondent pas"
 	},
 	"common.pinRequiredToAcceptPresentation": {
@@ -2161,7 +2204,7 @@
 		"message": "Present In-person",
 		"placeholders": {},
 		"comments": [],
-		"origin": [["src/features/wallet/WalletScreen.tsx", 75]],
+		"origin": [["src/features/wallet/WalletScreen.tsx", 82]],
 		"translation": "Présenter en personne"
 	},
 	"common.presentationCouldNotBeShared": {
@@ -2218,11 +2261,11 @@
 		"translation": "BUT"
 	},
 	"paradymWallet.about.emailHeader": {
-		"message": "Reach out from Paradym Wallet",
+		"message": "Reach out from Sunbird Wallet",
 		"placeholders": {},
-		"comments": ["Email subject when contacting support from Paradym wallet"],
+		"comments": ["Email subject when contacting support from Sunbird wallet"],
 		"origin": [["src/config/copy.ts", 12]],
-		"translation": "Contact depuis Paradym Wallet"
+		"translation": "Nous contacter depuis Sunbird Wallet"
 	},
 	"onboardingDataProtection.privacy": {
 		"message": "Read the Privacy Policy",
@@ -2251,7 +2294,7 @@
 		"message": "Receive or share from your wallet",
 		"placeholders": {},
 		"comments": [],
-		"origin": [["src/features/wallet/WalletScreen.tsx", 62]],
+		"origin": [["src/features/wallet/WalletScreen.tsx", 69]],
 		"translation": "Recevoir ou partager depuis votre portefeuille"
 	},
 	"activity.receivedFailed": {
@@ -2306,14 +2349,14 @@
 		"message": "Repeat your PIN",
 		"placeholders": {},
 		"comments": ["Heading when user repeats their PIN"],
-		"origin": [["src/features/onboarding/steps.ts", 21]],
+		"origin": [["src/features/onboarding/steps.ts", 22]],
 		"translation": "Saisissez à nouveau votre code PIN"
 	},
 	"inbox.notificationType.request": {
 		"message": "Request",
 		"placeholders": {},
 		"comments": ["Label for a notification about a proof request"],
-		"origin": [["src/features/didcomm/InboxScreen.tsx", 83]],
+		"origin": [["src/features/didcomm/InboxScreen.tsx", 75]],
 		"translation": "Demande"
 	},
 	"requestedAttributes.heading": {
@@ -2417,7 +2460,7 @@
 		"message": "Scan QR-code",
 		"placeholders": {},
 		"comments": [],
-		"origin": [["src/features/wallet/WalletScreen.tsx", 69]],
+		"origin": [["src/features/wallet/WalletScreen.tsx", 76]],
 		"translation": "Scanner un code QR"
 	},
 	"nfcScanner.complete.title": {
@@ -2461,7 +2504,7 @@
 		"message": "Search cards",
 		"placeholders": {},
 		"comments": ["Placeholder for search input in credentials list"],
-		"origin": [["src/features/wallet/CredentialsScreen.tsx", 94]],
+		"origin": [["src/features/wallet/CredentialsScreen.tsx", 87]],
 		"translation": "Rechercher des cartes"
 	},
 	"onboardingIntroduction.step1.title": {
@@ -2493,7 +2536,7 @@
 		"message": "Set up biometrics",
 		"placeholders": {},
 		"comments": ["Heading when user sets up biometrics"],
-		"origin": [["src/features/onboarding/steps.ts", 27]],
+		"origin": [["src/features/onboarding/steps.ts", 40]],
 		"translation": "Configurer la biométrie"
 	},
 	"common.setUpLater": {
@@ -3060,7 +3103,7 @@
 		"message": "There's nothing here, yet",
 		"placeholders": {},
 		"comments": ["Shown when the user has no credentials"],
-		"origin": [["src/features/wallet/CredentialsScreen.tsx", 68]],
+		"origin": [["src/features/wallet/CredentialsScreen.tsx", 61]],
 		"translation": "Il n'y a rien ici pour l'instant"
 	},
 	"activity.emptyTitle": {
@@ -3105,11 +3148,11 @@
 		"translation": "Cela permet à l'application de partager via un code QR."
 	},
 	"paradymWallet.about.description": {
-		"message": "This app was created by Animo Solutions as a companion app for Paradym. All code is available under Apache 2.0.",
+		"message": "This app was created by Animo Solutions as a companion app for Sunbird Wallet. All code is available under Apache 2.0.",
 		"placeholders": {},
-		"comments": ["About screen description text for the Paradym wallet"],
+		"comments": ["About screen description text for the Sunbird wallet"],
 		"origin": [["src/config/copy.ts", 6]],
-		"translation": "Cette application a été créée par Animo Solutions comme application complémentaire de Paradym. Tout le code est disponible sous Apache 2.0."
+		"translation": "Cette application a été créée par Animo Solutions en tant qu'application compagnon pour Sunbird Wallet. Tout le code est disponible sous licence Apache 2.0."
 	},
 	"cardLifecycle.limitedByDate.expiresIn": {
 		"message": "This card expires in {expiryDaysString}, on {0}.",
@@ -3156,6 +3199,13 @@
 		"origin": [["src/features/share/slides/ShareCredentialsSlide.tsx", 89]],
 		"translation": "Demande hors ligne"
 	},
+	"onboarding.name.subtitle": {
+		"message": "This is how we'll greet you in the app.",
+		"placeholders": {},
+		"comments": ["Explanation of why the name is requested in onboarding"],
+		"origin": [["src/features/onboarding/steps.ts", 34]],
+		"translation": "C'est ainsi que nous vous saluerons dans l'application."
+	},
 	"pidSetup.idCardPin.subtitle": {
 		"message": "This is required to read data from your card.",
 		"placeholders": {},
@@ -3195,7 +3245,7 @@
 		"message": "This PIN secures your identity wallet. You enter it every time you share data.",
 		"placeholders": {},
 		"comments": ["Explanation of the PIN purpose in onboarding"],
-		"origin": [["src/features/onboarding/steps.ts", 15]],
+		"origin": [["src/features/onboarding/steps.ts", 16]],
 		"translation": "Ce code PIN protège votre portefeuille d'identité. Vous le saisissez chaque fois que vous partagez des données."
 	},
 	"common.archiveCardDescription": {
@@ -3219,11 +3269,11 @@
 		"translation": "À {0}"
 	},
 	"pidSetup.enableBiometrics.subtitle": {
-		"message": "To continue, make sure your device has biometric protection enabled, and that Paradym Wallet is allowed to use biometrics.",
+		"message": "To continue, make sure your device has biometric protection enabled, and that Sunbird Wallet is allowed to use biometrics.",
 		"placeholders": {},
 		"comments": [],
 		"origin": [["src/utils/sharedPidSetup.ts", 70]],
-		"translation": "Pour continuer, assurez-vous que la protection biométrique est activée sur votre appareil et que Paradym Wallet est autorisé à utiliser la biométrie."
+		"translation": "Pour continuer, assurez-vous que la protection biométrique de votre appareil est activée et que Sunbird Wallet est autorisée à utiliser la biométrie."
 	},
 	"credentialCardSlide.subtitle.pin": {
 		"message": "To receive this card from {issuerName}, you need to enter a PIN.",
@@ -3431,6 +3481,13 @@
 		"origin": [["src/features/menu/MenuScreen.tsx", 84]],
 		"translation": "WALLET"
 	},
+	"issuers.emptyDescription": {
+		"message": "We couldn't reach any issuers right now. You can still receive a card by scanning a QR-code.",
+		"placeholders": {},
+		"comments": ["Subtext explaining why the issuer list is empty"],
+		"origin": [["src/features/issuers/IssuerDirectoryScreen.tsx", 61]],
+		"translation": "Nous n'avons pas pu joindre d'émetteur pour le moment. Vous pouvez toujours recevoir une carte en scannant un code QR."
+	},
 	"pidSetup.idCardVerify.Subtitle": {
 		"message": "We need your biometrics to verify your identity.",
 		"placeholders": {},
@@ -3458,6 +3515,13 @@
 		"comments": ["Title for second slide of wallet onboarding"],
 		"origin": [["src/features/onboarding/screens/wallet-explanation.tsx", 43]],
 		"translation": "À quoi ça sert ?"
+	},
+	"onboarding.name.title": {
+		"message": "What's your name?",
+		"placeholders": {},
+		"comments": ["Heading when user enters their name during onboarding"],
+		"origin": [["src/features/onboarding/steps.ts", 28]],
+		"translation": "Quel est votre prénom ?"
 	},
 	"cardLifecycle.limitedByDate.notYetActive.description": {
 		"message": "Will be active in {activeDaysString}",
@@ -3597,7 +3661,7 @@
 		"message": "You don't have any notifications at the moment.",
 		"placeholders": {},
 		"comments": ["Paragraph shown when the inbox is empty"],
-		"origin": [["src/features/didcomm/InboxScreen.tsx", 62]],
+		"origin": [["src/features/didcomm/InboxScreen.tsx", 54]],
 		"translation": "Vous n'avez aucune notification pour le moment."
 	},
 	"requestedAttributes.onlyUnsatisfiedDescription": {
@@ -3686,7 +3750,7 @@
 		"message": "You're all caught up",
 		"placeholders": {},
 		"comments": ["Heading shown when the inbox is empty"],
-		"origin": [["src/features/didcomm/InboxScreen.tsx", 57]],
+		"origin": [["src/features/didcomm/InboxScreen.tsx", 49]],
 		"translation": "Vous êtes à jour"
 	},
 	"receiveCredential.deferredCredentialParagraph": {
@@ -3734,6 +3798,13 @@
 		"comments": ["Shown after credentials are shared (no verifier name)"],
 		"origin": [["src/features/share/slides/PresentationSuccessSlide.tsx", 86]],
 		"translation": "Vos informations ont été partagées."
+	},
+	"onboarding.name.placeholder": {
+		"message": "Your name",
+		"placeholders": {},
+		"comments": [],
+		"origin": [["src/features/onboarding/screens/name.tsx", 32]],
+		"translation": "Votre prénom"
 	},
 	"authenticate.pinRequiredToast": {
 		"message": "Your PIN is required to unlock the app",

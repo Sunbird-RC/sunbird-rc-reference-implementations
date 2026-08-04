@@ -91,7 +91,7 @@
 
 ### **What NOT to Translate**
 - Technical identifiers (URLs, codes, file extensions)
-- Proper nouns (company names like "Paradym Wallet", product names)
+- Proper nouns (company names like "Sunbird Wallet", product names)
 - Placeholder syntax
 - HTML/XML tags
 - Demo labels: "(Demo)" remains "(Demo)"

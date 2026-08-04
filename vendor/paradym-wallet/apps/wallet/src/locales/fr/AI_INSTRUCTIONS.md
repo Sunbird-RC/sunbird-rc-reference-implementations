@@ -7,7 +7,7 @@
 - Keep UI labels short and direct
 
 ### **Key Terminology**
-- **Wallet** → `portefeuille` for the generic feature, but keep product names like `Paradym Wallet` unchanged
+- **Wallet** → `portefeuille` for the generic feature, but keep product names like `Sunbird Wallet` unchanged
 - **Card** → `carte`
 - **Credential** → default to `carte` in wallet UI, receiving/sharing flows, empty states, and activity text; reserve `justificatif` for formal or metadata-style labels like credential type
 - **PIN** → always `code PIN` in user-facing French

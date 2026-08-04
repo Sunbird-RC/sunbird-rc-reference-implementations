@@ -44,7 +44,7 @@
 			"baseLabel": ["baseLabel"]
 		},
 		"comments": ["Label like \"Card from X\" or \"Request from Y\""],
-		"origin": [["src/features/didcomm/InboxScreen.tsx", 90]],
+		"origin": [["src/features/didcomm/InboxScreen.tsx", 82]],
 		"translation": "{baseLabel} nga {0}"
 	},
 	"dateFormatting.mulitpleDays": {
@@ -204,14 +204,14 @@
 		"message": "Activate Biometrics",
 		"placeholders": {},
 		"comments": [],
-		"origin": [["src/features/onboarding/onboardingContext.tsx", 261]],
+		"origin": [["src/features/onboarding/onboardingContext.tsx", 270]],
 		"translation": "Aktivizo biometrikën"
 	},
 	"onboarding.biometrics.subtitle": {
 		"message": "Activate the biometrics functionality of your phone to make sure only you can enter your wallet and share data.",
 		"placeholders": {},
 		"comments": ["Subtitle explaining purpose of biometrics"],
-		"origin": [["src/features/onboarding/steps.ts", 33]],
+		"origin": [["src/features/onboarding/steps.ts", 46]],
 		"translation": "Aktivizo funksionin biometrik të telefonit tënd për të siguruar që vetëm ti mund të hysh në portofol dhe të ndash të dhëna."
 	},
 	"menu.item.activity": {
@@ -595,6 +595,15 @@
 		"origin": [["../../packages/translations/src/commonMessages.ts", 517]],
 		"translation": "I lindur"
 	},
+	"issuers.homeDescription": {
+		"message": "Browse available issuers",
+		"placeholders": {},
+		"comments": [
+			"Subtext of the home screen button that opens the issuer directory"
+		],
+		"origin": [["src/features/issuers/GetCardCard.tsx", 29]],
+		"translation": "Shfleto lëshuesit e disponueshëm"
+	},
 	"common.deleteDeferredCredentialDescription": {
 		"message": "By deleting {name}, you will no longer be able to retrieve your card from the issuer.",
 		"placeholders": {
@@ -617,7 +626,7 @@
 		"message": "Card",
 		"placeholders": {},
 		"comments": ["Label for a notification about a received credential"],
-		"origin": [["src/features/didcomm/InboxScreen.tsx", 78]],
+		"origin": [["src/features/didcomm/InboxScreen.tsx", 70]],
 		"translation": "Kartë"
 	},
 	"common.cardAdded": {
@@ -790,7 +799,7 @@
 		"message": "Choose a 6-digit PIN",
 		"placeholders": {},
 		"comments": ["Heading when user chooses a PIN"],
-		"origin": [["src/features/onboarding/steps.ts", 9]],
+		"origin": [["src/features/onboarding/steps.ts", 10]],
 		"translation": "Zgjedh një PIN me 6 shifra"
 	},
 	"onboardingIntroduction.step1.description": {
@@ -926,7 +935,7 @@
 		"message": "Credentials will appear here once you receive them.",
 		"placeholders": {},
 		"comments": ["Subtext explaining that credentials will appear later"],
-		"origin": [["src/features/wallet/CredentialsScreen.tsx", 73]],
+		"origin": [["src/features/wallet/CredentialsScreen.tsx", 66]],
 		"translation": "Kredencialet do të shfaqen këtu pasi t'i marrësh."
 	},
 	"noContentWallet.message": {
@@ -1154,7 +1163,7 @@
 		"message": "Error occurred during onboarding",
 		"placeholders": {},
 		"comments": [],
-		"origin": [["src/features/onboarding/onboardingContext.tsx", 233]],
+		"origin": [["src/features/onboarding/onboardingContext.tsx", 240]],
 		"translation": "Ndodhi gabim gjatë regjistrimit"
 	},
 	"notification.errorParsingInvitation": {
@@ -1274,6 +1283,24 @@
 		"origin": [["src/features/menu/AboutScreen.tsx", 33]],
 		"translation": "Për më shumë informacion, kontakto"
 	},
+	"issuers.homeTitle": {
+		"message": "Get a card",
+		"placeholders": {},
+		"comments": [
+			"Title of the home screen button that opens the issuer directory"
+		],
+		"origin": [["src/features/issuers/GetCardCard.tsx", 22]],
+		"translation": "Merr një kartë"
+	},
+	"issuers.title": {
+		"message": "Get a card",
+		"placeholders": {},
+		"comments": [
+			"Heading for the list of issuers the user can request a credential from"
+		],
+		"origin": [["src/features/issuers/IssuerDirectoryScreen.tsx", 40]],
+		"translation": "Merr një kartë"
+	},
 	"onboardingWalletExplanation.getStarted": {
 		"message": "Get Started",
 		"placeholders": {},
@@ -1353,11 +1380,20 @@
 		"origin": [["src/utils/formatePredicate.ts", 10]],
 		"translation": "më shumë ose baraz me"
 	},
+	"home.helloWithName": {
+		"message": "Hello, {deviceUserName}!",
+		"placeholders": {
+			"deviceUserName": ["deviceUserName"]
+		},
+		"comments": [],
+		"origin": [["src/features/wallet/WalletScreen.tsx", 63]],
+		"translation": "Përshëndetje, {deviceUserName}!"
+	},
 	"home.helloWithoutName": {
 		"message": "Hello!",
 		"placeholders": {},
 		"comments": [],
-		"origin": [["src/features/wallet/WalletScreen.tsx", 59]],
+		"origin": [["src/features/wallet/WalletScreen.tsx", 65]],
 		"translation": "Përshëndetje!"
 	},
 	"credentials.hideMetadata": {
@@ -1449,7 +1485,7 @@
 		"message": "Inbox",
 		"placeholders": {},
 		"comments": ["Header title for the inbox screen"],
-		"origin": [["src/features/didcomm/InboxScreen.tsx", 34]],
+		"origin": [["src/features/didcomm/InboxScreen.tsx", 33]],
 		"translation": "Mesazhet"
 	},
 	"invalidTxCode.title": {
@@ -1593,7 +1629,7 @@
 			"0": ["formatDate(issuedAt, { includeTime: false })"]
 		},
 		"comments": ["Label before the date a credential was issued"],
-		"origin": [["src/features/wallet/CredentialsScreen.tsx", 195]],
+		"origin": [["src/features/wallet/CredentialsScreen.tsx", 188]],
 		"translation": "Lëshuar më {0}"
 	},
 	"common.fields.issuer": {
@@ -1768,7 +1804,7 @@
 			"searchQuery": ["searchQuery"]
 		},
 		"comments": ["Shown when search yields no results; includes query string"],
-		"origin": [["src/features/wallet/CredentialsScreen.tsx", 128]],
+		"origin": [["src/features/wallet/CredentialsScreen.tsx", 121]],
 		"translation": "Nuk u gjetën karta për \"{searchQuery}\""
 	},
 	"credentials.noCardsMessage": {
@@ -1840,6 +1876,13 @@
 		],
 		"origin": [["src/features/didcomm/DidCommNotificationScreen.tsx", 32]],
 		"translation": "Nuk u gjet ftesë. Provo përsëri."
+	},
+	"issuers.emptyTitle": {
+		"message": "No issuers available",
+		"placeholders": {},
+		"comments": ["Shown when no issuers could be loaded"],
+		"origin": [["src/features/issuers/IssuerDirectoryScreen.tsx", 56]],
+		"translation": "Nuk ka lëshues të disponueshëm"
 	},
 	"verifyPartySlide.hasNoPreviousInteractionsDescription": {
 		"message": "No previous interactions found",
@@ -2025,7 +2068,7 @@
 		"message": "Pending",
 		"placeholders": {},
 		"comments": ["Label for a notification about a pending credential"],
-		"origin": [["src/features/didcomm/InboxScreen.tsx", 72]],
+		"origin": [["src/features/didcomm/InboxScreen.tsx", 64]],
 		"translation": "Në pritje"
 	},
 	"activity.latest.pendingCard": {
@@ -2068,7 +2111,7 @@
 		"message": "Pin entries do not match",
 		"placeholders": {},
 		"comments": [],
-		"origin": [["src/features/onboarding/onboardingContext.tsx", 123]],
+		"origin": [["src/features/onboarding/onboardingContext.tsx", 125]],
 		"translation": "Hyrjet e PIN-it nuk përputhen"
 	},
 	"common.pinRequiredToAcceptPresentation": {
@@ -2161,7 +2204,7 @@
 		"message": "Present In-person",
 		"placeholders": {},
 		"comments": [],
-		"origin": [["src/features/wallet/WalletScreen.tsx", 75]],
+		"origin": [["src/features/wallet/WalletScreen.tsx", 82]],
 		"translation": "Paraqit personalisht"
 	},
 	"common.presentationCouldNotBeShared": {
@@ -2218,11 +2261,11 @@
 		"translation": "QËLLIMI"
 	},
 	"paradymWallet.about.emailHeader": {
-		"message": "Reach out from Paradym Wallet",
+		"message": "Reach out from Sunbird Wallet",
 		"placeholders": {},
-		"comments": ["Email subject when contacting support from Paradym wallet"],
+		"comments": ["Email subject when contacting support from Sunbird wallet"],
 		"origin": [["src/config/copy.ts", 12]],
-		"translation": "Kontakto nga Paradym Wallet"
+		"translation": "Na kontaktoni nga Sunbird Wallet"
 	},
 	"onboardingDataProtection.privacy": {
 		"message": "Read the Privacy Policy",
@@ -2251,7 +2294,7 @@
 		"message": "Receive or share from your wallet",
 		"placeholders": {},
 		"comments": [],
-		"origin": [["src/features/wallet/WalletScreen.tsx", 62]],
+		"origin": [["src/features/wallet/WalletScreen.tsx", 69]],
 		"translation": "Merr ose nda nga portofoli yt"
 	},
 	"activity.receivedFailed": {
@@ -2306,14 +2349,14 @@
 		"message": "Repeat your PIN",
 		"placeholders": {},
 		"comments": ["Heading when user repeats their PIN"],
-		"origin": [["src/features/onboarding/steps.ts", 21]],
+		"origin": [["src/features/onboarding/steps.ts", 22]],
 		"translation": "Përsërit PIN-in tënd"
 	},
 	"inbox.notificationType.request": {
 		"message": "Request",
 		"placeholders": {},
 		"comments": ["Label for a notification about a proof request"],
-		"origin": [["src/features/didcomm/InboxScreen.tsx", 83]],
+		"origin": [["src/features/didcomm/InboxScreen.tsx", 75]],
 		"translation": "Kërkesë"
 	},
 	"requestedAttributes.heading": {
@@ -2417,7 +2460,7 @@
 		"message": "Scan QR-code",
 		"placeholders": {},
 		"comments": [],
-		"origin": [["src/features/wallet/WalletScreen.tsx", 69]],
+		"origin": [["src/features/wallet/WalletScreen.tsx", 76]],
 		"translation": "Skano kodin QR"
 	},
 	"nfcScanner.complete.title": {
@@ -2461,7 +2504,7 @@
 		"message": "Search cards",
 		"placeholders": {},
 		"comments": ["Placeholder for search input in credentials list"],
-		"origin": [["src/features/wallet/CredentialsScreen.tsx", 94]],
+		"origin": [["src/features/wallet/CredentialsScreen.tsx", 87]],
 		"translation": "Kërko karta"
 	},
 	"onboardingIntroduction.step1.title": {
@@ -2493,7 +2536,7 @@
 		"message": "Set up biometrics",
 		"placeholders": {},
 		"comments": ["Heading when user sets up biometrics"],
-		"origin": [["src/features/onboarding/steps.ts", 27]],
+		"origin": [["src/features/onboarding/steps.ts", 40]],
 		"translation": "Konfiguro biometrikën"
 	},
 	"common.setUpLater": {
@@ -3060,7 +3103,7 @@
 		"message": "There's nothing here, yet",
 		"placeholders": {},
 		"comments": ["Shown when the user has no credentials"],
-		"origin": [["src/features/wallet/CredentialsScreen.tsx", 68]],
+		"origin": [["src/features/wallet/CredentialsScreen.tsx", 61]],
 		"translation": "Nuk ka asgjë këtu, ende"
 	},
 	"activity.emptyTitle": {
@@ -3105,11 +3148,11 @@
 		"translation": "Kjo lejon aplikacionin të ndajë me kod QR."
 	},
 	"paradymWallet.about.description": {
-		"message": "This app was created by Animo Solutions as a companion app for Paradym. All code is available under Apache 2.0.",
+		"message": "This app was created by Animo Solutions as a companion app for Sunbird Wallet. All code is available under Apache 2.0.",
 		"placeholders": {},
-		"comments": ["About screen description text for the Paradym wallet"],
+		"comments": ["About screen description text for the Sunbird wallet"],
 		"origin": [["src/config/copy.ts", 6]],
-		"translation": "Ky aplikacion u krijua nga Animo Solutions si një aplikacion shoqërues për Paradym. I gjithë kodi është i disponueshëm nën Apache 2.0."
+		"translation": "Ky aplikacion u krijua nga Animo Solutions si aplikacion shoqërues për Sunbird Wallet. I gjithë kodi është i disponueshëm nën Apache 2.0."
 	},
 	"cardLifecycle.limitedByDate.expiresIn": {
 		"message": "This card expires in {expiryDaysString}, on {0}.",
@@ -3156,6 +3199,13 @@
 		"origin": [["src/features/share/slides/ShareCredentialsSlide.tsx", 89]],
 		"translation": "Kjo është një kërkesë offline"
 	},
+	"onboarding.name.subtitle": {
+		"message": "This is how we'll greet you in the app.",
+		"placeholders": {},
+		"comments": ["Explanation of why the name is requested in onboarding"],
+		"origin": [["src/features/onboarding/steps.ts", 34]],
+		"translation": "Kështu do të të përshëndesim në aplikacion."
+	},
 	"pidSetup.idCardPin.subtitle": {
 		"message": "This is required to read data from your card.",
 		"placeholders": {},
@@ -3195,7 +3245,7 @@
 		"message": "This PIN secures your identity wallet. You enter it every time you share data.",
 		"placeholders": {},
 		"comments": ["Explanation of the PIN purpose in onboarding"],
-		"origin": [["src/features/onboarding/steps.ts", 15]],
+		"origin": [["src/features/onboarding/steps.ts", 16]],
 		"translation": "Ky PIN siguron portofolin tënd të identitetit. E fut çdo herë që ndan të dhëna."
 	},
 	"common.archiveCardDescription": {
@@ -3219,11 +3269,11 @@
 		"translation": "Për {0}"
 	},
 	"pidSetup.enableBiometrics.subtitle": {
-		"message": "To continue, make sure your device has biometric protection enabled, and that Paradym Wallet is allowed to use biometrics.",
+		"message": "To continue, make sure your device has biometric protection enabled, and that Sunbird Wallet is allowed to use biometrics.",
 		"placeholders": {},
 		"comments": [],
 		"origin": [["src/utils/sharedPidSetup.ts", 70]],
-		"translation": "Për të vazhduar, sigurohu që pajisja jote ka aktivizuar mbrojtjen biometrike, dhe që Paradym Wallet lejohet të përdorë biometrikë."
+		"translation": "Për të vazhduar, sigurohu që mbrojtja biometrike e pajisjes tënde është aktivizuar dhe që Sunbird Wallet lejohet të përdorë biometrikën."
 	},
 	"credentialCardSlide.subtitle.pin": {
 		"message": "To receive this card from {issuerName}, you need to enter a PIN.",
@@ -3431,6 +3481,13 @@
 		"origin": [["src/features/menu/MenuScreen.tsx", 84]],
 		"translation": "PORTOFOLI"
 	},
+	"issuers.emptyDescription": {
+		"message": "We couldn't reach any issuers right now. You can still receive a card by scanning a QR-code.",
+		"placeholders": {},
+		"comments": ["Subtext explaining why the issuer list is empty"],
+		"origin": [["src/features/issuers/IssuerDirectoryScreen.tsx", 61]],
+		"translation": "Nuk arritëm të lidhemi me asnjë lëshues tani. Ende mund të marrësh një kartë duke skanuar një kod QR."
+	},
 	"pidSetup.idCardVerify.Subtitle": {
 		"message": "We need your biometrics to verify your identity.",
 		"placeholders": {},
@@ -3458,6 +3515,13 @@
 		"comments": ["Title for second slide of wallet onboarding"],
 		"origin": [["src/features/onboarding/screens/wallet-explanation.tsx", 43]],
 		"translation": "Për çfarë shërben?"
+	},
+	"onboarding.name.title": {
+		"message": "What's your name?",
+		"placeholders": {},
+		"comments": ["Heading when user enters their name during onboarding"],
+		"origin": [["src/features/onboarding/steps.ts", 28]],
+		"translation": "Si e ke emrin?"
 	},
 	"cardLifecycle.limitedByDate.notYetActive.description": {
 		"message": "Will be active in {activeDaysString}",
@@ -3597,7 +3661,7 @@
 		"message": "You don't have any notifications at the moment.",
 		"placeholders": {},
 		"comments": ["Paragraph shown when the inbox is empty"],
-		"origin": [["src/features/didcomm/InboxScreen.tsx", 62]],
+		"origin": [["src/features/didcomm/InboxScreen.tsx", 54]],
 		"translation": "Nuk ke njoftime për momentin."
 	},
 	"requestedAttributes.onlyUnsatisfiedDescription": {
@@ -3686,7 +3750,7 @@
 		"message": "You're all caught up",
 		"placeholders": {},
 		"comments": ["Heading shown when the inbox is empty"],
-		"origin": [["src/features/didcomm/InboxScreen.tsx", 57]],
+		"origin": [["src/features/didcomm/InboxScreen.tsx", 49]],
 		"translation": "I ke lexuar të gjitha"
 	},
 	"receiveCredential.deferredCredentialParagraph": {
@@ -3734,6 +3798,13 @@
 		"comments": ["Shown after credentials are shared (no verifier name)"],
 		"origin": [["src/features/share/slides/PresentationSuccessSlide.tsx", 86]],
 		"translation": "Informacioni yt është ndarë."
+	},
+	"onboarding.name.placeholder": {
+		"message": "Your name",
+		"placeholders": {},
+		"comments": [],
+		"origin": [["src/features/onboarding/screens/name.tsx", 32]],
+		"translation": "Emri yt"
 	},
 	"authenticate.pinRequiredToast": {
 		"message": "Your PIN is required to unlock the app",
