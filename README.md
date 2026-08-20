@@ -19,8 +19,8 @@ Across these use cases, the showcase includes Inji Wallet interoperability, suit
 ## Project Status
 
 - **PRODUCT:** approved and baselined in `main`.
-- **DESIGN:** current stage; work is maintained on a dedicated design branch until review and sign-off.
-- **IMPLEMENTATION:** begins through iteration branches after the Design baseline is approved.
+- **DESIGN:** approved and baselined.
+- **IMPLEMENTATION:** next stage; work proceeds through use-case iteration branches.
 
 ## Project Documents
 

@@ -1,6 +1,6 @@
 # Sunbird RC Demo — Architecture & Design
 
-**Status:** Design in progress — architecture decisions approved; desk compatibility validated
+**Status:** Approved — 20 August 2026
 **Product baseline:** [`../project/PRODUCT.md`](../project/PRODUCT.md)
 **Compatibility baseline:** [`COMPATIBILITY.md`](COMPATIBILITY.md)
 
