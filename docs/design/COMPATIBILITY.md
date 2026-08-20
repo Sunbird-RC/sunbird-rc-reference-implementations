@@ -1,11 +1,11 @@
 # Sunbird RC Demo — Compatibility Baseline
 
-**Status:** Desk validation complete; device-level validation required before Iteration 1 implementation
+**Status:** Reference input for engineering
 **Validated:** 20 August 2026
 
 ## Purpose
 
-Pin candidate releases and distinguish documented or source-verified compatibility from interoperability that must still be demonstrated on real wallet builds.
+Summarise documented or source-verified compatibility as input to Kartheek's implementation decisions. This document does not prescribe wallet assignment or create a separate delivery gate.
 
 ## Candidate Releases
 
@@ -15,7 +15,7 @@ Pin candidate releases and distinguish documented or source-verified compatibili
 | EUDI Android Reference Wallet | `2026.07.39-Demo` (`3956c13`) | Age SD-JWT VC wallet |
 | Inji Mobile | `v0.22.1` | Agriculture wallet and mandatory Inji lifecycle |
 
-These are candidate implementation pins. Kartheek should record immutable image digests or commit SHAs when the deployable stack is assembled.
+These are reference candidates, not mandatory implementation pins. Kartheek may select other suitable open-source wallets or releases while preserving the Product requirements, and should record immutable image digests or commit SHAs with the implementation evidence.
 
 ## Compatibility Matrix
 
@@ -45,33 +45,32 @@ Inspection of the released `v2.1.0` source confirms:
 
 This evidence supports the architecture, but it does not substitute for testing the selected EUDI and Inji application builds.
 
-## Required Hands-on Checks
+## Engineering Validation Guidance
 
-Kartheek and Claude Code / Co-work should complete these before feature implementation:
+Kartheek and Claude Code / Co-work should perform the relevant checks within each implementation iteration. The exact wallets and order are engineering decisions.
 
-### EUDI / Age
+### SD-JWT wallet flow
 
-- Install/build `2026.07.39-Demo`.
+- Install/build the selected open-source wallet.
 - Import an offer from Sunbird RC in final OpenID4VCI mode.
 - Receive an ES256 SD-JWT VC bound to the wallet key.
 - Answer a DCQL request through the web QR flow.
 - Disclose only `ageOver18`.
 - Confirm holder binding, nonce, audience, and replay rejection.
 
-### Inji / Agriculture
+### Inji flow
 
 - Install/build `v0.22.1`.
 - Enable Sunbird RC `DRAFT13_COMPAT_MODE` where required.
-- Receive credentials from two logical issuers.
-- Present both credentials in one verifier transaction.
+- Complete the issuance and presentation requirements of the use case assigned to Inji.
 - Confirm user consent and verifier correlation using only verified claims.
 - Record the exact OpenID4VP request-object and client-ID mode required.
 
 ## Adapter Decision
 
-**Current decision: no separate adapter.**
+**Current baseline: no separate adapter.**
 
-Use Sunbird RC `v2.1.0` native compatibility settings first. Introduce adapter code only if a hands-on check fails and all of the following are recorded:
+Use Sunbird RC `v2.1.0` native compatibility settings first. Kartheek may propose adapter code only if an implementation check fails and all of the following are recorded:
 
 1. Exact wallet and Sunbird RC versions.
 2. Failing protocol exchange and evidence.

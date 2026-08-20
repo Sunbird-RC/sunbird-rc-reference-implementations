@@ -35,7 +35,7 @@ The architecture must maximise reuse without hiding use-case differences or over
 └─────────────────────┬───────────────────────────────┘
                       ↓
           Compatible mobile VC wallets
-      EUDI Reference Wallet | Inji Mobile
+      Inji + other open-source wallet(s)
                       ↓ OpenID4VP
           ┌───────────┴───────────┐
           ↓                       ↓
@@ -75,10 +75,10 @@ It must not become a second registry, duplicate domain data, or contain domain b
 
 ### Wallets
 
-- **Age:** use the open-source EUDI Reference Wallet for the SD-JWT VC selective-disclosure flow.
-- **Agriculture:** use Inji Mobile for the complete multi-issuer and multi-credential flow.
-- **Education:** reuse EUDI Reference Wallet or Inji Mobile based on credential discovery/filtering support; do not introduce a third wallet without a demonstrated need.
-- Pin the exact wallet releases after validating protocol, credential-format, consent, holder-binding, and multi-credential compatibility.
+- Inji must complete at least one full use-case lifecycle.
+- Kartheek may select Inji or another suitable open-source VC-compliant mobile wallet for each use case.
+- Wallet selection should consider protocol and credential-format support, consent, holder binding, selective disclosure, multi-credential presentation, and implementation effort.
+- Exact wallet releases and compatibility modes are engineering decisions and must be recorded with the implementation evidence.
 - Wallet-specific behaviour remains outside generic issuer and verifier logic.
 
 ### Verifier Service
@@ -112,7 +112,7 @@ Target standards:
 - SD-JWT as defined by RFC 9901.
 - The compatible SD-JWT VC profile supported by the selected issuer and wallet releases.
 
-The final implementation profile must be pinned in the repository and based on demonstrated interoperability, not assumed feature parity. The EUDI Reference Wallet is the primary SD-JWT VC test client; Inji uses the best compatible credential profile for its assigned use case. Any protocol translation that is genuinely required must remain inside the standards adapter.
+The final implementation profile must be pinned in the repository and based on demonstrated interoperability, not assumed feature parity. Kartheek selects the best compatible open-source wallet and profile for each use case. Any protocol translation that is genuinely required must remain inside the standards adapter.
 
 ## 6. Credential and Issuer Model
 
@@ -233,19 +233,9 @@ Protocol conformance tooling should be used where practical; an end-to-end demo 
 
 ## 12. Implementation Sequence
 
-### Design validation spike
-
-Before feature implementation:
-
-1. Pin the Sunbird RC, EUDI Reference Wallet, and Inji Mobile releases.
-2. Record their supported credential formats, algorithms, holder binding, selective disclosure, multi-credential behaviour, and OpenID4VC draft/final versions.
-3. Demonstrate the smallest Sunbird RC → EUDI issuance/presentation flow for SD-JWT VC.
-4. Demonstrate the smallest Sunbird RC → Inji issuance/presentation flow using Inji's best compatible profile.
-5. Decide whether the standards adapter is required, based only on verified gaps.
-
 ### Iteration 1 — Age
 
-Establish the reusable vertical slice: Sunbird RC entity, issuer, SD-JWT VC, EUDI Reference Wallet, web QR verification, consent, holder/transaction binding, and age decision.
+Establish the reusable vertical slice: Sunbird RC entity, issuer, SD-JWT VC, a suitable open-source mobile wallet, web QR verification, consent, holder/transaction binding, and age decision.
 
 ### Iteration 2 — Agriculture
 
@@ -258,10 +248,10 @@ Add the third domain, credential filtering/discovery, a mobile verifier experien
 ## 13. Architecture Decisions
 
 1. **Sunbird RC boundary:** baseline Sunbird RC `v2.1.0` and its native `oid4vc-service`; introduce a thin standards adapter only for a demonstrated gap that configuration cannot resolve.
-2. **Wallet assignment:** EUDI Reference Wallet for Age; Inji Mobile for Agriculture; reuse one of them for Education after validating discovery/filtering behaviour.
+2. **Wallet policy:** Kartheek selects suitable open-source wallets per use case; Inji must complete at least one full use case.
 3. **Trust model:** use a repository-controlled issuer allowlist for the demo; do not build a trust registry.
 4. **Data model:** use one PostgreSQL deployment with separate use-case schemas and no shared cross-domain person table.
-5. **Delivery order:** complete the compatibility spike, then Age, Agriculture, and Education/mobile verification.
+5. **Delivery order:** Age, Agriculture, then Education/mobile verification.
 
 ## 14. References
 
