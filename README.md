@@ -27,6 +27,8 @@ Across these use cases, the showcase includes Inji Wallet interoperability, suit
 - [Product Definition](docs/project/PRODUCT.md)
 - [Working & Engagement Model](docs/project/WORKING-ENGAGEMENT-MODEL.md)
 - [Git Working Model](docs/project/GIT-WORKING-MODEL.md)
+- [Architecture & Design](docs/design/DESIGN.md)
+- [Compatibility Baseline](docs/design/COMPATIBILITY.md)
 
 These documents are the authoritative project baseline. Architecture and implementation must remain aligned with them.
 

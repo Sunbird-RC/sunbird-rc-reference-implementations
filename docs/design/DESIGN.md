@@ -1,7 +1,8 @@
 # Sunbird RC Demo — Architecture & Design
 
-**Status:** Design in progress — architecture decisions approved  
+**Status:** Design in progress — architecture decisions approved; desk compatibility validated
 **Product baseline:** [`../project/PRODUCT.md`](../project/PRODUCT.md)
+**Compatibility baseline:** [`COMPATIBILITY.md`](COMPATIBILITY.md)
 
 ## 1. Design Objective
 
@@ -59,7 +60,9 @@ One shared Sunbird RC deployment may serve the demo. Logical issuers must remain
 
 ### Standards Adapter
 
-A small stateless adapter is permitted only when the selected Sunbird RC release does not natively provide the exact wallet-facing profile required by the showcase.
+Sunbird RC `v2.1.0` includes a native `oid4vc-service` protocol façade with OpenID4VCI/OpenID4VP and `vc+sd-jwt`. Therefore, **no separate standards adapter is part of the baseline architecture**.
+
+A small stateless adapter remains permitted only if hands-on wallet interoperability identifies a gap that cannot be addressed through the released Sunbird RC compatibility modes or configuration.
 
 Its allowed responsibilities are:
 
@@ -254,7 +257,7 @@ Add the third domain, credential filtering/discovery, a mobile verifier experien
 
 ## 13. Architecture Decisions
 
-1. **Sunbird RC boundary:** use native Sunbird RC capabilities first; introduce a thin standards adapter only for demonstrated compatibility gaps.
+1. **Sunbird RC boundary:** baseline Sunbird RC `v2.1.0` and its native `oid4vc-service`; introduce a thin standards adapter only for a demonstrated gap that configuration cannot resolve.
 2. **Wallet assignment:** EUDI Reference Wallet for Age; Inji Mobile for Agriculture; reuse one of them for Education after validating discovery/filtering behaviour.
 3. **Trust model:** use a repository-controlled issuer allowlist for the demo; do not build a trust registry.
 4. **Data model:** use one PostgreSQL deployment with separate use-case schemas and no shared cross-domain person table.
