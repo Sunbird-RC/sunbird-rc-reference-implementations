@@ -8,6 +8,11 @@
 //   cd deploy && docker compose up -d && ../scripts/bootstrap.sh
 //   ../scripts/seed-age-citizens.sh
 //   npm run test:e2e
+//
+// The npm script pins --test-concurrency=1. Both e2e files drive ONE shared
+// stack, and data-isolation.test.mjs shells into Docker; running the files in
+// parallel produced a flaky failure here that never reproduced alone. Serial is
+// the honest configuration for integration tests against a shared deployment.
 
 import test, { before, describe } from 'node:test';
 import assert from 'node:assert/strict';

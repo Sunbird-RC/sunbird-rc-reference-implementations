@@ -171,7 +171,13 @@ open http://localhost/verifier/
    handshake docs this work references. GIT-WORKING-MODEL says an iteration
    branch starts from the latest accepted `main`; flagging the difference rather
    than quietly rebasing.
-8. **The verifier page is a static page, not the React app** the plan mentioned
+8. **Turning on `ENABLE_AUTH` will require a token in the verifier service.**
+   `POST /vp/request` and `GET /vp/status/:id` carry `@UseGuards(KeycloakAuthGuard)`
+   in `oid4vp.controller.ts` — a no-op while `ENABLE_AUTH=false`, but on the dev
+   deployment `services/verifier` will need a `client_credentials` token for both
+   calls. Noted now because the deployment posture is otherwise ready for auth:
+   we never use the registry offer hook, which is the caller that cannot send one.
+9. **The verifier page is a static page, not the React app** the plan mentioned
    adapting from `demo-oid4vc/verifier-app`. It needs no build step, so the whole
    stack builds offline; the UI patterns were carried over, the toolchain was not.
 

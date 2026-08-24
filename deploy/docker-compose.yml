@@ -14,8 +14,10 @@
 #  2. Vault runs in DEV mode: unsealed, fixed root token. The production file
 #     backend must be initialised and unsealed by hand after every restart,
 #     which is the single biggest obstacle to a one-command start.
-#  3. The registry's JDBC URL points at its own namespace (AGE_REGISTRY_JDBC),
-#     so Age entity tables do not share a namespace with anything else.
+#  3. The registry's JDBC URL points at the Age domain's own DATABASE
+#     (AGE_REGISTRY_JDBC), so Age entity tables share a namespace with nothing
+#     else. A schema would have been closer to DESIGN §7's wording, but Sqlg
+#     ignores currentSchema and writes to `public` — verified, not assumed.
 #  4. OID4VP request signing is ON, because Paradym (Credo-based) answers 406 to
 #     an unsigned request object. That requires VERIFIER_DID to be a did:web —
 #     oid4vc-service refuses to sign with a did:rcw.
@@ -33,7 +35,11 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - POSTGRES_DB=registry
     volumes:
-      - ./init-db/10-databases.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
+      # .sql, not .sh: a mounted shell script failed with "bad interpreter:
+      # Permission denied" and the entrypoint started the server anyway, so the
+      # databases and the `age` schema were silently missing.
+      - ./init-db/01-databases.sql:/docker-entrypoint-initdb.d/01-databases.sql:ro
+      - ./init-db/02-schemas.sql:/docker-entrypoint-initdb.d/02-schemas.sql:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 5s
@@ -83,7 +89,7 @@ services:
     env_file:
       - ./registry.env
     environment:
-      - connectionInfo_uri=${AGE_REGISTRY_JDBC:-jdbc:postgresql://db:5432/registry?currentSchema=age}
+      - connectionInfo_uri=${AGE_REGISTRY_JDBC:-jdbc:postgresql://db:5432/age}
       - authentication_enabled=${REGISTRY_AUTH_ENABLED:-false}
     healthcheck:
       # wget, not curl: the registry image ships wget but no curl, so a
@@ -278,10 +284,20 @@ services:
     depends_on:
       oid4vc-service:
         condition: service_healthy
+      # service_started, NOT service_healthy, for the two services this
+      # iteration adds. The verifier fails closed at boot when it has no
+      # trusted issuer DID, and that DID is minted by scripts/bootstrap.sh —
+      # which needs this gateway to reach /did/generate. Waiting for verifier
+      # health here would deadlock the first run of a clean checkout.
+      #
+      # Safe because every proxy_pass in nginx.conf goes through a variable
+      # plus `resolver`, so nginx resolves the upstream per request instead of
+      # caching it at startup: a service that is briefly down 502s and then
+      # works, rather than requiring an nginx reload.
       verifier:
-        condition: service_healthy
+        condition: service_started
       age-issuer:
-        condition: service_healthy
+        condition: service_started
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       # The verifier web page is static and needs no build step, so nginx

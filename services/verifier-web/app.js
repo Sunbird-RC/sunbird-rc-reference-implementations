@@ -73,6 +73,10 @@ async function start() {
   }
 
   state.sessionId = body.sessionId;
+  // Exposed in the DOM so the scripted wallet (and the demo capture) can answer
+  // the session this page is actually showing. It is a transaction id, not
+  // holder data, and it is single-use and short-lived.
+  el('qr').dataset.sessionId = body.sessionId;
   el('qr').innerHTML = body.qrSvg;
   el('qr').hidden = false;
   el('hint').hidden = false;

@@ -37,10 +37,21 @@ envval() {
 }
 
 # Writes KEY=value into .env, replacing any existing line for that key.
+# Writes KEY=value, replacing any existing line for that key. Also drops any
+# line that is neither a comment, a blank, nor a single-line KEY=VALUE — a value
+# that once contained a newline leaves an orphan fragment behind, and compose
+# would go on interpreting it.
+#
+# The alternation is spelled with three separate branches rather than one group
+# containing an empty alternative: BSD grep (the macOS default) rejects
+# '(...|...|)' with "empty (sub)expression", and the `|| true` below then turns
+# that failure into an EMPTY file — which silently truncated .env on the first
+# run, taking the DIDs with it.
 set_env() {
   local key="$1" value="$2" tmp
   tmp="$(mktemp)"
-  { grep -vE "^$key=" "$ENV_FILE" 2>/dev/null || true; } > "$tmp"
+  { grep -vE "^$key=" "$ENV_FILE" 2>/dev/null || true; } \
+    | grep -E '^[A-Za-z_][A-Za-z0-9_]*=|^#|^$' > "$tmp" || true
   printf '%s=%s\n' "$key" "$value" >> "$tmp"
   mv "$tmp" "$ENV_FILE"
 }
@@ -98,11 +109,17 @@ say "3. Identities (did:web, so standards wallets can resolve them)"
 # resolver will look for https://localhost/<uuid>/did.json and fail.
 # identity-service resolves its own DIDs from its database, so issuance and
 # verification work locally; only third-party resolution needs the HTTPS host.
+# Everything this function reports goes to STDERR. Its stdout is the DID itself,
+# captured by $(...) — a status line printed there ends up inside the value,
+# which then reaches .env, the schema `author` field and the trust allowlist.
+# (Found exactly that way on the first run: the allowlist held an ANSI-coloured
+# sentence and the verifier trusted nobody real.)
 mint_did() {
   local env_key="$1" label="$2" existing resp did
   existing="$(envval "$env_key")"
-  if [ -n "$existing" ] && curl -fksS -o /dev/null --max-time 5 "$BASE/did/resolve/$existing" 2>/dev/null; then
-    green "$label: reusing $existing"
+  if [ -n "$existing" ] && [ "${existing#did:}" != "$existing" ] \
+     && curl -fksS -o /dev/null --max-time 5 "$BASE/did/resolve/$existing" 2>/dev/null; then
+    green "$label: reusing $existing" >&2
     printf '%s' "$existing"
     return 0
   fi
@@ -111,7 +128,12 @@ mint_did() {
     || die "minting a did:web for $label failed"
   did="$(printf '%s' "$resp" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d[0] if isinstance(d,list) else d)["id"])')" \
     || die "could not read the DID out of: $(printf '%s' "$resp" | head -c 200)"
-  green "$label: $did"
+  # Fail loudly rather than write a malformed identity into the trust model.
+  case "$did" in
+    did:web:*) ;;
+    *) die "expected a did:web for $label, got: $(printf '%s' "$did" | head -c 120)" ;;
+  esac
+  green "$label: $did" >&2
   printf '%s' "$did"
 }
 

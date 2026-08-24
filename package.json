@@ -11,7 +11,7 @@
   "scripts": {
     "test": "npm run test:unit",
     "test:unit": "node --test tests/unit/*.test.mjs",
-    "test:e2e": "node --test --test-timeout=180000 tests/e2e/*.test.mjs",
+    "test:e2e": "node --test --test-concurrency=1 --test-timeout=180000 tests/e2e/*.test.mjs",
     "test:all": "npm run test:unit && npm run test:e2e",
     "stack:up": "docker compose -f deploy/docker-compose.yml up -d",
     "stack:down": "docker compose -f deploy/docker-compose.yml down",

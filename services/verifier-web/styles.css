@@ -41,6 +41,13 @@ body {
 }
 h1 { margin: 0 0 0.5rem; font-size: 1.6rem; letter-spacing: -0.01em; }
 .lede { margin: 0; color: var(--muted); }
+/* Must come before .panel: `display: grid` below is a normal declaration on a
+   class, which beats the user-agent's `[hidden] { display: none }` rule — so
+   without this the result panel is visible on first load, before any check has
+   run. */
+[hidden] {
+  display: none !important;
+}
 .panel {
   background: var(--card);
   border: 1px solid var(--line);
