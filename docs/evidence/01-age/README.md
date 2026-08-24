@@ -256,15 +256,35 @@ Recorded because each one would have passed a code review:
 
 ## UI theme
 
-The verifier page uses the **Sunbird Spark "Joyful" design system**, taken from
-the Spark portal's own tokens (`sunbird-spark-portal/frontend/src/index.css`):
-the six-seed HSL system on the Terracotta preset, `#E9E8D9` body, chip-tinted
-cream cards, `1rem` radius, and Rubik self-hosted from the same `woff2` Spark
-ships — no CDN, so the stack still works with no network. Switching the three
-seed lines in `styles.css` rethemes the page to Spark's Blue or Teal preset
-exactly as it does in Spark.
+The verifier page follows the **Sunbird Spark** design system, read from the
+Figma file itself (`figma.com/design/gdTmBeuK9os2NxeLZIi5rq`, "Color palette and
+font" frame, node `13-89`) and cross-checked against the Spark portal's shipped
+CSS, which encodes the same system.
 
-Not yet verified against the Figma file itself (`Sunbird Spark`, node `0-1`):
-the Figma MCP connector needs interactive authorisation via `/mcp`. The tokens
-used here come from Spark's shipped source, which should be the same system, but
-the exact spacing and type scale in that file have not been diffed.
+Palette, hex verbatim from the file's Primary/Secondary Palette:
+
+| Token | Hex | Used for |
+|---|---|---|
+| BRICK | `#a85236` | primary action, links, section labels |
+| GINGER | `#cc8545` | wordmark, chip borders, warning tone |
+| SUNFLOWER | `#ffdb73` | the chip for the one claim actually shared |
+| IVORY | `#fffef4` | QR plate |
+| INK | `#376673` | secondary/status text |
+| WAVE | `#70adbf` | focus rings, the waiting pulse |
+| FOREST / MOSS | `#82a668` / `#66a682` | APPROVED |
+| JAMUN | `#540f3b` | DENIED — BRICK is the primary action colour here, so a refusal needs a different, unmistakable tone from the same palette |
+
+Type is Rubik throughout, per the file's own note ("HEADINGS & LARGER TEXT:
+Rubik / PARAGRAPH & BODY TEXT: Rubik"), self-hosted from the same `woff2` the
+Spark portal ships — no CDN, so the stack still runs with no network. Card titles
+are Rubik Medium 20 in the file, which is the scale used here.
+
+Composition follows the file's screens rather than being invented: white cards
+with a hairline border on a light page, `#F4F4F4` frame fill, SUNFLOWER pill
+chips with dark text, dot-separated meta lines (the file's idiom for card
+metadata), BRICK section labels with a `→`, and a near-black footer band with the
+wordmark in GINGER.
+
+Verified in Chrome for both outcomes after the restyle. Dev Mode inspect was not
+available (the file is on a Free team plan, so exact spacing tokens could not be
+exported); geometry was read from the Design panel and from the rendered frames.

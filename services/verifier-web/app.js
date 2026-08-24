@@ -121,7 +121,7 @@ async function start() {
   el('qr').hidden = false;
   el('hint').hidden = false;
   el('start').hidden = true;
-  el('panel-request').querySelector('.eyebrow').textContent = 'Step 2 — scan with your wallet';
+  el('request-eyebrow').textContent = 'Scan with your wallet';
 
   state.deadline = Date.now() + body.expiresInSeconds * 1000;
   state.timer = setInterval(poll, POLL_INTERVAL_MS);
