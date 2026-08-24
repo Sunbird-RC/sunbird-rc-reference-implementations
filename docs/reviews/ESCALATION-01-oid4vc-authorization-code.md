@@ -147,8 +147,24 @@ algorithm advertisement. The release advertises `Ed25519Signature2020` — a
 Linked-Data suite — as an SD-JWT VC signing algorithm for every non-mdoc format,
 which is not a value a JOSE wallet can act on.
 
-Image tag for evidence, if adopted:
-`sunbird-rc-oid4vc-service:v2.1.0-authcode.1583b7bd`.
+Image built and smoke-tested, for evidence if adopted:
+`sunbird-rc-oid4vc-service:v2.1.0-authcode.1583b7bd` (94.2 MB, `22cb55d3aae2`).
+
+Runtime check on the built artifact — not just the test suite. A throwaway
+container, configured with `KEYCLOAK_PUBLIC_URL` and `KEYCLOAK_REALM=age`, serves:
+
+```json
+"authorization_servers": [
+  "http://keycloak.test/auth/realms/age",
+  "http://localhost:3401"
+]
+```
+
+The realm is advertised first and the service keeps itself second, so a wallet can
+be pointed at Keycloak **without** breaking pre-authorised issuance — the accepted
+Flow 2 path continues to work. Blocker 1 is therefore resolved in the artifact, not
+only in code. The container was removed after the check; the running stack was
+never touched.
 
 ## Impact if deferred
 
