@@ -29,6 +29,7 @@ The showcase should prove that common credential capabilities can support indepe
 - Other use cases may use Inji or suitable open-source, VC-compliant mobile wallets.
 - Across the showcase, wallets must support issuance/receipt, storage, credential selection, user consent, presentation, and the required web-to-mobile or mobile-to-mobile flows.
 - One wallet implementation is not required for every use case; multiple compliant wallets may be used to demonstrate interoperability.
+- For the revised Age iteration, the wallet must authenticate the citizen through Keycloak, show available issuers, let the citizen select the National Identity Authority, and request/fetch the credential directly from that issuer. Issuance must not use a QR code or an issuer-counter web page.
 
 ## Issuers and Data
 
@@ -48,7 +49,7 @@ A verifier web page initiates a presentation request and displays a QR code. A c
 
 ### Mobile verification
 
-A separate demo mobile verifier experience initiates or receives a credential presentation and displays the verified business result. It may be a lightweight application, an adapted open-source verifier, or another standards-compatible demo application.
+A separate demo mobile verifier experience initiates or receives a credential presentation and displays the verified business result. It may be a lightweight application, an adapted open-source verifier, or another standards-compatible demo application. For the revised Age iteration, this must be a same-device journey: the verifier app invokes the wallet through a standards-compatible deep link, the holder reviews and consents, and the selectively disclosed response is validated before the app displays its result.
 
 The detailed protocol interaction and component choices belong in architecture and design.
 
@@ -66,6 +67,8 @@ The detailed protocol interaction and component choices belong in architecture a
 - Result: **APPROVED** or **DENIED**
 
 Demonstrates issuance, wallet storage, selective disclosure, consent, holder/key binding, presentation, cryptographic verification, replay/transaction protection, and data minimisation.
+
+The Age use case must demonstrate all three interaction patterns: authenticated wallet-driven issuance without an issuance QR, cross-device web verification by QR, and same-device mobile verification by deep link.
 
 ### 2. Agriculture / Rural Credit
 
