@@ -116,7 +116,9 @@ Option A has been **prepared** so the decision can be made against something
 real rather than a proposal. Nothing is adopted: the stack still runs the
 official `ghcr.io` image, and no phase downstream of this decision has started.
 
-Fork: `sunbird-rc-core`, branch `oid4vc/keycloak-as-v2.1.0`, from the `v2.1.0` tag.
+Fork: `sunbird-rc-core`, branch `oid4vc-keycloak-as-v2.1.0`, from the `v2.1.0` tag.
+(Flat name, not `oid4vc/keycloak-as-...`: a branch named `oid4vc` already exists
+in that fork, and Git cannot create a ref path beneath an existing ref.)
 
 | Commit | What |
 |---|---|

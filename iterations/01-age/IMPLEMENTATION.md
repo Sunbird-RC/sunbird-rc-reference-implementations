@@ -52,7 +52,8 @@ it: issuer metadata hardcodes itself as the authorization server
 claims — claims live in an offer session keyed by a pre-authorised code. The fix
 is three small edits that already exist on the fork's `oid4vc_issuer` branch;
 the escalation asks to port them onto the `v2.1.0` tag and run one non-release
-image. **Phases 1-6 do not start until that is answered.**
+image. That port is prepared on fork branch `oid4vc-keycloak-as-v2.1.0`
+(11 suites / 127 tests passing) but **not adopted**. **Phases 1-6 do not start until that is answered.**
 
 ## Phase 0 — Wallet compatibility spike *(next, runs in parallel)*
 
