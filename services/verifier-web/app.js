@@ -122,10 +122,6 @@ async function start() {
   el('hint').hidden = false;
   el('start').hidden = true;
   el('request-eyebrow').textContent = 'Scan with your wallet';
-  // Shown so the flow can be completed without a phone:
-  //   ./scripts/wallet.sh AGE-000001 <sessionId>
-  el('session').textContent = `no phone? ./scripts/wallet.sh AGE-000001 ${body.sessionId}`;
-  el('session').hidden = false;
 
   state.deadline = Date.now() + body.expiresInSeconds * 1000;
   state.timer = setInterval(poll, POLL_INTERVAL_MS);

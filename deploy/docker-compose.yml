@@ -303,7 +303,6 @@ services:
       # The web pages are static and need no build step, so nginx serves them
       # directly instead of a container existing to hold a handful of files.
       - ../services/verifier-web:/usr/share/nginx/html/verifier:ro
-      - ../services/issuer-web:/usr/share/nginx/html/issuer:ro
       - ../services/web-assets:/usr/share/nginx/html/assets:ro
     ports:
       # Port 80 on purpose — see the header note about did:web and ports.

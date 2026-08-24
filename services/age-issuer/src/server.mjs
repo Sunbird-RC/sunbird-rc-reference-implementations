@@ -1,7 +1,15 @@
-// National Identity Authority issuer counter.
+// National Identity Authority issuer-side backend.
 //
-// One job: turn "issue an age credential for citizen X" into a wallet-scannable
-// OpenID4VCI offer whose claims came from the registry and were derived here.
+// One job: turn "issue an age credential for citizen X" into an OpenID4VCI offer
+// whose claims came from the registry and were derived here.
+//
+// SCOPE NOTE after the Iteration 01 review: the charter now requires issuance to
+// be initiated and completed INSIDE the wallet, authenticated through Keycloak,
+// with no issuance QR and no issuer-counter page. So this service no longer
+// renders a QR or lists citizens, and the wallet-driven path will resolve claims
+// in oid4vc-service from the authenticated subject instead. What remains here is
+// kept for automated protocol evidence until that lands, and its derivation
+// rules (src/age-claims.mjs) stay as the reference implementation.
 //
 // It holds no keys and stores no credentials — signing lives in identity-service
 // (keys stay in Vault) and the credential itself only ever exists in the
@@ -9,7 +17,6 @@
 // is services/verifier.
 
 import { createServer } from 'node:http';
-import QRCode from 'qrcode-svg';
 import { deriveAgeClaims } from './age-claims.mjs';
 import { registryClient } from './registry.mjs';
 import { oid4vcClient } from './oid4vc.mjs';
@@ -63,10 +70,6 @@ async function issueOffer(citizenId) {
     status: 201,
     body: {
       offerId: offer.offer_id,
-      // Rendered here rather than by the page: the deep link carries the
-      // pre-authorised code, so the fewer places it is copied through, the
-      // better. A phone scans this; nothing else needs the raw string.
-      qrSvg: new QRCode({ content: offer.qr_data, padding: 2, width: 320, height: 320, ecl: 'M' }).svg(),
       // The deep link a wallet scans. NOT logged: it carries the
       // pre-authorised code, which is a bearer secret until redeemed.
       qrData: offer.qr_data,
@@ -96,18 +99,6 @@ const routes = {
         registry: registryHealth.status === 'fulfilled' ? 'UP' : 'DOWN',
         oid4vc: oid4vcHealth.status === 'fulfilled' ? 'UP' : 'DOWN',
       },
-    };
-  },
-
-  // The seeded citizens, so the counter can offer a list instead of asking an
-  // operator to memorise identifiers. Names are synthetic fixture data and this
-  // is the issuer's OWN registry — the privacy boundary that matters is what
-  // leaves in a credential, which is asserted in the e2e suite.
-  'GET /citizens': async () => {
-    const citizens = await registry.listCitizens();
-    return {
-      status: 200,
-      body: citizens.map((c) => ({ citizenId: c.citizenId, name: c.name })),
     };
   },
 

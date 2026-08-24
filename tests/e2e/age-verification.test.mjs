@@ -115,28 +115,15 @@ describe('positive flow', () => {
   });
 });
 
-describe('issuer counter', () => {
-  test('lists the seeded citizens', async () => {
+describe('issuer-side backend', () => {
+  test('the offer is a standards OpenID4VCI offer, and carries no QR', async () => {
     guard();
-    const { status, body } = await json(`${base}/api/issuer/citizens`);
-    assert.equal(status, 200);
-    const ids = body.map((c) => c.citizenId);
-    for (const expected of [ADULT, MINOR, 'AGE-000003', 'AGE-000004', 'AGE-000005']) {
-      assert.ok(ids.includes(expected), `${expected} must be listed`);
-    }
-  });
-
-  test('the offer carries a scannable deep link and a rendered QR', async () => {
-    guard();
-    // A phone cannot consume JSON. The counter page needs an image, and the
-    // deep link has to be the OpenID4VCI offer scheme or no wallet will act on
-    // it.
+    // The charter forbids an issuance QR, so the issuer no longer renders one.
+    // The offer itself must still be a spec-shaped credential offer, because the
+    // wallet-driven flow dereferences the same object.
     const offer = await issueOfferFor(base, ADULT);
     assert.match(offer.qrData, /^openid-credential-offer:\/\/\?credential_offer_uri=/);
-    // An SVG document, not necessarily starting with <svg: qrcode-svg emits an
-    // XML declaration first.
-    assert.match(offer.qrSvg, /<svg[^>]+width="320"/);
-    assert.ok(offer.qrSvg.includes('<rect'), 'the QR must have modules drawn');
+    assert.equal(offer.qrSvg, undefined, 'no rendered QR may come back from the issuer');
     assert.equal(offer.claimNames.length, 4);
   });
 

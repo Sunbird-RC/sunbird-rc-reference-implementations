@@ -57,16 +57,6 @@ export function registryClient(baseUrl) {
       return list[0];
     },
 
-    /** Every seeded AgeCitizen, ordered so the demo list is stable. */
-    async listCitizens() {
-      const results = await call('/api/v1/AgeCitizen/search', {
-        method: 'POST',
-        body: JSON.stringify({ filters: {} }),
-      });
-      const list = Array.isArray(results) ? results : results?.data || [];
-      return list.sort((a, b) => String(a.citizenId).localeCompare(String(b.citizenId)));
-    },
-
     /** @param {Record<string, unknown>} record */
     async createCitizen(record) {
       return call('/api/v1/AgeCitizen', { method: 'POST', body: JSON.stringify(record) });
