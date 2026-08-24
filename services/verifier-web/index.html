@@ -3,39 +3,45 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
     <title>Age-restricted service — age check</title>
+    <link rel="preload" href="fonts/rubik-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main class="shell">
       <header>
-        <p class="eyebrow">Age-restricted service</p>
+        <span class="brand"><span class="mark" aria-hidden="true">◆</span> Age-restricted service</span>
         <h1>Prove you are over 18</h1>
         <p class="lede">
-          Scan the code with your wallet. You will be asked to share one thing only —
-          whether you are over 18. Not your date of birth, not your name.
+          Scan the code with your wallet. You will be asked to share
+          <strong>one thing only</strong> — whether you are over 18. Not your date of birth,
+          not your name.
         </p>
       </header>
 
       <section class="panel" id="panel-request">
+        <p class="eyebrow">Step 1 — start the check</p>
         <button id="start" class="primary">Start age check</button>
         <div id="qr" class="qr" hidden></div>
         <p class="muted" id="hint" hidden>
+          <span class="pulse" aria-hidden="true"></span>
           Waiting for your wallet… <span id="countdown"></span>
         </p>
-        <p class="muted small" id="policy"></p>
+        <div class="chips" id="policy"></div>
       </section>
 
       <section class="panel result" id="panel-result" hidden>
+        <p class="eyebrow" id="result-eyebrow">Result</p>
         <div id="decision" class="decision"></div>
         <p id="reason" class="muted"></p>
         <dl id="detail" class="detail"></dl>
         <button id="again" class="secondary">Run another check</button>
       </section>
 
-      <footer class="muted small">
+      <footer>
         Synthetic demonstration data. The decision is made by the verifier service after
-        cryptographic verification — this page only displays it.
+        cryptographic verification and an issuer trust check — this page only displays it.
       </footer>
     </main>
     <script src="app.js"></script>

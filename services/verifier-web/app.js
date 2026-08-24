@@ -13,6 +13,9 @@ const POLL_INTERVAL_MS = 1500;
 const el = (id) => document.getElementById(id);
 const state = { sessionId: null, timer: null, countdown: null, deadline: null };
 
+/** Everything from the server is rendered as text, never as markup. */
+const text = (value) => document.createTextNode(String(value));
+
 async function api(path, init) {
   const res = await fetch(`${API}${path}`, init);
   const body = await res.json().catch(() => ({}));
@@ -26,32 +29,69 @@ function stopPolling() {
   state.countdown = null;
 }
 
+/** Verification checks as pass/fail pills. */
+function checksNode(checks) {
+  const wrap = document.createElement('div');
+  wrap.className = 'checks';
+  for (const [name, value] of Object.entries(checks)) {
+    const pill = document.createElement('span');
+    pill.className = value === 'OK' ? 'check' : 'check bad';
+    pill.appendChild(text(name));
+    wrap.appendChild(pill);
+  }
+  return wrap;
+}
+
+/** Claim chips: what was shared, and what was deliberately not. */
+function claimsNode(disclosed) {
+  const wrap = document.createElement('div');
+  wrap.className = 'chips';
+  for (const [name, value] of Object.entries(disclosed)) {
+    const chip = document.createElement('span');
+    chip.className = 'chip ask';
+    chip.appendChild(text(`${name} = ${value}`));
+    wrap.appendChild(chip);
+  }
+  for (const withheld of ['date of birth', 'name', 'ageOver21']) {
+    const chip = document.createElement('span');
+    chip.className = 'chip withheld';
+    chip.appendChild(text(withheld));
+    wrap.appendChild(chip);
+  }
+  return wrap;
+}
+
+function row(list, term, valueNode) {
+  const dt = document.createElement('dt');
+  dt.appendChild(text(term));
+  const dd = document.createElement('dd');
+  dd.appendChild(typeof valueNode === 'string' ? text(valueNode) : valueNode);
+  list.appendChild(dt);
+  list.appendChild(dd);
+}
+
 function showResult({ decision, reason, checks, issuer, disclosed, failedCheck, diagnostic }) {
   stopPolling();
   el('panel-request').hidden = true;
   el('panel-result').hidden = false;
 
   const verdict = decision || 'NOT VERIFIED';
+  const tone = verdict === 'APPROVED' ? 'approved' : verdict === 'DENIED' ? 'denied' : 'failed';
   const node = el('decision');
   node.textContent = verdict;
-  node.className = `decision ${verdict === 'APPROVED' ? 'approved' : verdict === 'DENIED' ? 'denied' : 'failed'}`;
+  node.className = `decision ${tone}`;
+  el('result-eyebrow').textContent = decision ? 'Verified result' : 'Rejected';
   el('reason').textContent = reason || '';
 
-  const rows = [];
-  if (issuer) rows.push(['Issuer', issuer]);
+  const detail = el('detail');
+  detail.textContent = '';
+  if (issuer) row(detail, 'Issuer', issuer);
   if (disclosed) {
-    rows.push(['Disclosed to us', Object.entries(disclosed).map(([k, v]) => `${k} = ${v}`).join(', ')]);
-    rows.push(['Not disclosed', 'date of birth, name, gender, everything else']);
+    row(detail, 'Shared with us', claimsNode(disclosed));
   }
-  if (checks && Object.keys(checks).length) {
-    rows.push(['Verification', Object.entries(checks).map(([k, v]) => `${k}: ${v}`).join('  ·  ')]);
-  }
-  if (failedCheck) rows.push(['Failed at', failedCheck]);
-  if (diagnostic) rows.push(['Detail', diagnostic]);
-
-  el('detail').innerHTML = rows
-    .map(([term, value]) => `<dt>${term}</dt><dd>${value}</dd>`)
-    .join('');
+  if (checks && Object.keys(checks).length) row(detail, 'Verification', checksNode(checks));
+  if (failedCheck) row(detail, 'Failed at', failedCheck);
+  if (diagnostic) row(detail, 'Detail', diagnostic);
 }
 
 async function poll() {
@@ -60,7 +100,7 @@ async function poll() {
     return showResult({ reason: 'The request expired before a presentation arrived.' });
   }
   if (body.state === 'waiting') return;
-  if (body.state === 'rejected') return showResult({ ...body, reason: body.reason });
+  if (body.state === 'rejected') return showResult(body);
   if (body.state === 'decided') return showResult(body);
 }
 
@@ -81,6 +121,7 @@ async function start() {
   el('qr').hidden = false;
   el('hint').hidden = false;
   el('start').hidden = true;
+  el('panel-request').querySelector('.eyebrow').textContent = 'Step 2 — scan with your wallet';
 
   state.deadline = Date.now() + body.expiresInSeconds * 1000;
   state.timer = setInterval(poll, POLL_INTERVAL_MS);
@@ -91,12 +132,26 @@ async function start() {
   }, 1000);
 }
 
+/** Shows what this verifier asks for, read from the service rather than hardcoded. */
 async function showPolicy() {
   const { body } = await api('/policy');
   if (!body.requestedClaims) return;
-  el('policy').textContent =
-    `This verifier requests: ${body.requestedClaims.join(', ')}. ` +
-    `Accepted issuers: ${(body.trustedIssuers || []).join(', ')}.`;
+  const wrap = el('policy');
+  wrap.textContent = '';
+  wrap.appendChild(text('Requests'));
+  for (const claim of body.requestedClaims) {
+    const chip = document.createElement('span');
+    chip.className = 'chip ask';
+    chip.appendChild(text(claim));
+    wrap.appendChild(chip);
+  }
+  wrap.appendChild(text('· accepts'));
+  for (const issuer of body.trustedIssuers || []) {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.appendChild(text(issuer));
+    wrap.appendChild(chip);
+  }
 }
 
 el('start').addEventListener('click', start);

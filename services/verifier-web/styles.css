@@ -1,91 +1,435 @@
+/* Sunbird Spark "Joyful" design system, applied to the age verifier.
+ *
+ * Tokens are lifted from the Spark portal's own seed system
+ * (sunbird-spark-portal/frontend/src/index.css): six HSL seeds drive the whole
+ * palette, so switching the three lines under "theme seeds" retherms this page
+ * exactly as it rethemes Spark — terracotta (default), blue, or teal.
+ *
+ * Rubik is self-hosted from the same woff2 Spark ships. No CDN: the stack has to
+ * work on a laptop with no network, and a wallet-facing demo should not depend on
+ * fonts.googleapis.com resolving.
+ */
+
+@font-face {
+  font-family: 'Rubik';
+  font-style: normal;
+  /* Variable font: one file covers 300-700. */
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('fonts/rubik-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
-  color-scheme: light dark;
-  --ink: #14181f;
-  --muted: #5c6674;
-  --line: #dfe4ea;
-  --card: #ffffff;
-  --bg: #f5f7fa;
-  --approved: #1a7f4b;
-  --denied: #b3261e;
-  --failed: #7a5c00;
-  --accent: #3d6b8c;
+  /* ---- theme seeds (Spark preset A — Terracotta) ---------------------------
+     Preset B (Blue): primary 217 71% 46%, chip 217 71%, icon 200
+     Preset C (Teal): primary 180 38% 38%, chip 180 38%, icon 170          */
+  --seed-primary-h: 12;
+  --seed-primary-s: 50%;
+  --seed-primary-l: 45%;
+  --seed-chip-h: 45;
+  --seed-chip-s: 100%;
+  --seed-icon-h: 28;
+
+  /* ---- surfaces ---- */
+  --background: 48 23% 91%;          /* #E9E8D9 warm body */
+  --surface: 0 0% 100%;
+  --card: var(--seed-chip-h) var(--seed-chip-s) 97%;   /* warm cream, chip-tinted */
+  --ivory: 55 100% 98%;
+  --foreground: 0 0% 13%;            /* #222222 */
+  --card-foreground: 0 0% 20%;       /* #333333 */
+  --muted-foreground: 210 11% 45%;
+  --border: 210 25% 80%;
+
+  /* ---- brand ---- */
+  --primary: var(--seed-primary-h) var(--seed-primary-s) var(--seed-primary-l);
+  --primary-strong: var(--seed-primary-h) var(--seed-primary-s) 36%;
+  --primary-tint: var(--seed-chip-h) var(--seed-chip-s) 93%;
+  --accent-muted: var(--seed-icon-h) var(--seed-primary-s) 54%;
+  --ginger: 28 57% 54%;              /* #CC8545 fixed amber-gold */
+  --sunflower: var(--seed-chip-h) var(--seed-chip-s) 73%;
+  --dark-blue: 207 100% 16%;         /* #002E50 */
+  --ink: 193 35% 33%;                /* #376673 */
+
+  /* ---- status ---- */
+  --moss: 146 26% 53%;               /* #66a682 — approved */
+  --moss-deep: 146 30% 30%;
+  --destructive: 0 84% 42%;          /* denied */
+  --destructive-tint: 0 60% 96%;
+
+  --radius: 1rem;
+  --radius-sm: 0.625rem;
+  --shadow-sm: 0 1px 2px hsl(var(--dark-blue) / 0.06);
+  --shadow-md: 0 6px 20px -6px hsl(var(--dark-blue) / 0.16), 0 1px 3px hsl(var(--dark-blue) / 0.05);
+  --shadow-lg: 0 24px 56px -24px hsl(var(--dark-blue) / 0.3), 0 2px 8px hsl(var(--dark-blue) / 0.06);
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ink: #eef2f7;
-    --muted: #9aa5b3;
-    --line: #2b323c;
-    --card: #171c23;
-    --bg: #0e1116;
-  }
-}
-* { box-sizing: border-box; }
-body {
-  margin: 0;
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 2rem 1rem;
-  background: var(--bg);
-  color: var(--ink);
-  font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-}
-.shell { width: min(34rem, 100%); display: grid; gap: 1.25rem; }
-.eyebrow {
-  margin: 0 0 0.25rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 0.75rem;
-  color: var(--accent);
-  font-weight: 600;
-}
-h1 { margin: 0 0 0.5rem; font-size: 1.6rem; letter-spacing: -0.01em; }
-.lede { margin: 0; color: var(--muted); }
-/* Must come before .panel: `display: grid` below is a normal declaration on a
-   class, which beats the user-agent's `[hidden] { display: none }` rule — so
-   without this the result panel is visible on first load, before any check has
-   run. */
+
+/* `display` on a class beats the user-agent's [hidden] rule, so state that is
+   meant to be hidden shows up on first paint without this. */
 [hidden] {
   display: none !important;
 }
-.panel {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 1.5rem;
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  padding: 3rem 1.25rem;
   display: grid;
-  gap: 1rem;
+  place-items: start center;
+  background-color: hsl(var(--background));
+  /* Two soft brand washes rather than a flat fill — the warmth is what makes
+     the Spark surfaces read as paper instead of chrome. */
+  background-image:
+    radial-gradient(60rem 32rem at 12% -8%, hsl(var(--sunflower) / 0.5), transparent 60%),
+    radial-gradient(48rem 28rem at 100% 0%, hsl(var(--primary) / 0.1), transparent 55%);
+  background-attachment: fixed;
+  color: hsl(var(--foreground));
+  font-family: 'Rubik', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.shell {
+  width: min(37rem, 100%);
+  display: grid;
+  gap: 1.5rem;
+}
+
+/* ---- header ---- */
+header {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.4rem 0.9rem 0.4rem 0.5rem;
+  border-radius: 999px;
+  background: hsl(var(--surface) / 0.75);
+  border: 1px solid hsl(var(--primary) / 0.16);
+  box-shadow: var(--shadow-sm);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: hsl(var(--card-foreground));
+}
+
+.brand .mark {
+  width: 1.55rem;
+  height: 1.55rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(140deg, hsl(var(--ginger)), hsl(var(--primary)));
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+h1 {
+  margin: 0.25rem 0 0;
+  font-size: clamp(1.75rem, 4vw, 2.3rem);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: hsl(var(--dark-blue));
+}
+
+.lede {
+  margin: 0;
+  max-width: 34rem;
+  color: hsl(var(--ink));
+}
+
+.lede strong {
+  font-weight: 500;
+  color: hsl(var(--primary-strong));
+}
+
+/* ---- panels ---- */
+.panel {
+  position: relative;
+  overflow: hidden;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--primary) / 0.14);
+  border-radius: var(--radius);
+  padding: 1.75rem;
+  display: grid;
+  gap: 1.15rem;
   justify-items: center;
   text-align: center;
+  box-shadow: var(--shadow-md);
 }
+
+/* The warm rule along the top edge is the Spark card signature. */
+.panel::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--ginger)), hsl(var(--sunflower)));
+}
+
+/* ---- buttons ---- */
 button {
   font: inherit;
-  font-weight: 600;
-  border-radius: 9px;
-  padding: 0.7rem 1.4rem;
+  font-weight: 500;
+  border-radius: 999px;
+  padding: 0.8rem 1.75rem;
   cursor: pointer;
   border: 1px solid transparent;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
 }
-button:disabled { opacity: 0.6; cursor: progress; }
-.primary { background: var(--accent); color: #fff; }
-.secondary { background: transparent; color: var(--ink); border-color: var(--line); }
-.qr { width: 320px; max-width: 100%; }
-.qr svg { width: 100%; height: auto; background: #fff; border-radius: 8px; padding: 8px; }
-.muted { color: var(--muted); margin: 0; }
-.small { font-size: 0.85rem; }
-.decision { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
-.decision.approved { color: var(--approved); }
-.decision.denied { color: var(--denied); }
-.decision.failed { color: var(--failed); }
+
+button:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
+
+.primary {
+  background: hsl(var(--primary));
+  color: #fff;
+  box-shadow: 0 8px 18px -8px hsl(var(--primary) / 0.7);
+}
+
+.primary:hover:not(:disabled) {
+  background: hsl(var(--primary-strong));
+  transform: translateY(-1px);
+}
+
+.secondary {
+  background: hsl(var(--surface));
+  color: hsl(var(--card-foreground));
+  border-color: hsl(var(--border));
+}
+
+.secondary:hover {
+  border-color: hsl(var(--primary) / 0.45);
+  color: hsl(var(--primary-strong));
+}
+
+button:focus-visible {
+  outline: 3px solid hsl(var(--accent-muted) / 0.5);
+  outline-offset: 2px;
+}
+
+/* ---- QR ---- */
+.qr {
+  width: 19rem;
+  max-width: 100%;
+  padding: 0.9rem;
+  border-radius: var(--radius-sm);
+  background: hsl(var(--ivory));
+  border: 1px solid hsl(var(--primary) / 0.16);
+  box-shadow: var(--shadow-sm);
+}
+
+.qr svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* ---- text helpers ---- */
+.muted {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(var(--primary-strong));
+}
+
+#hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+/* A quiet pulse, so "waiting" reads as live rather than stalled. */
+.pulse {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: hsl(var(--accent-muted));
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1.1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse { animation: none; }
+  button { transition: none; }
+}
+
+/* ---- policy chips: what is asked for, made visible ---- */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: center;
+  align-items: center;
+  font-size: 0.82rem;
+}
+
+.chip {
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  background: hsl(var(--primary-tint));
+  border: 1px solid hsl(var(--primary) / 0.2);
+  color: hsl(var(--card-foreground));
+  font-weight: 500;
+}
+
+.chip.ask {
+  background: hsl(var(--sunflower) / 0.55);
+  border-color: hsl(var(--ginger) / 0.45);
+}
+
+.chip.withheld {
+  background: hsl(var(--surface));
+  border-color: hsl(var(--border));
+  color: hsl(var(--muted-foreground));
+  text-decoration: line-through;
+  text-decoration-color: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* ---- decision ---- */
+.decision {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 2.1rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.decision::before {
+  content: '';
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  display: inline-block;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 1.3rem;
+}
+
+.decision.approved {
+  color: hsl(var(--moss-deep));
+}
+
+.decision.approved::before {
+  background-color: hsl(var(--moss) / 0.22);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2334704f' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+}
+
+.decision.denied {
+  color: hsl(var(--destructive));
+}
+
+.decision.denied::before {
+  background-color: hsl(var(--destructive-tint));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c41818' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E");
+}
+
+.decision.failed {
+  color: hsl(var(--ginger));
+}
+
+.decision.failed::before {
+  background-color: hsl(var(--sunflower) / 0.5);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a5a20' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8v5M12 17h.01'/%3E%3C/svg%3E");
+}
+
+/* ---- detail table ---- */
 .detail {
   width: 100%;
   margin: 0;
+  padding-top: 0.25rem;
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 0.35rem 1rem;
+  gap: 0.55rem 1.25rem;
   text-align: left;
-  font-size: 0.87rem;
+  font-size: 0.88rem;
+  border-top: 1px solid hsl(var(--primary) / 0.14);
 }
-.detail dt { color: var(--muted); }
-.detail dd { margin: 0; word-break: break-word; }
-footer { text-align: center; }
+
+.detail dt {
+  color: hsl(var(--muted-foreground));
+  font-weight: 400;
+}
+
+.detail dd {
+  margin: 0;
+  color: hsl(var(--card-foreground));
+  font-weight: 500;
+  word-break: break-word;
+}
+
+/* Verification checks, as pass/fail pills rather than a wall of text. */
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: hsl(var(--moss) / 0.16);
+  color: hsl(var(--moss-deep));
+  border: 1px solid hsl(var(--moss) / 0.3);
+}
+
+.check.bad {
+  background: hsl(var(--destructive-tint));
+  color: hsl(var(--destructive));
+  border-color: hsl(var(--destructive) / 0.3);
+}
+
+.check::before {
+  content: '✓';
+  font-size: 0.7rem;
+}
+
+.check.bad::before {
+  content: '✕';
+}
+
+footer {
+  text-align: center;
+  max-width: 32rem;
+  margin: 0 auto;
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+}
