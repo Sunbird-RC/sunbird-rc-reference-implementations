@@ -144,7 +144,6 @@ The selected wallet may determine the exact standards-compatible invocation and 
 - [ ] The citizen selects the issuer and requests the Age credential inside the wallet.
 - [ ] The issuer derives the claim from the authenticated citizen's Sunbird RC record.
 - [ ] The wallet receives and stores the holder-bound SD-JWT VC directly, without an issuance QR or issuer-counter page.
-- [ ] After closing/reopening the wallet and authenticating again, the citizen can still find and recognise the stored credential.
 - [ ] The ineligible citizen can receive a valid credential containing the issuer-derived negative assertion.
 - [ ] Invalid credentials, incorrect passwords, unmapped accounts, and attempts to request another citizen's credential fail safely.
 
