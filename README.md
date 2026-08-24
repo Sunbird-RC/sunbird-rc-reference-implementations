@@ -31,8 +31,7 @@ Across these use cases, the showcase includes Inji Wallet interoperability, suit
 - [Compatibility Baseline](docs/design/COMPATIBILITY.md)
 - [Coding Agent Instructions](CLAUDE.md)
 - [Iteration 01 — Age Verification](iterations/01-age/CHARTER.md)
-- [Kartheek — Start Here](docs/start/KARTHEEK-START.md)
-- [Claude Code / Co-work — Start Here](docs/start/CLAUDE-START.md)
+- [Iteration 01 review feedback](docs/reviews/ITERATION-01-FEEDBACK.md)
 
 These documents are the authoritative project baseline. Architecture and implementation must remain aligned with them.
 
