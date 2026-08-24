@@ -115,6 +115,78 @@ describe('positive flow', () => {
   });
 });
 
+describe('issuer counter', () => {
+  test('lists the seeded citizens', async () => {
+    guard();
+    const { status, body } = await json(`${base}/api/issuer/citizens`);
+    assert.equal(status, 200);
+    const ids = body.map((c) => c.citizenId);
+    for (const expected of [ADULT, MINOR, 'AGE-000003', 'AGE-000004', 'AGE-000005']) {
+      assert.ok(ids.includes(expected), `${expected} must be listed`);
+    }
+  });
+
+  test('the offer carries a scannable deep link and a rendered QR', async () => {
+    guard();
+    // A phone cannot consume JSON. The counter page needs an image, and the
+    // deep link has to be the OpenID4VCI offer scheme or no wallet will act on
+    // it.
+    const offer = await issueOfferFor(base, ADULT);
+    assert.match(offer.qrData, /^openid-credential-offer:\/\/\?credential_offer_uri=/);
+    // An SVG document, not necessarily starting with <svg: qrcode-svg emits an
+    // XML declaration first.
+    assert.match(offer.qrSvg, /<svg[^>]+width="320"/);
+    assert.ok(offer.qrSvg.includes('<rect'), 'the QR must have modules drawn');
+    assert.equal(offer.claimNames.length, 4);
+  });
+
+  test('the response never carries claim VALUES', async () => {
+    guard();
+    // Names only. A counter response that echoed the values would hand the
+    // caller the very data the credential exists to keep in the holder's hands.
+    const offer = await issueOfferFor(base, MINOR);
+    const serialised = JSON.stringify(offer);
+    assert.equal(/Arjun|2012-08-30/.test(serialised), false, 'no identity values in the offer response');
+    assert.deepEqual(offer.claimNames, ['ageOver18', 'ageOver21', 'dateOfBirth', 'name']);
+  });
+
+  test('an unknown citizen is refused', async () => {
+    guard();
+    const res = await json(`${base}/api/issuer/offers`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ citizenId: 'AGE-999999' }),
+    });
+    assert.equal(res.status, 404);
+    assert.equal(res.body.error, 'unknown_citizen');
+  });
+
+  test('a caller cannot dictate the claims that get issued', async () => {
+    guard();
+    // Names the minor, but also tries to assert adulthood in every shape the
+    // endpoint might plausibly accept. The registry record must win.
+    const holder = await createHolder();
+    const res = await json(`${base}/api/issuer/offers`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        citizenId: MINOR,
+        claims: { ageOver18: true },
+        ageOver18: true,
+        name: 'Someone Else',
+        dateOfBirth: '1980-01-01',
+      }),
+    });
+    assert.equal(res.status, 201);
+
+    const { credential } = await collectCredential({ base, offer: res.body, holder });
+    const values = Object.fromEntries(parseSdJwt(credential).disclosures.map((d) => [d.name, d.value]));
+    assert.equal(values.ageOver18, false, 'the caller must not be able to assert adulthood');
+    assert.equal(values.name, 'Arjun Das', 'the caller must not be able to rename the holder');
+    assert.equal(values.dateOfBirth, '2012-08-30');
+  });
+});
+
 describe('privacy and minimum disclosure', () => {
   test('the verifier asks for one claim only', async () => {
     guard();

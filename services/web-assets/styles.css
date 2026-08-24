@@ -1,4 +1,7 @@
-/* Sunbird Spark theme.
+/* Sunbird Spark theme — shared by the issuer counter and the verifier page.
+ *
+ * Served from /assets/ so both pages use one stylesheet and one font file
+ * rather than drifting copies.
  *
  * Palette and type read directly from the Sunbird Spark Figma file
  * (figma.com/design/gdTmBeuK9os2NxeLZIi5rq, "Color palette and font" frame,
@@ -21,7 +24,7 @@
   /* Variable font: one file covers 300-700. */
   font-weight: 300 700;
   font-display: swap;
-  src: url('fonts/rubik-latin.woff2') format('woff2');
+  src: url('/assets/fonts/rubik-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
     U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
     U+2212, U+2215, U+FEFF, U+FFFD;
@@ -482,4 +485,51 @@ footer .wordmark {
 footer strong {
   color: rgba(255, 255, 255, 0.9);
   font-weight: 400;
+}
+
+/* ---- record list (issuer counter) -------------------------------------- */
+.rows {
+  width: 100%;
+  display: grid;
+  gap: 0.5rem;
+}
+
+/* A row is a button: the whole thing is the target, which is what you want on a
+   touchscreen at a counter. */
+.record {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.85rem 1rem;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-inner);
+  font-weight: 300;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.record:hover {
+  border-color: var(--brick);
+  background: var(--sunflower-wash);
+}
+
+.record-name {
+  font-weight: 500;
+  color: var(--heading);
+}
+
+.record-id {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.record-go {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--brick);
+  white-space: nowrap;
 }

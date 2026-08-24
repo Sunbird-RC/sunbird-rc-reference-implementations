@@ -17,9 +17,11 @@ This is the handoff artifact. Anything not marked verified has not been run.
 | Age source data | `registry-schemas/AgeCitizen.json` | National Identity Authority entity; the only source of credential claims |
 | Issuer counter | `services/age-issuer/` | Reads the registry through its API, derives `ageOver18`/`ageOver21`, creates a pre-authorised OpenID4VCI offer |
 | Verifier service | `services/verifier/` | Generic: checks gate → disclosure policy → issuer trust allowlist → domain decision. Age is one module (`src/domains/age/`) |
-| Verifier page | `services/verifier-web/` | Static, Sunbird Spark themed. Shows the QR and the decision; talks only to the verifier service |
+| Issuer counter page | `services/issuer-web/` | Static. Lists the seeded citizens and shows the OpenID4VCI offer as a **scannable QR** — a phone cannot consume JSON. No login, no record editing |
+| Verifier page | `services/verifier-web/` | Static. Shows the presentation QR and the decision; talks only to the verifier service |
+| Shared web assets | `services/web-assets/` | One Spark stylesheet and one Rubik woff2, served at `/assets/`, so the two pages cannot drift |
 | Trust allowlist | `config/trust/issuers.json` | Version-controlled demo trust model (DESIGN §6) |
-| Tests | `tests/unit`, `tests/e2e` | 39 unit + 24 end-to-end |
+| Tests | `tests/unit`, `tests/e2e` | 39 unit + 29 end-to-end |
 
 **No standards adapter was needed.** Sunbird RC `v2.1.0`'s native `oid4vc-service`
 covered OpenID4VCI issuance, `vc+sd-jwt` selective disclosure, holder binding,
@@ -99,7 +101,7 @@ $ npm run test:unit
 tests 39   pass 39   fail 0
 
 $ npm run test:e2e
-tests 24   pass 24   fail 0     (6 consecutive clean runs)
+tests 29   pass 29   fail 0
 ```
 
 Unit coverage: calendar-correct age derivation (18th-birthday boundary,
@@ -130,6 +132,10 @@ the presentation is still refused, because the issuer is not on the allowlist.
 
 ### Browser
 
+`http://localhost/issuer/` lists the five seeded citizens and renders the credential
+offer as a QR with the claim names beside it — this is what a phone scans, and it is
+what makes the on-device run possible at all.
+
 `http://localhost/verifier/` was driven in Chrome for both outcomes: **APPROVED**
 (`ageOver18 = true`) and **DENIED** (`ageOver18 = false`), each showing the issuer
 name, the single disclosed claim, the withheld claims struck through, and all
@@ -142,6 +148,7 @@ renders it.
 - [x] A synthetic eligible citizen receives an `AgeVerificationCredential` in a wallet
 - [x] The wallet scans the web verifier's QR request
 - [~] The wallet shows that only `ageOver18` is requested and obtains consent — *protocol verified; the consent **screen** needs the Paradym device run*
+- [x] The issuance offer is presented as a scannable QR (`/issuer/`)
 - [x] The wallet presents `ageOver18 = true` without unrelated identity claims
 - [x] The verifier validates the presentation and displays **APPROVED**
 
@@ -162,7 +169,12 @@ renders it.
 - [x] Integration tests cover the issuance and presentation endpoints
 - [x] Use-case data remains logically separated (`tests/e2e/data-isolation.test.mjs`)
 - [x] Versions, configuration mode and limitations recorded
-- [ ] Paradym device run: consent screen, and OpenID4VCI collection on this stack
+- [ ] Paradym device run: consent screen, and OpenID4VCI collection on this stack.
+      **Blocked on the deferred exposure decision**: a phone cannot reach
+      `http://localhost`, and `did:web:localhost` is not resolvable off-box, so this
+      needs the HTTPS host with `PUBLIC_URL`/`PUBLIC_HOST` set and a re-bootstrap on a
+      clean stack (changing the host invalidates every `did:web` and every credential
+      already issued)
 - [ ] Kartheek demonstrates the flow to Anand
 
 ## Reproducing

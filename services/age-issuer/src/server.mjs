@@ -9,6 +9,7 @@
 // is services/verifier.
 
 import { createServer } from 'node:http';
+import QRCode from 'qrcode-svg';
 import { deriveAgeClaims } from './age-claims.mjs';
 import { registryClient } from './registry.mjs';
 import { oid4vcClient } from './oid4vc.mjs';
@@ -62,6 +63,10 @@ async function issueOffer(citizenId) {
     status: 201,
     body: {
       offerId: offer.offer_id,
+      // Rendered here rather than by the page: the deep link carries the
+      // pre-authorised code, so the fewer places it is copied through, the
+      // better. A phone scans this; nothing else needs the raw string.
+      qrSvg: new QRCode({ content: offer.qr_data, padding: 2, width: 320, height: 320, ecl: 'M' }).svg(),
       // The deep link a wallet scans. NOT logged: it carries the
       // pre-authorised code, which is a bearer secret until redeemed.
       qrData: offer.qr_data,
@@ -91,6 +96,18 @@ const routes = {
         registry: registryHealth.status === 'fulfilled' ? 'UP' : 'DOWN',
         oid4vc: oid4vcHealth.status === 'fulfilled' ? 'UP' : 'DOWN',
       },
+    };
+  },
+
+  // The seeded citizens, so the counter can offer a list instead of asking an
+  // operator to memorise identifiers. Names are synthetic fixture data and this
+  // is the issuer's OWN registry — the privacy boundary that matters is what
+  // leaves in a credential, which is asserted in the e2e suite.
+  'GET /citizens': async () => {
+    const citizens = await registry.listCitizens();
+    return {
+      status: 200,
+      body: citizens.map((c) => ({ citizenId: c.citizenId, name: c.name })),
     };
   },
 
