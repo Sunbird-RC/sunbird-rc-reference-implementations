@@ -533,3 +533,16 @@ footer strong {
   color: var(--brick);
   white-space: nowrap;
 }
+
+/* Demo aid on the verifier page: the command that answers this session when no
+   phone is in the loop. Monospace and quiet — it is scaffolding, not chrome. */
+.session {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+  background: var(--page);
+  border: 1px dashed var(--hairline);
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+  user-select: all;
+}

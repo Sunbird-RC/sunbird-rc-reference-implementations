@@ -186,9 +186,31 @@ cd deploy && cp env.example .env && docker compose up -d   # registry ~1-4 min
 cd .. && npm install
 npm run test:unit
 npm run test:e2e
-./scripts/demo.sh
-open http://localhost/verifier/
+./scripts/demo.sh                # headless walkthrough, positive + negatives
 ```
+
+### Checking both UIs by hand
+
+Two pages, one per role:
+
+| URL | Role | What to look for |
+|---|---|---|
+| `http://localhost/issuer/` | National Identity Authority | The seeded citizens; pick one and the credential offer appears as a QR, with the claim names that will be issued |
+| `http://localhost/verifier/` | Age-restricted service | "Start age check" produces the presentation QR; the result shows APPROVED/DENIED, the issuer, the one disclosed claim, and the seven checks |
+
+With a phone, scan the issuer QR, then the verifier QR — no other step. On a
+laptop there is no wallet in the browser, so the verifier page prints the command
+that answers the session it is showing:
+
+```bash
+./scripts/wallet.sh AGE-000001 <sessionId>   # collect, then present
+./scripts/wallet.sh AGE-000002 <sessionId>   # the minor: expect DENIED
+./scripts/wallet.sh AGE-000001               # collect only
+```
+
+`scripts/wallet.sh` is the same holder the e2e suite uses — real ES256 keys, a
+real proof of possession, a real SD-JWT presentation with a Key Binding JWT. It
+stands in for the phone; it does not stand in for the verification.
 
 ## Defects found by running it
 
