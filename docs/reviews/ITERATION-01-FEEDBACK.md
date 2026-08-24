@@ -59,6 +59,7 @@ The completed evidence must include the real mobile-wallet consent screen and su
 - Wallet authentication and issuer-selection demonstration.
 - Direct wallet-driven issuance with no issuance QR.
 - Credential visible in wallet after issuance.
+- Credential remains available after the citizen closes/reopens the wallet and authenticates again.
 - Cross-device QR presentation with wallet consent.
 - Same-device deep-link presentation with wallet consent.
 - Proof that only the requested age assertion reaches each verifier.
@@ -73,8 +74,74 @@ The completed evidence must include the real mobile-wallet consent screen and su
 - Record the dedicated Age database deviation for acceptance.
 - Demonstrate the completed iteration to Anand and close feedback before requesting merge.
 
-## Baseline Impact
+## Iteration Retrospective
 
-Keycloak-authenticated, wallet-driven issuance and same-device mobile verification were not explicit requirements of the approved Age charter. They are now requested acceptance behaviour and materially expand Iteration 01.
+### What worked
 
-Before implementation resumes, update the Product, Design, and Age charter as necessary so Kartheek and Claude work against one clear baseline. Do not treat these additions as previously failed criteria.
+- The iteration produced a substantive Sunbird RC implementation rather than a paper design.
+- Synthetic citizen data and issuer-derived `ageOver18` were demonstrated.
+- The SD-JWT and reusable verifier foundation is technically promising.
+- Cross-device OpenID4VP worked with the scripted wallet, and the web verifier produced the expected decisions.
+- Automated tests and implementation evidence gave the review a concrete basis.
+- Known wallet and interoperability limitations were reported rather than hidden.
+
+### What we learned
+
+1. **Define journeys, not only capabilities.** Terms such as “issuance,” “wallet support,” and “end to end” allowed multiple interpretations. Every mandatory journey must identify the actor, visible user action, system interaction, expected screen/result, failure outcome, and required evidence.
+2. **Keep controlled baselines consistent.** Product expected mobile verification, while Design sequencing and the original Age charter deferred it. Product, Design, charter, agent instructions, and acceptance evidence must form one traceable chain before implementation begins.
+3. **Separate evidence levels.** Unit/API tests and scripted protocol clients prove technical behaviour; they do not prove the required real-wallet user experience. Acceptance must distinguish automated evidence, real-component integration, and real-device demonstration.
+4. **Validate wallet compatibility early.** Before full implementation, confirm the selected wallet can support the required SD-JWT profile, Keycloak authentication journey, issuer discovery, direct issuance, cross-device QR, same-device deep link/callback, consent, and credential selection.
+5. **Review earlier.** Journey and compatibility reviews should happen before substantial implementation, when a correction is still inexpensive.
+6. **Record deviations as they occur.** Database layout, algorithm-policy enforcement, authentication removal, public HTTPS requirements, and similar deviations must be logged and classified as an engineering choice, an acceptance issue, or a material decision requiring Anand.
+7. **Protect branch intent.** Temporary handshake material must not flow into an implementation merge merely because of branch ancestry. Implementation branches should start from the latest accepted `main`, and proposed merge contents must be checked explicitly.
+8. **Completion means observable outcomes.** Successful endpoints are not sufficient when the charter requires an actual citizen journey across wallet, issuer, and verifier applications.
+
+### Process changes for this and future iterations
+
+Before full implementation begins:
+
+1. Approve actor-by-actor positive, negative, cancellation, and privacy journeys.
+2. Map each journey to Product, Design, charter acceptance criteria, tests, and demo evidence.
+3. Complete a time-boxed compatibility check for every wallet-dependent interaction.
+4. Record exact component/profile versions and any gap or workaround.
+5. Confirm the iteration branch starts from the intended accepted baseline.
+
+During implementation:
+
+1. Review progress at journey-level checkpoints, not only at the final demo.
+2. Maintain a concise decision/deviation log.
+3. Keep automated protocol tests, real-component tests, and real-device evidence visibly separate.
+4. Escalate material Product, Design, privacy, security, or standards changes before implementing them.
+
+At handoff:
+
+1. Demonstrate each journey using the required real applications.
+2. Provide pass/fail traceability from every charter item to evidence.
+3. Show eligible, ineligible, cancellation, authentication failure, privacy, tampering, and replay outcomes.
+4. Inspect the proposed merge contents and exclude temporary handshake material.
+5. Wait for Anand's explicit sign-off before merging to `main`.
+
+## End-to-End Journey Sufficiency
+
+No additional primary Age journey is required beyond the three revised flows:
+
+1. Authenticated wallet-driven issuance without an issuance QR.
+2. Cross-device web verification using QR.
+3. Same-device mobile verification using a deep link.
+
+These flows must, however, be demonstrated with the following variants rather than treated as separate applications:
+
+- Eligible citizen → valid credential → **APPROVED**.
+- Ineligible citizen → valid credential → **DENIED**.
+- Incorrect credentials, unmapped account, and cross-citizen issuance attempt → no credential.
+- User cancellation/denial → no disclosure and no approval.
+- Returning authenticated user → previously issued credential remains available in the wallet.
+- Tampered, expired, replayed, wrongly bound, or untrusted presentation → rejection.
+
+Credential revocation, renewal/reissuance, recovery after wallet loss, multi-device synchronisation, and production identity proofing are useful future lifecycle journeys but are not required for the current capability-showcase iteration.
+
+## Baseline Update
+
+Keycloak-authenticated, wallet-driven issuance and same-device mobile verification were not explicit requirements of the original approved Age charter. They materially expand Iteration 01 and must not be described as failures against the earlier baseline.
+
+Product, Design, the Age charter, review feedback, and Claude instructions have now been aligned on branch `review/age-01-feedback`. Kartheek and Claude must use that revised baseline before implementation resumes.
