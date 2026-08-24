@@ -110,6 +110,44 @@ than "Sunbird RC plus a bespoke adapter we maintain".
 We would record it as a deviation in three places: the version table (image tag
 carrying the source SHA), the deviation log, and the handoff.
 
+## Status of the work (prepared, not adopted)
+
+Option A has been **prepared** so the decision can be made against something
+real rather than a proposal. Nothing is adopted: the stack still runs the
+official `ghcr.io` image, and no phase downstream of this decision has started.
+
+Fork: `sunbird-rc-core`, branch `oid4vc/keycloak-as-v2.1.0`, from the `v2.1.0` tag.
+
+| Commit | What |
+|---|---|
+| `bc892456` | Keycloak-as-authorization-server issuance ported onto v2.1.0 |
+| `1583b7bd` | `/vp/status` reports the presentation's signature algorithms |
+
+Verified on the branch:
+
+- `tsc --noEmit` clean.
+- **11 suites / 127 tests pass**, including the release's own `oid4vp.service.spec.ts`
+  — so the v2.1.0 SD-JWT and DCQL fixes this iteration depends on are intact —
+  and the ported `oid4vci.self-service.spec.ts`, `claim-source.spec.ts` and
+  `token.service.keycloak.spec.ts`.
+- All three blockers resolved: `authorization_servers` now resolved from config,
+  `/credential` accepts realm-verified Keycloak tokens, and claims resolve from
+  the token subject to a registry record through a claim-source abstraction.
+
+Deliberately **not** ported, to keep the change reviewable: tx_code/PIN
+verification (the release refuses tx_code offers rather than ship a no-op check,
+and `authorization_code` does not use it), the demo apps and portals that commit
+also carried, and the old `OFFER_REQUIRES_STAFF` gate — v2.1.0's `ENABLE_AUTH`
+guard supersedes it.
+
+Taken from that branch because it is better: per-format credential signing
+algorithm advertisement. The release advertises `Ed25519Signature2020` — a
+Linked-Data suite — as an SD-JWT VC signing algorithm for every non-mdoc format,
+which is not a value a JOSE wallet can act on.
+
+Image tag for evidence, if adopted:
+`sunbird-rc-oid4vc-service:v2.1.0-authcode.1583b7bd`.
+
 ## Impact if deferred
 
 Flow 1 does not start, and Flows 2 and 3 cannot be demonstrated end to end on a
