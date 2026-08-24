@@ -1,0 +1,300 @@
+# Iteration 01 — Age Verification: reproducible local stack.
+#
+#   cp env.example .env && docker compose up -d && ../scripts/bootstrap.sh
+#
+# Everything Sunbird RC is PULLED at the pinned release (v2.1.0) — no core
+# checkout required. Only the two thin services this iteration adds are built
+# from source.
+#
+# Four things are deliberate and load-bearing:
+#
+#  1. nginx binds port 80, so PUBLIC_URL carries no port. A did:web with a port
+#     needs it percent-encoded (did:web:localhost%3A8080:...), which silently
+#     breaks issuer-DID matching in wallets and in our trust allowlist.
+#  2. Vault runs in DEV mode: unsealed, fixed root token. The production file
+#     backend must be initialised and unsealed by hand after every restart,
+#     which is the single biggest obstacle to a one-command start.
+#  3. The registry's JDBC URL points at its own namespace (AGE_REGISTRY_JDBC),
+#     so Age entity tables do not share a namespace with anything else.
+#  4. OID4VP request signing is ON, because Paradym (Credo-based) answers 406 to
+#     an unsigned request object. That requires VERIFIER_DID to be a did:web —
+#     oid4vc-service refuses to sign with a did:rcw.
+#
+# Synthetic data only. Never point this file at anything real.
+
+name: sunbird-rc-age
+
+services:
+  db:
+    image: postgres:14
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=registry
+    volumes:
+      - ./init-db/10-databases.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  vault:
+    image: hashicorp/vault:1.13.3
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    environment:
+      - VAULT_DEV_ROOT_TOKEN_ID=${VAULT_TOKEN:-local-root-token}
+      - VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200
+      - VAULT_ADDR=http://127.0.0.1:8200
+    command: server -dev
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O- http://127.0.0.1:8200/v1/sys/health?standbyok=true || exit 1']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Session store for oid4vc-service. Redis (not `memory`) because single-use
+  # pre-authorised codes, c_nonces and VP transactions must behave the same way
+  # across a service restart — the replay tests depend on it.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Age source data: the National Identity Authority's AgeCitizen records.
+  # No Keycloak in this stack, so registry auth is off and age-issuer is the
+  # only writer.
+  registry:
+    image: ghcr.io/sunbird-rc/sunbird-rc-core:${RELEASE_VERSION:-v2.1.0}
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ../registry-schemas:/home/sunbirdrc/config/public/_schemas
+    env_file:
+      - ./registry.env
+    environment:
+      - connectionInfo_uri=${AGE_REGISTRY_JDBC:-jdbc:postgresql://db:5432/registry?currentSchema=age}
+      - authentication_enabled=${REGISTRY_AUTH_ENABLED:-false}
+    healthcheck:
+      # wget, not curl: the registry image ships wget but no curl, so a
+      # curl-based probe reports unhealthy forever while the service is fine.
+      test: ['CMD-SHELL', 'wget -q -O- http://localhost:8081/health >/dev/null || exit 1']
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      # Java under amd64 emulation takes minutes to reach "Startup completed".
+      # That is not a hang.
+      start_period: 240s
+
+  identity:
+    image: ghcr.io/sunbird-rc/sunbird-rc-identity-service:${RELEASE_VERSION:-v2.1.0}
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/identity
+      - VAULT_ADDR=http://vault:8200
+      - VAULT_TOKEN=${VAULT_TOKEN:-local-root-token}
+      - VAULT_BASE_URL=http://vault:8200/v1/
+      - VAULT_ROOT_PATH=kv
+      - VAULT_TIMEOUT=10000
+      - VAULT_PROXY=false
+      - SIGNING_ALGORITHM=Ed25519Signature2020
+      - ENABLE_AUTH=false
+      # Bare host, NO scheme. getDidPrefixForBaseUrl strips only a literal
+      # "https://" and then percent-encodes any remaining colon, so
+      # "http://localhost" yields the malformed did:web:http%3A::localhost:<uuid>.
+      - WEB_DID_BASE_URL=${PUBLIC_HOST:-localhost}
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:3332/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  credential-schema:
+    image: ghcr.io/sunbird-rc/sunbird-rc-credential-schema:${RELEASE_VERSION:-v2.1.0}
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      identity:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/credential_schema
+      - IDENTITY_BASE_URL=http://identity:3332
+      - ENABLE_AUTH=false
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:3333/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  credential:
+    image: ghcr.io/sunbird-rc/sunbird-rc-credentials-service:${RELEASE_VERSION:-v2.1.0}
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      identity:
+        condition: service_healthy
+      credential-schema:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/credential
+      - IDENTITY_BASE_URL=http://identity:3332
+      - SCHEMA_BASE_URL=http://credential-schema:3333
+      - CREDENTIAL_SERVICE_BASE_URL=http://credential:3000
+      - ENABLE_AUTH=false
+      - QR_TYPE=W3C_VC
+      # Revocation infrastructure is out of scope for the showcase (PRODUCT).
+      # Left off knowingly: it means oid4vc-service's `revocation: OK` is a
+      # default rather than a real status-list check. Recorded as a limitation.
+      - STATUS_LIST_ENABLED=false
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:3000/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # The OpenID4VCI / OpenID4VP protocol façade. Native to v2.1.0 — this is why
+  # the architecture needs no standards adapter.
+  oid4vc-service:
+    image: ghcr.io/sunbird-rc/sunbird-rc-oid4vc-service:${RELEASE_VERSION:-v2.1.0}
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      credential:
+        condition: service_healthy
+      identity:
+        condition: service_healthy
+      credential-schema:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: '3400'
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost}
+      # In-network address identity-service uses to dereference this service.
+      INTERNAL_URL: http://oid4vc-service:3400
+      CREDENTIAL_SERVICE_BASE_URL: http://credential:3000
+      IDENTITY_BASE_URL: http://identity:3332
+      SCHEMA_BASE_URL: http://credential-schema:3333
+      REDIS_URL: redis://redis:6379
+      SESSION_STORE: redis
+      # Fallback only: each schema is signed with its own `author` DID, which is
+      # what makes the National Identity Authority the credential's `iss`.
+      ISSUER_DID: ${AGE_ISSUER_DID:-}
+      # Paradym requires a signed request object; signing requires a
+      # wallet-resolvable DID. Both are written by scripts/bootstrap.sh.
+      OID4VP_SIGN_REQUEST: ${OID4VP_SIGN_REQUEST:-true}
+      VERIFIER_DID: ${VERIFIER_DID:-}
+      # Final OpenID4VCI 1.0 shapes. Paradym speaks final; DRAFT13 is Inji's
+      # idiom and belongs to the Agriculture iteration.
+      DRAFT13_COMPAT_MODE: 'false'
+      ENABLE_AUTH: 'false'
+      CORS_ALLOWED_ORIGINS: ${PUBLIC_URL:-http://localhost}
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:3400/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # --- what this iteration adds -----------------------------------------------
+
+  # Issuer-side backend for the National Identity Authority. Reads AgeCitizen
+  # records through the registry API (never the tables), derives the age
+  # assertions, and asks oid4vc-service for a credential offer.
+  age-issuer:
+    build:
+      context: ../services/age-issuer
+    restart: unless-stopped
+    depends_on:
+      registry:
+        condition: service_healthy
+      oid4vc-service:
+        condition: service_healthy
+    environment:
+      PORT: '4200'
+      REGISTRY_BASE_URL: http://registry:8081
+      OID4VC_BASE_URL: http://oid4vc-service:3400
+      SCHEMA_BASE_URL: http://credential-schema:3333
+      CREDENTIAL_NAME: Age Verification Credential
+      CREDENTIAL_FORMAT: vc+sd-jwt
+      # Disambiguates the credential configuration by author. The negative-path
+      # fixtures create a SECOND schema with the same name and vct under an
+      # untrusted issuer, so resolving by name alone would be ambiguous.
+      AGE_ISSUER_DID: ${AGE_ISSUER_DID:-}
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O- http://127.0.0.1:4200/healthz >/dev/null || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  # The reusable verifier service. Generic protocol/trust/policy handling with
+  # the Age decision isolated in one module — iterations 2 and 3 extend this
+  # rather than reimplementing verification.
+  verifier:
+    build:
+      context: ../services/verifier
+    restart: unless-stopped
+    depends_on:
+      oid4vc-service:
+        condition: service_healthy
+    volumes:
+      - ../config/trust:/app/config/trust:ro
+    environment:
+      PORT: '4300'
+      OID4VC_BASE_URL: http://oid4vc-service:3400
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost}
+      TRUST_POLICY_FILE: /app/config/trust/issuers.json
+      # Expanded into the trust policy at load time, so the committed policy
+      # file stays stable across deployments while the pinned DID does not.
+      AGE_ISSUER_DID: ${AGE_ISSUER_DID:-}
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O- http://127.0.0.1:4300/healthz >/dev/null || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      oid4vc-service:
+        condition: service_healthy
+      verifier:
+        condition: service_healthy
+      age-issuer:
+        condition: service_healthy
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # The verifier web page is static and needs no build step, so nginx
+      # serves it directly instead of a container existing to hold three files.
+      - ../services/verifier-web:/usr/share/nginx/html/verifier:ro
+    ports:
+      # Port 80 on purpose — see the header note about did:web and ports.
+      - '80:80'
+    healthcheck:
+      # 127.0.0.1, not localhost: inside the container `localhost` resolves to
+      # [::1] first and the server block only listens on IPv4, so an otherwise
+      # healthy gateway reports "connection refused".
+      test: ['CMD-SHELL', 'wget -q -O- http://127.0.0.1/gateway-health >/dev/null || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 20

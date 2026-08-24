@@ -1,0 +1,84 @@
+:root {
+  color-scheme: light dark;
+  --ink: #14181f;
+  --muted: #5c6674;
+  --line: #dfe4ea;
+  --card: #ffffff;
+  --bg: #f5f7fa;
+  --approved: #1a7f4b;
+  --denied: #b3261e;
+  --failed: #7a5c00;
+  --accent: #3d6b8c;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #eef2f7;
+    --muted: #9aa5b3;
+    --line: #2b323c;
+    --card: #171c23;
+    --bg: #0e1116;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1rem;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.shell { width: min(34rem, 100%); display: grid; gap: 1.25rem; }
+.eyebrow {
+  margin: 0 0 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+h1 { margin: 0 0 0.5rem; font-size: 1.6rem; letter-spacing: -0.01em; }
+.lede { margin: 0; color: var(--muted); }
+.panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 1.5rem;
+  display: grid;
+  gap: 1rem;
+  justify-items: center;
+  text-align: center;
+}
+button {
+  font: inherit;
+  font-weight: 600;
+  border-radius: 9px;
+  padding: 0.7rem 1.4rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+button:disabled { opacity: 0.6; cursor: progress; }
+.primary { background: var(--accent); color: #fff; }
+.secondary { background: transparent; color: var(--ink); border-color: var(--line); }
+.qr { width: 320px; max-width: 100%; }
+.qr svg { width: 100%; height: auto; background: #fff; border-radius: 8px; padding: 8px; }
+.muted { color: var(--muted); margin: 0; }
+.small { font-size: 0.85rem; }
+.decision { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
+.decision.approved { color: var(--approved); }
+.decision.denied { color: var(--denied); }
+.decision.failed { color: var(--failed); }
+.detail {
+  width: 100%;
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 1rem;
+  text-align: left;
+  font-size: 0.87rem;
+}
+.detail dt { color: var(--muted); }
+.detail dd { margin: 0; word-break: break-word; }
+footer { text-align: center; }

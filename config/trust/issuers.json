@@ -1,0 +1,26 @@
+{
+  "_comment": [
+    "Demo trust model (DESIGN §6): a version-controlled allowlist of issuer",
+    "identifiers, loaded by the verifier service. A production trust registry is",
+    "explicitly out of scope.",
+    "",
+    "Why this file has to exist: Sunbird RC v2.1.0's OID4VP verifier checks that a",
+    "presented credential's signature is VALID, but never checks WHO signed it (see",
+    "oid4vc-service/src/oid4vp/oid4vp.service.ts — the six checks are holder",
+    "signature, nonce, audience, credential signatures, holder binding, revocation,",
+    "plus DCQL). Any issuer able to mint the same `vct` would otherwise be accepted.",
+    "The verifier service enforces this allowlist before any business rule runs.",
+    "",
+    "${VARS} are expanded from the environment at load time, so the policy stays",
+    "stable in Git while the locally-minted did:web does not. An unset or unexpanded",
+    "variable is a hard failure, never a wildcard."
+  ],
+  "allowedAlgorithms": ["ES256"],
+  "issuers": [
+    {
+      "name": "National Identity Authority",
+      "did": "${AGE_ISSUER_DID}",
+      "credentials": ["Age Verification Credential"]
+    }
+  ]
+}

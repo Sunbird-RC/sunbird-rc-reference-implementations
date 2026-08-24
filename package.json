@@ -1,0 +1,30 @@
+{
+  "name": "sunbird-rc-age-showcase",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Iteration 01 — Age Verification: Sunbird RC issuance, wallet, selective disclosure and web verification",
+  "workspaces": [
+    "services/age-issuer",
+    "services/verifier"
+  ],
+  "scripts": {
+    "test": "npm run test:unit",
+    "test:unit": "node --test tests/unit/*.test.mjs",
+    "test:e2e": "node --test --test-timeout=180000 tests/e2e/*.test.mjs",
+    "test:all": "npm run test:unit && npm run test:e2e",
+    "stack:up": "docker compose -f deploy/docker-compose.yml up -d",
+    "stack:down": "docker compose -f deploy/docker-compose.yml down",
+    "stack:reset": "docker compose -f deploy/docker-compose.yml down -v",
+    "stack:logs": "docker compose -f deploy/docker-compose.yml logs -f --tail=100",
+    "bootstrap": "./scripts/bootstrap.sh",
+    "seed": "./scripts/seed-age-citizens.sh",
+    "demo": "./scripts/demo.sh"
+  },
+  "devDependencies": {
+    "jose": "6.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
