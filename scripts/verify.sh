@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+# One command that answers "what is actually done?" for Iteration 01.
+#
+#   ./scripts/verify.sh              repo + fork state, and the test suites
+#   ./scripts/verify.sh --no-tests   skip the suites (fast, ~5 seconds)
+#
+# It checks CLAIMS, not vibes: every line below either passes or fails, and the
+# last section lists what is deliberately NOT done, so a green run can never be
+# mistaken for "the iteration is complete".
+#
+# Plain text, no colour: this output gets pasted into evidence.
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+FORK="${SUNBIRD_RC_CORE_PATH:-$ROOT/../sunbird-rc-core}"
+BASE="${BASE:-http://localhost}"
+RUN_TESTS=1
+[ "${1:-}" = "--no-tests" ] && RUN_TESTS=0
+
+cd "$ROOT"
+PASS=0; FAIL=0; SKIP=0
+ok()   { PASS=$((PASS+1)); printf '  PASS  %s\n' "$1"; }
+no()   { FAIL=$((FAIL+1)); printf '  FAIL  %s\n' "$1"; }
+skip() { SKIP=$((SKIP+1)); printf '  SKIP  %s  (%s)\n' "$1" "$2"; }
+head_() { printf '\n%s\n' "$1"; }
+check() { if eval "$2" >/dev/null 2>&1; then ok "$1"; else no "$1"; fi; }
+# Inverted check: passes when the thing is ABSENT.
+gone()  { if eval "$2" >/dev/null 2>&1; then no "$1"; else ok "$1"; fi; }
+
+printf 'Iteration 01 verification — %s\n' "$(date -u '+%Y-%m-%d %H:%M UTC')"
+printf 'repo: %s\nfork: %s\n' "$ROOT" "$FORK"
+
+head_ '1. Branch and working tree'
+check "on iteration/age-01-verification" '[ "$(git branch --show-current)" = "iteration/age-01-verification" ]'
+check "working tree clean (ignoring node_modules)" '[ -z "$(git status --porcelain | grep -v "^?? node_modules")" ]'
+
+head_ '2. Revised baseline is the authoritative input'
+check "CLAUDE.md carries the scripted-client rule" 'grep -q "scripted protocol client" CLAUDE.md'
+check "CLAUDE.md forbids substituting a QR/issuer page" 'grep -q "Do not substitute a QR or issuer web page" CLAUDE.md'
+check "charter is the revised, three-journey one" 'grep -q "Do not use a QR code for issuance" iterations/01-age/CHARTER.md'
+check "review feedback is on the branch" '[ -f docs/reviews/ITERATION-01-FEEDBACK.md ]'
+
+head_ '3. Branch hygiene (review item)'
+gone "docs/start/CLAUDE-START.md removed" '[ -f docs/start/CLAUDE-START.md ]'
+gone "docs/start/KARTHEEK-START.md removed" '[ -f docs/start/KARTHEEK-START.md ]'
+gone "no handshake files tracked by git" '[ -n "$(git ls-files docs/start)" ]'
+gone "README has no dangling handshake links" 'grep -q "docs/start" README.md'
+
+head_ '4. Rejected work removed (review item)'
+gone "services/issuer-web deleted" '[ -d services/issuer-web ]'
+gone "compose no longer mounts it" 'grep -q "issuer-web" deploy/docker-compose.yml'
+gone "nginx no longer routes /issuer/" 'grep -q "location /issuer/" deploy/nginx/nginx.conf'
+gone "age-issuer dropped the QR dependency" 'grep -q "qrcode-svg" services/age-issuer/package.json'
+gone "verifier page no longer prints wallet.sh" 'grep -q "wallet.sh" services/verifier-web/app.js'
+
+head_ '5. Escalation and plan'
+check "escalation raised for the Flow 1 gap" '[ -f docs/reviews/ESCALATION-01-oid4vc-authorization-code.md ]'
+check "escalation records the Age-database deviation" 'grep -q "Age database deviation" docs/reviews/ESCALATION-01-oid4vc-authorization-code.md'
+check "implementation plan is the journey-based one" 'grep -q "Step 0 — Baseline, branch hygiene, escalation" iterations/01-age/IMPLEMENTATION.md'
+
+head_ '6. Running stack reflects the removals'
+if curl -fsS -o /dev/null --max-time 5 "$BASE/gateway-health" 2>/dev/null; then
+  check "/issuer/ is gone (404)" '[ "$(curl -s -o /dev/null -w %{http_code} --max-time 8 $BASE/issuer/)" = "404" ]'
+  check "/api/issuer/citizens is gone (404)" '[ "$(curl -s -o /dev/null -w %{http_code} --max-time 8 $BASE/api/issuer/citizens)" = "404" ]'
+  check "/verifier/ still serves (200)" '[ "$(curl -s -o /dev/null -w %{http_code} --max-time 8 $BASE/verifier/)" = "200" ]'
+  gone "issuer response carries no rendered QR" 'curl -s --max-time 10 -X POST $BASE/api/issuer/offers -H "content-type: application/json" -d "{\"citizenId\":\"AGE-000001\"}" | grep -q qrSvg'
+  check "stack runs the OFFICIAL oid4vc image (port not adopted)" 'docker inspect sunbird-rc-age-oid4vc-service-1 --format "{{.Config.Image}}" | grep -q "ghcr.io"'
+else
+  skip "running-stack checks" "stack not up at $BASE — cd deploy && docker compose up -d"
+fi
+
+head_ '7. Fork: the prepared oid4vc-service port'
+if [ -d "$FORK/.git" ]; then
+  check "fork main is untouched (== origin/main)" 'git -C "$FORK" rev-parse main | grep -q "$(git -C "$FORK" rev-parse origin/main)"'
+  check "fork main sits on the v2.1.0 tag" 'git -C "$FORK" rev-parse main | grep -q "$(git -C "$FORK" rev-parse v2.1.0)"'
+  check "port branch has exactly 2 commits off v2.1.0" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "2" ]'
+  check "ported image is built" 'docker images -q sunbird-rc-oid4vc-service:v2.1.0-authcode.1583b7bd | grep -q .'
+  check "compose still pins the official image" 'grep -q "ghcr.io/sunbird-rc/sunbird-rc-oid4vc-service" deploy/docker-compose.yml'
+else
+  skip "fork checks" "no checkout at $FORK — set SUNBIRD_RC_CORE_PATH"
+fi
+
+head_ '8. Test suites'
+if [ "$RUN_TESTS" = "1" ]; then
+  if npm run --silent test:unit >/tmp/verify-unit.log 2>&1; then
+    ok "unit: $(grep -E '^. pass' /tmp/verify-unit.log | tail -1 | tr -s ' ')"
+  else
+    no "unit suite (see /tmp/verify-unit.log)"
+  fi
+  if curl -fsS -o /dev/null --max-time 5 "$BASE/gateway-health" 2>/dev/null; then
+    if npm run --silent test:e2e >/tmp/verify-e2e.log 2>&1; then
+      ok "e2e: $(grep -E '^. pass' /tmp/verify-e2e.log | tail -1 | tr -s ' ')"
+    else
+      no "e2e suite (see /tmp/verify-e2e.log)"
+    fi
+  else
+    skip "e2e suite" "stack not up"
+  fi
+  if [ -d "$FORK/services/oid4vc-service/node_modules" ]; then
+    if (cd "$FORK/services/oid4vc-service" && npx jest --silent >/tmp/verify-fork.log 2>&1); then
+      ok "fork port branch: $(grep -E '^Tests:' /tmp/verify-fork.log | tr -s ' ')"
+    else
+      no "fork suite (see /tmp/verify-fork.log)"
+    fi
+  else
+    skip "fork suite" "dependencies not installed in the fork"
+  fi
+else
+  skip "test suites" "--no-tests"
+fi
+
+head_ 'NOT DONE — the three mandatory journeys'
+cat <<'NOTDONE'
+  These are the charter's acceptance criteria and NONE is demonstrated. A green
+  run above does not mean the iteration is complete.
+
+  Flow 1  authenticated wallet-driven issuance, no QR
+          BLOCKED on docs/reviews/ESCALATION-01-oid4vc-authorization-code.md
+          (released v2.1.0 cannot do it; the port is prepared, not adopted)
+  Flow 2  cross-device web QR — protocol works, but the REAL WALLET consent
+          screen has never been captured
+  Flow 3  same-device mobile verifier by deep link — does not exist yet
+
+  Also outstanding: Keycloak is not in the stack, no Keycloak-to-citizen
+  mapping, no Inji, no mobile verifier app, no real-device evidence.
+NOTDONE
+
+head_ 'Summary'
+printf '  %s passed, %s failed, %s skipped\n' "$PASS" "$FAIL" "$SKIP"
+if [ "$FAIL" -gt 0 ]; then
+  printf '  RESULT: something regressed — see the FAIL lines above.\n'
+  exit 1
+fi
+printf '  RESULT: Step 0 and the prepared port are intact. The three journeys are still to build.\n'
