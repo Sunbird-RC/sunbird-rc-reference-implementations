@@ -1,187 +1,153 @@
-# Iteration 01 — Age Verification: implementation plan (revised after review)
+# Iteration 01 — Age Verification: implementation plan
 
-**Status:** In progress — Step 0 done, Flow 1 blocked on an open escalation
-**Supersedes:** the pre-review plan of 21 August 2026
-**Charter:** [`CHARTER.md`](CHARTER.md) (revised)
+**Status:** Approved scope, in progress. Flow 1 unblocked.
+**Supersedes:** the plan of 24 August 2026, written while the Flow 1 gap was open
+**Charter:** [`CHARTER.md`](CHARTER.md)
 **Review:** [`../../docs/reviews/ITERATION-01-FEEDBACK.md`](../../docs/reviews/ITERATION-01-FEEDBACK.md)
-**Escalation:** [`../../docs/reviews/ESCALATION-01-oid4vc-authorization-code.md`](../../docs/reviews/ESCALATION-01-oid4vc-authorization-code.md)
-**Evidence:** [`../../docs/evidence/01-age/`](../../docs/evidence/01-age/)
+**Questions and answers:** [`../../docs/reviews/QUESTIONS-01-age-for-anand.md`](../../docs/reviews/QUESTIONS-01-age-for-anand.md) · [`../../docs/reviews/ANSWERS-01-age-from-anand.md`](../../docs/reviews/ANSWERS-01-age-from-anand.md)
+**Compatibility:** [`../../docs/design/COMPATIBILITY.md`](../../docs/design/COMPATIBILITY.md)
 
 ## Context
 
-The first pass built a working Sunbird RC slice — issuance, SD-JWT selective
-disclosure, cross-device OpenID4VP, APPROVED/DENIED, 39 unit + 28 e2e tests — and
-the review returned **changes required**, because the *user journeys* the charter
-now mandates were not demonstrated: no Keycloak authentication in the wallet, no
-issuer list, no wallet-driven issuance, an issuance QR that "does not meet
-requirement", no same-device mobile verifier, and no real-wallet consent evidence.
+The first pass built a working Sunbird RC slice; the review returned **changes
+required** because the *user journeys* were not demonstrated. Anand has now
+answered the eleven open questions and amended PRODUCT, DESIGN and the charter to
+match. Flow 1 is approved with controls, so the iteration is unblocked.
 
-Anand recorded that Keycloak-authenticated wallet-driven issuance and same-device
-verification "were not explicit requirements of the original approved Age
-charter… and must not be described as failures against the earlier baseline". This
-is scope growth on top of accepted foundations, not rework of a botched build.
+Three of his answers overturn work already committed here, and this plan starts by
+correcting them rather than leaving them to be found at review:
 
-Three journeys now define the iteration, each traced to acceptance and evidence:
+| His decision | What it invalidates |
+|---|---|
+| One PostgreSQL database, separation by use-case tables | our dedicated `age` database and its isolation tests |
+| No committed passwords or secrets | the planned realm export with fixed demo passwords |
+| The mobile verifier must be an installed app | the mobile-web fallback we were holding |
 
-| # | Journey | State |
+## Decisions now settled
+
+| # | Decision | Source |
 |---|---|---|
-| 1 | Authenticated wallet-driven issuance, **no QR** | Blocked — see escalation |
-| 2 | Cross-device web verification by QR | Protocol accepted; needs the device run |
-| 3 | Same-device mobile verification by deep link | Not started |
+| 1 | Keycloak-backed `authorization_code` added inside `oid4vc-service` on a pinned fork build; **optional and configurable**; pre-auth unchanged by default; both grants regression-covered; narrow scope; upstream contribution prepared | answer 1, DESIGN decision 6 |
+| 2 | Issuer discovery via the wallet's companion configuration, limited to discovery only. Age lists **only** the National Identity Authority | answer 2, DESIGN "Issuer Discovery" |
+| 3 | Demo starts from pre-created synthetic accounts. Enrolment out of scope. **No credentials committed** | answer 3 |
+| 4 | Either Keycloak arrangement — wallet-to-Keycloak, or issuer redirects to Keycloak. Record which and why | answer 4 |
+| 5 | Mobile verifier is a **separately installed app**; a web page is not sufficient | answer 5 |
+| 6 | One continuous recording per journey, to a fixed shot list, with secrets redacted | answer 6 |
+| 7 | Returning citizen: show **both** local persistence and survival of a fresh Keycloak session | answer 7 |
+| 8 | Cross-citizen protection proven by an automated test, including absence from logs | answer 8 |
+| 9 | Age wallet reassignment accepted; spike first, then record version/profile | answer 9 |
+| 10 | **One PostgreSQL database**, independent non-overlapping tables per use case, no shared person table | answer 10, PRODUCT + DESIGN |
+| 11 | Keep this branch and its history; squash merge only after demos, evidence, closure and sign-off | answer 11 |
 
-## Step 0 — Baseline, branch hygiene, escalation *(done)*
+### One interpretation recorded for acknowledgement
 
-- Revised baseline merged into this branch; `CLAUDE.md`, PRODUCT, DESIGN and the
-  charter here are now the authoritative inputs.
-- Handshake-only files (`docs/start/*`) deleted so the proposed merge into `main`
-  carries no handshake material. The *history* still contains those three
-  commits; a **squash merge** would resolve that completely — Anand's call.
-- Rejected work removed: `services/issuer-web/` deleted, `age-issuer` no longer
-  renders a QR or lists citizens, and the verifier page no longer prints the
-  `scripts/wallet.sh` aid.
-- Escalation raised for the Flow 1 protocol gap, with the Age-database deviation
-  attached for acknowledgement.
+DESIGN lists "protocol transaction and non-domain configuration tables" among the
+groups inside the one database. Read strictly that would move identity-service,
+credentials-service and credential-schema into the domain database, which is not
+safely possible: each is a separate Prisma service and each owns a
+`_prisma_migrations` table, so they would share and overwrite one another's
+migration state.
 
-## The Flow 1 blocker, in one paragraph
+We therefore read the rule as governing **use-case/domain data** — every rule
+written under it concerns domain data — and keep the protocol services' own stores
+as internal implementation detail. Flagged for Anand's acknowledgement; the Age
+migration below is identical either way, so nothing waits on it.
 
-Released `v2.1.0` cannot do wallet-driven issuance, and no configuration changes
-it: issuer metadata hardcodes itself as the authorization server
-(`oid4vci.service.ts:129`), it offers only the pre-authorised grant
-(`token.service.ts:86-90`), and `/credential` accepts only tokens it minted itself
-(`token.service.ts:58-79`). Nor is there any path from an authenticated subject to
-claims — claims live in an offer session keyed by a pre-authorised code. The fix
-is three small edits that already exist on the fork's `oid4vc_issuer` branch;
-the escalation asks to port them onto the `v2.1.0` tag and run one non-release
-image. That port is prepared on fork branch `oid4vc-keycloak-as-v2.1.0`
-(11 suites / 127 tests passing) but **not adopted**. **Phases 1-6 do not start until that is answered.**
+## Step A — Baseline documents *(his stated first task)*
 
-## Phase 0 — Wallet compatibility spike *(next, runs in parallel)*
+This plan, plus `COMPATIBILITY.md` revised: Age wallet reassignment, the
+installed-app requirement, the fork addition recorded as approved-but-not-released,
+and the open nonce-sourcing finding. The escalation stays as the record of how
+decision 1 was reached.
 
-Two days, throwaway stack, no production code. The retrospective asks for exactly
-this: validate wallet compatibility before implementation, not at the demo.
+## Step B — One database, separation by tables
 
-**Wallet: Inji.** The only candidate whose stock UX *is* Flow 1 — it ships
-`screens/Issuers/IssuersScreen.tsx` and `CredentialTypeSelectionScreen.tsx`, the
-charter's steps 3-5. Paradym cannot do Flow 1 at all: no issuer directory, no
-Keycloak journey, it only consumes offers. PRODUCT also wants Inji to complete at
-least one full use case. Inji discovers issuers through **Mimoto**, so the spike
-stands Mimoto up with a National Identity Authority entry in
-`mimoto-issuers-config.json`.
+Reverses our earlier per-domain database. The original `?currentSchema=age` finding
+still stands and now stops mattering: separation is by entity name, which the
+registry does naturally (`V_AgeCitizen`).
 
-Record versions and the exact protocol exchange for each:
+- Registry JDBC back to the shared database; `CREATE DATABASE age` removed.
+- `tests/e2e/data-isolation.test.mjs` rewritten to assert what is now required:
+  Age entity tables present, **no shared cross-domain person table**, no overlap
+  between use-case tables, correlation only in explicit fixtures. Stronger than
+  before — these are the assertions that will matter when Agriculture lands.
+- Verified on a clean stack so the old database is gone.
 
-| Interaction | Needed by | Pass criterion |
-|---|---|---|
-| Keycloak login inside Inji | 1 | Wallet authenticates a demo user |
-| Issuer list + credential-type selection | 1 | NIA appears and is selectable |
-| `authorization_code` fetch, no QR | 1 | Credential stored in the wallet |
-| `vc+sd-jwt` receipt and rendering | all | Credential recognisable in the wallet |
-| Cross-device QR presentation | 2 | Consent screen, then verified |
-| Same-device deep link | 3 | Wallet opens from another app and returns |
-| Draft-13 vs final metadata | all | Which `DRAFT13_COMPAT_MODE` Inji needs |
+## Step C — The port, to his controls
 
-**Gate:** if the issuer-list journey or the same-device deep link fails on Inji,
-stop and escalate before building anything.
+Already true, and verified on the branch: opt-in by construction
+(`KEYCLOAK_PUBLIC_URL` absent means off), issuer metadata advertises only itself
+when the capability is off, and tests assert realm tokens are *not* trusted when
+unconfigured.
 
-## Phase 1 — Identity and mapping
+Outstanding:
 
-Keycloak returns to the stack (its removal is one of the rejected items), with a
-realm import, one demo user per synthetic citizen, and a protocol mapper putting
-`citizenId` into the access token. The mapping is enforced **server-side**:
-`KEYCLOAK_SUBJECT_CLAIM=citizenId` → `REGISTRY_SUBJECT_ENTITY=AgeCitizen`. The
-wallet never names a citizen.
+- Remove the per-format signing-algorithm change carried over from the older fork
+  branch — a real improvement, but unrelated to `authorization_code`, and he said
+  not to include unrelated changes.
+- Keep the `/vp/status` algorithm reporting as its own change, justified by his own
+  earlier review item ("enforce the approved algorithm policy"), since the policy
+  cannot be enforced while the algorithm is unobservable. Raised explicitly rather
+  than folded into the port.
+- Add the dual-grant regression test: pre-authorised issuance still succeeds **with
+  Keycloak enabled**. Existing coverage proves it with Keycloak off.
+- Pin source commit and image digest; record the deviation and removal path;
+  prepare the upstream contribution.
 
-Files: `deploy/docker-compose.yml`, `deploy/keycloak/realm-age.json`,
-`scripts/bootstrap.sh`, `deploy/env.example`, plus a mapping table in the evidence
-pack.
+## Step D — Demo accounts without committed secrets
 
-## Phase 2 — Flow 1: wallet-driven issuance
+Passwords generated during bootstrap or read from gitignored local configuration,
+printed once for the operator. The realm import carries users and the `citizenId`
+attribute mapping, never credentials. Evidence shows the account-to-citizen mapping
+with no passwords or tokens in it.
 
-Run `oid4vc-service` from the ported build; publish `authorization_servers`
-pointing at Keycloak. Claim derivation moves into `oid4vc-service`
-(`REGISTRY_BIRTHDATE_FIELD`); `services/age-issuer/src/age-claims.mjs` and its
-unit tests stay as the reference implementation of the boundary rules.
+## Step E — Wallet compatibility spike *(before building the journeys)*
 
-Negative paths, each with a test: wrong password, authenticated-but-unmapped
-account, and a request naming another citizen — all must fail with no credential.
+Prove and record: sign-in inside the wallet; issuer list showing only the National
+Identity Authority; direct fetch with no QR; credential rendering; cross-device QR
+presentation; same-device deep link; and which metadata/compatibility mode the
+wallet needs. First item is the nonce-sourcing finding in COMPATIBILITY, because it
+decides the Keycloak arrangement.
 
-Files: `deploy/docker-compose.yml`, `tests/e2e/issuance-authz.test.mjs`.
+## Step F — The three journeys
 
-## Phase 3 — Flow 2: cross-device, on a real device
+1. **Identity:** Keycloak in the stack, one demo account per synthetic citizen,
+   `citizenId` exposed as a token claim, mapping enforced server-side.
+2. **Flow 1:** wallet signs the citizen in, lists the issuer, fetches the
+   credential. No QR, no issuer page. Negative paths as tests: wrong password,
+   unmapped account, manipulated citizen identifier.
+3. **Flow 2:** cross-device QR on a device. Pin the public HTTPS host *before*
+   issuing anything demoable — it is baked into the issuer identifier and the
+   credential type, so changing it invalidates credentials already issued.
+4. **Flow 3:** installed Android app, built on `services/verifier`, displaying only
+   what that service decides. Android because the wallet is Android — an
+   engineering decision, recorded.
 
-Pin the public HTTPS host **before issuing anything demoable** — it is baked into
-every `did:web`, the `vct`, `iss` and `aud`, so changing it invalidates every
-credential already issued. `services/verifier` and `services/verifier-web` stay as
-accepted. Set the OpenID4VP mode Inji needs from Phase 0 and record it. The
-acceptance artifact is the wallet's own consent screen.
-
-## Phase 4 — Flow 3: same-device mobile verifier
-
-A small installable Android app (React Native/Expo) rather than a mobile web page:
-PRODUCT would permit "a lightweight application", but the charter says "app" and
-this review has already rejected one substitution. Mobile web plus `openid4vp://`
-is the fallback if the toolchain proves disproportionate — decided at the end of
-Phase 0, with evidence.
-
-The app builds its request **through `services/verifier`** and displays only what
-that service decides; DESIGN forbids an independent trust path in the mobile UI.
-The wallet returns via `direct_post` to the verifier service and the app polls its
-session. Cancellation discloses nothing and approves nothing.
-
-Files: `apps/mobile-verifier/` (new).
-
-## Phase 5 — Security, privacy, open items
-
-- **Enforce the algorithm policy for real:** surface the presentation's JWS `alg`
-  in `/vp/status` in the ported build and enforce the ES256 allowlist in
-  `services/verifier/src/core/trust.mjs`. Closes the review item that currently
-  stands as a documented gap.
-- **Age-database deviation** recorded for acknowledgement (attached to the
-  escalation).
-- Negative matrix extended to the new journeys — authentication failure, unmapped
-  account, cross-citizen issuance — with the existing tamper / wrong issuer /
-  wrong holder key / nonce / audience / expiry / replay set staying green.
-
-## Phase 6 — Evidence, in three separate levels
-
-The retrospective asks for this split explicitly:
+## Step G — Evidence
 
 | Level | Proves | Artifacts |
 |---|---|---|
-| Automated | technical behaviour | unit + e2e runs, scripted-wallet protocol coverage |
-| Real component | the stack integrates | Keycloak, Mimoto, Sunbird RC versions and digests |
-| **Real device** | **the required journeys** | recordings of all three flows on Inji, consent screens, credential still present after reopen + re-authenticate |
+| Automated | technical behaviour | unit + e2e suites, scripted-client protocol coverage |
+| Real component | the stack integrates | Keycloak, companion config, Sunbird RC versions and digests |
+| **Real device** | **the required journeys** | one continuous recording per journey, to his shot list |
 
-Plus exact versions (including our `oid4vc-service` build SHA), the
-identity-mapping document, a running decision/deviation log, sanitised
-minimum-disclosure evidence per channel, and pass/fail traceability from every
+Plus: exact versions including the fork build's commit and image digest; the
+account-to-citizen mapping; a running decision and deviation log; sanitised
+minimum-disclosure evidence per channel; and pass/fail traceability from every
 charter checkbox to an artifact.
 
 ## Verification
 
 ```bash
-cd deploy && cp env.example .env && docker compose up -d   # registry ~1-4 min
-../scripts/bootstrap.sh          # + Keycloak realm, Mimoto issuer config
-../scripts/seed-age-citizens.sh
-cd .. && npm install
-npm run test:unit                # 39 passing
-npm run test:e2e                 # 28 passing
-
-# journeys, on a device against the pinned HTTPS host
-#  1. Inji: login -> issuers -> National Identity Authority -> fetch -> stored
-#  2. web verifier: scan, consent -> APPROVED; ineligible citizen -> DENIED
-#  3. mobile verifier app -> deep link -> consent -> APPROVED/DENIED
-#  4. close/reopen Inji, re-authenticate -> credential still present
-#  5. negative: wrong password, unmapped account, cross-citizen, cancellation
+./scripts/verify.sh                       # repo, stack and fork state, plus the suites
+npm run test:unit && npm run test:e2e
+cd ../sunbird-rc-core/services/oid4vc-service && npx jest
 ```
 
-## Decision log
+Then the spike, then the three journeys with recordings.
 
-| # | Decision | Status |
-|---|---|---|
-| 1 | Port `authorization_code` onto `v2.1.0` in the fork; run one non-release image | **Open — Anand** |
-| 2 | Inji + Mimoto as the Age wallet | Kartheek; confirmed by Phase 0 |
-| 3 | Flow 3 as an installable Android app, mobile web as fallback | Kartheek; Anand to nod |
-| 4 | Enforce the algorithm allowlist in the ported build | Kartheek — agreed |
-| 5 | Stay on `iteration/age-01-verification`; recommend a squash merge | Kartheek — agreed |
-| 6 | Age boundary is a dedicated database, not a schema | Recorded for acknowledgement |
+## Open with Anand
+
+- Acknowledge the protocol-store interpretation above.
+- The `/vp/status` algorithm reporting: confirm it is wanted as a separate change,
+  since it is what makes the algorithm policy enforceable.

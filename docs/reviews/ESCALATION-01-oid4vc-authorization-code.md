@@ -1,5 +1,16 @@
 # Escalation — Iteration 01 Flow 1 cannot be built on released Sunbird RC v2.1.0
 
+> **RESOLVED, 25 August 2026 — approved with controls.** See
+> [`ANSWERS-01-age-from-anand.md`](ANSWERS-01-age-from-anand.md) answer 1, now also
+> DESIGN decision 6. The capability is to live inside `oid4vc-service` (not the
+> registry engine), be optional and configurable, leave pre-authorised issuance
+> unchanged by default, carry regression coverage for both grants, stay narrowly
+> scoped with pinned commit and image digest, be described as an upstream-aligned
+> addition rather than a released `v2.1.0` feature, and be offered upstream.
+> Unrelated changes from the older fork branch must not be included.
+>
+> Kept as the record of how the decision was reached.
+
 **Raised by:** Kartheek / Claude Code
 **Date:** 24 August 2026
 **Branch:** `iteration/age-01-verification`
