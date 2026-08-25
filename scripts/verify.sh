@@ -56,7 +56,9 @@ gone "verifier page no longer prints wallet.sh" 'grep -q "wallet.sh" services/ve
 head_ '5. Escalation and plan'
 check "escalation raised for the Flow 1 gap" '[ -f docs/reviews/ESCALATION-01-oid4vc-authorization-code.md ]'
 check "escalation records the Age-database deviation" 'grep -q "Age database deviation" docs/reviews/ESCALATION-01-oid4vc-authorization-code.md'
-check "implementation plan is the journey-based one" 'grep -q "Step 0 — Baseline, branch hygiene, escalation" iterations/01-age/IMPLEMENTATION.md'
+check "implementation plan reflects Anand's answers" 'grep -q "Decisions now settled" iterations/01-age/IMPLEMENTATION.md'
+check "his answers are on the branch" '[ -f docs/reviews/ANSWERS-01-age-from-anand.md ]'
+check "escalation is marked resolved" 'grep -q "RESOLVED, 25 August 2026" docs/reviews/ESCALATION-01-oid4vc-authorization-code.md'
 
 head_ '6. Running stack reflects the removals'
 if curl -fsS -o /dev/null --max-time 5 "$BASE/gateway-health" 2>/dev/null; then
@@ -69,18 +71,29 @@ else
   skip "running-stack checks" "stack not up at $BASE — cd deploy && docker compose up -d"
 fi
 
-head_ '7. Fork: the prepared oid4vc-service port'
+head_ '7. Data model matches the approved design'
+# A generated .env silently overrides both the compose default and env.example.
+# That is exactly how the registry ended up still pointing at a per-domain
+# database after the design changed to one shared database - it started, failed
+# to connect, and reported only "database age does not exist" deep in a pool log.
+check "deploy/.env points the registry at the shared database" 'grep -q "^AGE_REGISTRY_JDBC=jdbc:postgresql://db:5432/registry$" deploy/.env'
+gone "no per-use-case database remains" 'docker compose -f deploy/docker-compose.yml exec -T db psql -U postgres -At -c "select datname from pg_database" 2>/dev/null | grep -qxE "age|agriculture|education"'
+
+head_ '8. Fork: the prepared oid4vc-service port'
 if [ -d "$FORK/.git" ]; then
   check "fork main is untouched (== origin/main)" 'git -C "$FORK" rev-parse main | grep -q "$(git -C "$FORK" rev-parse origin/main)"'
   check "fork main sits on the v2.1.0 tag" 'git -C "$FORK" rev-parse main | grep -q "$(git -C "$FORK" rev-parse v2.1.0)"'
-  check "port branch has exactly 2 commits off v2.1.0" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "2" ]'
+  # Exact count on purpose: the port is meant to stay narrow, so an unexplained
+  # extra commit should show up here rather than in review. Raise it deliberately
+  # when the port legitimately grows.
+  check "port branch is 3 commits off v2.1.0 (port, alg reporting, narrowing)" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "3" ]'
   check "ported image is built" 'docker images -q sunbird-rc-oid4vc-service:v2.1.0-authcode.1583b7bd | grep -q .'
   check "compose still pins the official image" 'grep -q "ghcr.io/sunbird-rc/sunbird-rc-oid4vc-service" deploy/docker-compose.yml'
 else
   skip "fork checks" "no checkout at $FORK — set SUNBIRD_RC_CORE_PATH"
 fi
 
-head_ '8. Test suites'
+head_ '9. Test suites'
 if [ "$RUN_TESTS" = "1" ]; then
   if npm run --silent test:unit >/tmp/verify-unit.log 2>&1; then
     ok "unit: $(grep -E '^. pass' /tmp/verify-unit.log | tail -1 | tr -s ' ')"
@@ -115,14 +128,16 @@ cat <<'NOTDONE'
   run above does not mean the iteration is complete.
 
   Flow 1  authenticated wallet-driven issuance, no QR
-          BLOCKED on docs/reviews/ESCALATION-01-oid4vc-authorization-code.md
-          (released v2.1.0 cannot do it; the port is prepared, not adopted)
+          APPROVED with controls (answer 1). The capability is ported, narrowed
+          to those controls and tested, but not yet adopted into the stack and
+          never yet run with a real wallet.
   Flow 2  cross-device web QR — protocol works, but the REAL WALLET consent
           screen has never been captured
   Flow 3  same-device mobile verifier by deep link — does not exist yet
 
-  Also outstanding: Keycloak is not in the stack, no Keycloak-to-citizen
-  mapping, no Inji, no mobile verifier app, no real-device evidence.
+  Also outstanding: Keycloak is not in the stack, no account-to-citizen
+  mapping, no wallet, no installed mobile verifier app, and no real-device
+  recordings - which are now the required form of evidence (answer 6).
 NOTDONE
 
 head_ 'Summary'

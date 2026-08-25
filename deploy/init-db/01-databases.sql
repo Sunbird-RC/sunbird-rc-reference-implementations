@@ -19,14 +19,9 @@ CREATE DATABASE identity;
 CREATE DATABASE credential;
 CREATE DATABASE credential_schema;
 
--- The Age domain's own namespace (DESIGN §7).
---
--- A DATABASE, not a schema, and that is a deviation worth reading. The registry
--- exposes only a JDBC URI (application.yml: `connectionInfo_uri`) and leaves
--- table placement to Sqlg, which puts every unqualified vertex label in
--- `public`. Verified on this stack: with `?currentSchema=age` the registry
--- created public.V_AgeCitizen and left the `age` schema empty. There is no
--- supported setting for it, so the per-domain boundary is a database instead —
--- stronger isolation than a schema, still one PostgreSQL deployment, and it
--- keeps `agriculture` and `education` independent in later iterations.
-CREATE DATABASE age;
+-- No per-use-case database. Age, Agriculture and Education share the registry's
+-- database and are separated by their own tables/entities (Anand's answer 10,
+-- PRODUCT and DESIGN §7). These three remain separate because they are NOT
+-- use-case data: each is a distinct Prisma service that owns its own
+-- `_prisma_migrations` table, and merging them would have three services
+-- overwriting one another's migration state.

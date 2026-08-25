@@ -14,10 +14,10 @@
 #  2. Vault runs in DEV mode: unsealed, fixed root token. The production file
 #     backend must be initialised and unsealed by hand after every restart,
 #     which is the single biggest obstacle to a one-command start.
-#  3. The registry's JDBC URL points at the Age domain's own DATABASE
-#     (AGE_REGISTRY_JDBC), so Age entity tables share a namespace with nothing
-#     else. A schema would have been closer to DESIGN §7's wording, but Sqlg
-#     ignores currentSchema and writes to `public` — verified, not assumed.
+#  3. One database for the showcase; use cases are separated by their own tables
+#     (Age owns AgeCitizen). The registry names tables after the entity, so this
+#     needs no schema or database per domain. tests/e2e/data-isolation.test.mjs
+#     asserts the separation that matters: no shared cross-domain person table.
 #  4. OID4VP request signing is ON, because Paradym (Credo-based) answers 406 to
 #     an unsigned request object. That requires VERIFIER_DID to be a did:web —
 #     oid4vc-service refuses to sign with a did:rcw.
@@ -89,7 +89,7 @@ services:
     env_file:
       - ./registry.env
     environment:
-      - connectionInfo_uri=${AGE_REGISTRY_JDBC:-jdbc:postgresql://db:5432/age}
+      - connectionInfo_uri=${AGE_REGISTRY_JDBC:-jdbc:postgresql://db:5432/registry}
       - authentication_enabled=${REGISTRY_AUTH_ENABLED:-false}
     healthcheck:
       # wget, not curl: the registry image ships wget but no curl, so a

@@ -1,16 +1,14 @@
--- Namespaces inside the registry database (DESIGN §7).
+-- Non-domain namespace only.
 --
--- `age` is where the registry's Age entity tables land: the JDBC URL carries
--- ?currentSchema=age, and Postgres will not create the schema for us — without
--- this the connection silently falls back to `public` and the domain boundary
--- the design asks for does not exist. tests/e2e/data-isolation.test.mjs checks
--- the tables really are here rather than taking this file's word for it.
+-- Use-case separation is by TABLE, not by schema or database: Age owns
+-- AgeCitizen, Agriculture will own Farmer and Land, Education its own — all in
+-- the registry's database, with no shared cross-domain person table (Anand's
+-- answer 10, PRODUCT and DESIGN §7).
 --
--- `platform` is for non-domain state. It stays EMPTY in Iteration 01: protocol
--- transaction state lives in Redis (single-use codes and nonces), which is
--- recorded as a deviation in docs/evidence/01-age/.
+-- An earlier iteration tried `?currentSchema=age` here. Worth remembering as a
+-- dead end: the registry leaves table placement to Sqlg, which writes
+-- unqualified vertex labels to `public` whatever the connection says.
 --
--- Runs against POSTGRES_DB (= registry), which is the connection the entrypoint
--- gives every init file.
-CREATE SCHEMA IF NOT EXISTS age;
+-- `platform` is kept for non-domain state and stays empty in Iteration 01 —
+-- protocol transaction state lives in Redis.
 CREATE SCHEMA IF NOT EXISTS platform;
