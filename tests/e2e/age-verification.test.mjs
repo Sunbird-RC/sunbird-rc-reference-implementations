@@ -27,6 +27,7 @@ import {
   disclosedClaimNames,
   json,
 } from './lib/stack.mjs';
+import { deriveAgeClaims } from '../../services/age-issuer/src/age-claims.mjs';
 import {
   createHolder,
   collectCredential,
@@ -261,12 +262,58 @@ describe('domain decision', () => {
 
   test('the boundary fixtures decide correctly', async () => {
     guard();
-    // AGE-000003 turns 18 today; AGE-000004 turns 18 tomorrow.
-    for (const [citizenId, expected] of [['AGE-000003', 'APPROVED'], ['AGE-000004', 'DENIED']]) {
+    // AGE-000003 was seeded as "turns 18 today" and AGE-000004 as "turns 18
+    // tomorrow" — relative to the day they were SEEDED, which is not
+    // necessarily the day this test runs. Hardcoding APPROVED/DENIED per
+    // citizen therefore passes only on seeding day, and fails the morning
+    // after (found exactly that way).
+    //
+    // So derive the expectation from the authoritative record instead, with the
+    // issuer's own rule. That asserts the property actually worth asserting —
+    // the verifier's decision agrees with what the registry's date of birth
+    // implies today — and it holds on any day.
+    for (const citizenId of ['AGE-000003', 'AGE-000004']) {
+      const seeded = await json(`${base}/api/v1/AgeCitizen/search`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ filters: { citizenId: { eq: citizenId } } }),
+      });
+      const record = (Array.isArray(seeded.body) ? seeded.body : seeded.body?.data || [])[0];
+      assert.ok(record?.dateOfBirth, `${citizenId} must be seeded`);
+      const expected = deriveAgeClaims(record).ageOver18 ? 'APPROVED' : 'DENIED';
+
       const { holder, credential } = await walletWithCredential(citizenId);
       const { result } = await present({ credential, holder });
-      assert.equal(result.decision, expected, `${citizenId} must be ${expected}`);
+      assert.equal(
+        result.decision,
+        expected,
+        `${citizenId} (dob ${record.dateOfBirth}) must be ${expected} today`,
+      );
     }
+  });
+
+  test('the boundary fixtures still straddle the 18th birthday', async () => {
+    guard();
+    // The pair is only a boundary test while one is over 18 and the other is
+    // not. Once the calendar moves past both, they still pass the test above
+    // while having stopped testing the boundary — so say so out loud rather
+    // than let the suite look stronger than it is.
+    const dobs = {};
+    for (const citizenId of ['AGE-000003', 'AGE-000004']) {
+      const seeded = await json(`${base}/api/v1/AgeCitizen/search`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ filters: { citizenId: { eq: citizenId } } }),
+      });
+      const record = (Array.isArray(seeded.body) ? seeded.body : seeded.body?.data || [])[0];
+      dobs[citizenId] = deriveAgeClaims(record).ageOver18;
+    }
+    assert.notEqual(
+      dobs['AGE-000003'],
+      dobs['AGE-000004'],
+      'boundary fixtures have gone stale: both citizens now fall the same side of 18. ' +
+        'Re-seed with ./scripts/seed-age-citizens.sh on a clean stack.',
+    );
   });
 
   test('a leap-day date of birth is handled', async () => {

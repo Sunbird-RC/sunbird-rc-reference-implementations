@@ -44,14 +44,57 @@ t = date.today() + timedelta(days=1)
 print(date(t.year - 18, t.month, t.day).isoformat())
 ")"
 
+# Returns the existing record for a citizen as JSON, or empty when absent.
+fetch_record() {
+  curl -fsS -X POST "$REG/AgeCitizen/search" -H 'content-type: application/json' \
+    -d "{\"filters\":{\"citizenId\":{\"eq\":\"$1\"}}}" \
+    | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+rows = d if isinstance(d, list) else d.get("data", [])
+print(json.dumps(rows[0]) if rows else "")
+'
+}
+
 seed() {
-  local citizen_id="$1" body="$2" label="$3" found
-  found="$(curl -fsS -X POST "$REG/AgeCitizen/search" -H 'content-type: application/json' \
-    -d "{\"filters\":{\"citizenId\":{\"eq\":\"$citizen_id\"}}}" \
-    | python3 -c 'import json,sys; d=json.load(sys.stdin); print(len(d if isinstance(d,list) else d.get("data",[])))')"
-  if [ "$found" != "0" ]; then info "$citizen_id already present"; return 0; fi
+  local citizen_id="$1" body="$2" label="$3" existing
+  existing="$(fetch_record "$citizen_id")"
+  if [ -n "$existing" ]; then info "$citizen_id already present"; return 0; fi
   curl -fsS -X POST "$REG/AgeCitizen" -H 'content-type: application/json' -d "$body" >/dev/null \
     && green "$label" || die "seeding $citizen_id failed"
+}
+
+# Keeps a boundary fixture meaningful.
+#
+# "Turns 18 today" and "turns 18 tomorrow" are computed against the day of
+# SEEDING, so the morning after, both citizens are over 18 and the pair has
+# quietly stopped testing the boundary it exists to test. (Found exactly that
+# way: the e2e boundary assertion failed the next day.) So refresh the date of
+# birth when it has drifted, rather than reporting "already present" and moving
+# on. tests/e2e/age-verification.test.mjs asserts the pair still straddles 18.
+refresh_boundary() {
+  local citizen_id="$1" want_dob="$2" label="$3" existing osid current
+  existing="$(fetch_record "$citizen_id")"
+  [ -z "$existing" ] && return 1   # absent: the caller's seed() will create it
+  osid="$(printf '%s' "$existing" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("osid",""))')"
+  current="$(printf '%s' "$existing" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("dateOfBirth",""))')"
+  if [ "$current" = "$want_dob" ]; then
+    info "$citizen_id boundary date still correct ($current)"
+    return 0
+  fi
+  [ -z "$osid" ] && { warn "$citizen_id has no osid; cannot refresh"; return 0; }
+  local updated
+  updated="$(printf '%s' "$existing" | python3 -c "
+import json, sys
+r = json.load(sys.stdin)
+r['dateOfBirth'] = '$want_dob'
+for k in ('osid', '_osSignedData', '@type', 'osOwner'):
+    r.pop(k, None)
+print(json.dumps(r))
+")"
+  curl -fsS -X PUT "$REG/AgeCitizen/$osid" -H 'content-type: application/json' -d "$updated" >/dev/null \
+    && green "$label refreshed: $current -> $want_dob" \
+    || warn "$citizen_id refresh failed; the boundary test will report it as stale"
 }
 
 printf '\033[1mSeeding synthetic AgeCitizen records at %s\033[0m\n' "$REG"
@@ -73,6 +116,11 @@ seed AGE-000003 \
 seed AGE-000004 \
   "{\"citizenId\":\"AGE-000004\",\"name\":\"Sana Iqbal\",\"dateOfBirth\":\"$TURNS_18_TOMORROW\",\"gender\":\"Female\",\"district\":\"Hyderabad\",\"state\":\"Telangana\"}" \
   "AGE-000004 Sana Iqbal — turns 18 TOMORROW ($TURNS_18_TOMORROW), expects DENIED"
+
+# The two records above are only a boundary pair on the day they were seeded, so
+# bring their dates forward if the calendar has moved on.
+refresh_boundary AGE-000003 "$TURNS_18_TODAY"    'AGE-000003 (turns 18 today)'
+refresh_boundary AGE-000004 "$TURNS_18_TOMORROW" 'AGE-000004 (turns 18 tomorrow)'
 
 # Born on a leap day: the derivation compares calendar fields, so 29 February
 # must not shift by a day or resolve to "no birthday this year".
