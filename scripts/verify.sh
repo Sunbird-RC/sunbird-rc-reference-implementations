@@ -66,7 +66,14 @@ if curl -fsS -o /dev/null --max-time 5 "$BASE/gateway-health" 2>/dev/null; then
   check "/api/issuer/citizens is gone (404)" '[ "$(curl -s -o /dev/null -w %{http_code} --max-time 8 $BASE/api/issuer/citizens)" = "404" ]'
   check "/verifier/ still serves (200)" '[ "$(curl -s -o /dev/null -w %{http_code} --max-time 8 $BASE/verifier/)" = "200" ]'
   gone "issuer response carries no rendered QR" 'curl -s --max-time 10 -X POST $BASE/api/issuer/offers -H "content-type: application/json" -d "{\"citizenId\":\"AGE-000001\"}" | grep -q qrSvg'
-  check "stack runs the OFFICIAL oid4vc image (port not adopted)" 'docker inspect sunbird-rc-age-oid4vc-service-1 --format "{{.Config.Image}}" | grep -q "ghcr.io"'
+  # Adoption of the ported build is now the approved state (answer 1), so the
+  # check is no longer "is it unadopted" but "is exactly one service off the
+  # official baseline, and is it the pinned build we tested".
+  check "oid4vc-service runs the PINNED ported build" 'docker inspect sunbird-rc-age-oid4vc-service-1 --format "{{.Config.Image}}" | grep -q "v2.1.0-authcode\."'
+  check "every other Sunbird service still runs an official ghcr image" 'test "$(for c in registry identity credential credential-schema; do docker inspect sunbird-rc-age-$c-1 --format "{{.Config.Image}}" 2>/dev/null; done | grep -cv "^ghcr.io/sunbird-rc/")" = "0"'
+  check "Keycloak is serving the age realm" '[ "$(curl -s -o /dev/null -w %{http_code} --max-time 8 $BASE/auth/realms/age/.well-known/openid-configuration)" = "200" ]'
+  check "issuer advertises Keycloak first, itself second" 'curl -s --max-time 8 $BASE/.well-known/openid-credential-issuer | python3 -c "import json,sys; a=json.load(sys.stdin)[\"authorization_servers\"]; raise SystemExit(0 if len(a)==2 and \"/realms/age\" in a[0] else 1)"'
+  check "issuer names itself, so a wallet issuer list is readable" 'curl -s --max-time 8 $BASE/.well-known/openid-credential-issuer | python3 -c "import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if (d.get(\"display\") or [{}])[0].get(\"name\") else 1)"'
 else
   skip "running-stack checks" "stack not up at $BASE — cd deploy && docker compose up -d"
 fi
@@ -88,7 +95,13 @@ if [ -d "$FORK/.git" ]; then
   # when the port legitimately grows.
   check "port branch is 4 commits off v2.1.0 (port, alg, narrowing, issuer display)" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "4" ]'
   check "ported image is built" 'docker images -q sunbird-rc-oid4vc-service:v2.1.0-authcode.4889fbdb | grep -q .'
-  check "compose still pins the official image" 'grep -q "ghcr.io/sunbird-rc/sunbird-rc-oid4vc-service" deploy/docker-compose.yml'
+  check "the ported build is pinned by source commit in its tag" 'grep -qE "sunbird-rc-oid4vc-service:v2.1.0-authcode\.[0-9a-f]{7,}" deploy/docker-compose.yml'
+  # Takes the ACTUAL generated secret and proves it appears in no tracked file.
+  # The first version of this check grepped for a pattern and matched its own
+  # pattern string in this file - a check that fails for the wrong reason is
+  # barely better than no check.
+  check "the generated demo password is absent from every tracked file" 'PW=$(grep "^DEMO_CITIZEN_PASSWORD=" deploy/.env 2>/dev/null | cut -d= -f2); test -z "$PW" || ! git ls-files -z | xargs -0 grep -l -- "$PW" 2>/dev/null | grep -q .'
+  gone "the realm import carries no credentials" 'grep -q "\"credentials\"" deploy/keycloak/realm-age.json'
 else
   skip "fork checks" "no checkout at $FORK — set SUNBIRD_RC_CORE_PATH"
 fi
@@ -128,16 +141,17 @@ cat <<'NOTDONE'
   run above does not mean the iteration is complete.
 
   Flow 1  authenticated wallet-driven issuance, no QR
-          APPROVED with controls (answer 1). The capability is ported, narrowed
-          to those controls and tested, but not yet adopted into the stack and
-          never yet run with a real wallet.
+          SERVER SIDE READY: Keycloak is the authorization server, the signed-in
+          citizen resolves to their own record, and the issuer names itself for a
+          wallet's issuer list. NEVER YET RUN WITH A REAL WALLET - which is the
+          only thing that counts as acceptance.
   Flow 2  cross-device web QR — protocol works, but the REAL WALLET consent
           screen has never been captured
   Flow 3  same-device mobile verifier by deep link — does not exist yet
 
-  Also outstanding: Keycloak is not in the stack, no account-to-citizen
-  mapping, no wallet, no installed mobile verifier app, and no real-device
-  recordings - which are now the required form of evidence (answer 6).
+  Also outstanding: the wallet build pointed at this stack, an installed mobile
+  verifier app for Flow 3, and the real-device recordings that are now the
+  required form of evidence (answer 6).
 NOTDONE
 
 head_ 'Summary'
