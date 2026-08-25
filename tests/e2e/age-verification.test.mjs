@@ -369,7 +369,7 @@ describe('negative flows', () => {
     const offer = await issueAsIssuer({
       base,
       issuerDid: untrustedIssuerDid,
-      credentialName: 'Age Verification Credential',
+      credentialName: 'Age Verification Credential (unlisted issuer)',
       claims: { ageOver18: true, ageOver21: true, name: 'Impostor', dateOfBirth: '1990-01-01' },
     });
     const { credential } = await collectCredential({ base, offer, holder });

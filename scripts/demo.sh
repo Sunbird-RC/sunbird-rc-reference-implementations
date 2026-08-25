@@ -50,7 +50,7 @@ async function runCase({ label, citizenId, expect, mutate = {}, issuer }) {
     offer = await issueAsIssuer({
       base,
       issuerDid: untrustedIssuerDid,
-      credentialName: 'Age Verification Credential',
+      credentialName: 'Age Verification Credential (unlisted issuer)',
       claims: { ageOver18: true, ageOver21: true, name: 'Impostor', dateOfBirth: '1990-01-01' },
     });
     step(1, `an UNLISTED issuer creates an offer (${untrustedIssuerDid})`);

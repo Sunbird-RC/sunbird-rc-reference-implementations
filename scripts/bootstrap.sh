@@ -79,6 +79,7 @@ wait_for "gateway"           "$BASE/gateway-health"
 wait_for "identity-service"  "$BASE/identity-health"
 wait_for "credential-schema" "$BASE/schema-health"
 wait_for "credentials"       "$BASE/credential-health"
+wait_for "keycloak"          "$BASE/auth/realms/age/.well-known/openid-configuration" 90
 wait_for "oid4vc-service"    "$BASE/health"
 # The Java registry takes minutes under amd64 emulation. That is not a hang.
 wait_for "registry"          "$BASE/registry-health" 90
@@ -241,10 +242,60 @@ create_schema 'Age Verification Credential' 'AgeVerificationCredential' "$AGE_IS
 # Same name AND same vct, different author. That is the point: the DCQL query
 # matches on vct, upstream verification finds a perfectly valid signature, and
 # the ONLY thing that rejects it is the verifier's trust allowlist.
-create_schema 'Age Verification Credential' 'AgeVerificationCredentialUnlisted' "$UNTRUSTED_DID"
+# Distinct NAME, identical vct. The name is what a wallet shows in an issuer
+# list, so sharing it would put two identical-looking credentials in front of the
+# citizen and let them pick the untrusted one by accident. The vct is what DCQL
+# matches on, so keeping that identical is what makes the negative test real: the
+# presentation satisfies the query and is refused only by the trust allowlist.
+create_schema 'Age Verification Credential (unlisted issuer)' 'AgeVerificationCredentialUnlisted' "$UNTRUSTED_DID"
 
-# --- 5. apply the new configuration -----------------------------------------
-say "5. Applying configuration"
+# --- 5. demo citizen passwords ------------------------------------------------
+say "5. Demo citizen sign-in"
+# Generated, not committed. Anand's answer 3: "Do not commit passwords or
+# secrets. Reproducible demo credentials may be supplied through local
+# configuration or generated during setup and shown to the demo operator."
+#
+# Reproducible across re-runs because the generated value is kept in the
+# gitignored .env, so a second bootstrap does not silently change the password
+# an operator already wrote down.
+CITIZEN_PASSWORD="$(envval DEMO_CITIZEN_PASSWORD)"
+if [ -z "$CITIZEN_PASSWORD" ]; then
+  # python3, not `tr < /dev/urandom | head`: head closes the pipe, tr takes a
+  # SIGPIPE, and under `set -euo pipefail` that kills the script mid-step with no
+  # message at all. (It did exactly that on the first run.)
+  CITIZEN_PASSWORD="demo-$(python3 -c 'import secrets; print(secrets.token_hex(5))')"
+  set_env DEMO_CITIZEN_PASSWORD "$CITIZEN_PASSWORD"
+  green "generated a demo password and recorded it in deploy/.env"
+else
+  info "reusing the demo password already in deploy/.env"
+fi
+
+KC_ADMIN_USER="$(envval KEYCLOAK_ADMIN_USER)"; : "${KC_ADMIN_USER:=admin}"
+KC_ADMIN_PASS="$(envval KEYCLOAK_ADMIN_PASSWORD)"; : "${KC_ADMIN_PASS:=admin}"
+
+# Admin work runs through Keycloak's own CLI *inside* the container, on
+# localhost. Not a style choice: the master realm requires TLS for requests that
+# arrive proxied, so the same call through the gateway is refused with
+# "HTTPS required" even though the credentials are correct. Talking to
+# 127.0.0.1 from inside the container is treated as local and allowed.
+kcadm() {
+  "${COMPOSE[@]}" exec -T keycloak /opt/keycloak/bin/kcadm.sh "$@"
+}
+
+kcadm config credentials --server http://localhost:8080/auth \
+  --realm master --user "$KC_ADMIN_USER" --password "$KC_ADMIN_PASS" >/dev/null 2>&1 \
+  || die "could not authenticate to Keycloak as $KC_ADMIN_USER"
+
+for u in citizen.meera citizen.arjun citizen.nikhil citizen.sana citizen.unmapped; do
+  if kcadm set-password -r age --username "$u" --new-password "$CITIZEN_PASSWORD" >/dev/null 2>&1; then
+    green "$u ready"
+  else
+    warn "could not set the password for $u"
+  fi
+done
+
+# --- 6. apply the new configuration -----------------------------------------
+say "6. Applying configuration"
 # oid4vc-service reads VERIFIER_DID/ISSUER_DID and the verifier reads
 # AGE_ISSUER_DID at boot, so both need recreating now that .env has them.
 "${COMPOSE[@]}" up -d --force-recreate --no-deps oid4vc-service verifier age-issuer >/dev/null 2>&1 \
@@ -259,6 +310,14 @@ cat <<SUMMARY
   Verifier Age-restricted service        $VERIFIER_DID
   Unlisted negative-fixture issuer       $UNTRUSTED_DID
   Credential type                        $VCT
+
+  Demo sign-in (password printed once, and kept in deploy/.env)
+    citizen.meera     -> AGE-000001  adult,  expects APPROVED
+    citizen.arjun     -> AGE-000002  minor,  expects DENIED
+    citizen.nikhil    -> AGE-000003  turns 18 today
+    citizen.sana      -> AGE-000004  turns 18 tomorrow
+    citizen.unmapped  -> no citizen record: must receive NO credential
+    password          -> $CITIZEN_PASSWORD
 
   Next:
     ./scripts/seed-age-citizens.sh     synthetic citizens

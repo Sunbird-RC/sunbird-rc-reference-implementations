@@ -178,10 +178,52 @@ services:
       timeout: 5s
       retries: 30
 
+  # The authorization server for wallet-driven issuance (charter Flow 1). The
+  # citizen signs in here, inside the wallet's browser session, and the token it
+  # mints carries the citizenId claim the issuer resolves to a registry record.
+  #
+  # Relative path /auth on purpose: it keeps everything on one origin behind
+  # nginx, so the wallet, the issuer and the login page share a host and the
+  # redirect URI stays stable.
+  #
+  # Realm is imported at start; passwords are NOT in the import. bootstrap.sh
+  # sets them through the admin API and prints them once, because Anand's
+  # answer 3 forbids committing them.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    platform: linux/amd64
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm", "--http-relative-path=/auth"]
+    environment:
+      - KC_BOOTSTRAP_ADMIN_USERNAME=${KEYCLOAK_ADMIN_USER:-admin}
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      - KC_HTTP_ENABLED=true
+      - KC_HOSTNAME_STRICT=false
+      # Behind nginx: Keycloak must build absolute URLs from the forwarded host,
+      # or the login redirect sends the wallet somewhere it cannot reach.
+      - KC_PROXY_HEADERS=xforwarded
+      - KC_HEALTH_ENABLED=true
+    volumes:
+      - ./keycloak/realm-age.json:/opt/keycloak/data/import/realm-age.json:ro
+    healthcheck:
+      # A TCP connect, not an HTTP probe. The image ships no curl or wget, and
+      # hand-rolling an HTTP request through bash's /dev/tcp means embedding CRLF
+      # escapes in YAML — which is exactly how the first attempt silently failed
+      # while Keycloak itself was up and the realm imported fine.
+      #
+      # This asserts only what a healthcheck can cheaply assert: the server is
+      # listening. Realm readiness is a different claim, and bootstrap.sh proves
+      # it properly by fetching the realm's OIDC discovery document.
+      test: ['CMD-SHELL', 'exec 3<>/dev/tcp/127.0.0.1/8080']
+      interval: 10s
+      timeout: 5s
+      retries: 40
+      start_period: 60s
+
   # The OpenID4VCI / OpenID4VP protocol façade. Native to v2.1.0 — this is why
   # the architecture needs no standards adapter.
   oid4vc-service:
-    image: ghcr.io/sunbird-rc/sunbird-rc-oid4vc-service:${RELEASE_VERSION:-v2.1.0}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.4889fbdb}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -192,6 +234,8 @@ services:
       credential-schema:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      keycloak:
         condition: service_healthy
     environment:
       PORT: '3400'
@@ -215,6 +259,27 @@ services:
       DRAFT13_COMPAT_MODE: 'false'
       ENABLE_AUTH: 'false'
       CORS_ALLOWED_ORIGINS: ${PUBLIC_URL:-http://localhost}
+      # --- wallet-driven issuance (charter Flow 1) --------------------------
+      # Presence of KEYCLOAK_PUBLIC_URL is the switch. Unset it and this build
+      # behaves exactly like released v2.1.0: pre-authorised issuance only, and
+      # metadata advertising only itself as the authorization server. That
+      # opt-in shape is one of Anand's conditions for approving the capability.
+      KEYCLOAK_PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/auth
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/auth
+      KEYCLOAK_REALM: age
+      # The claim the issuer trusts to decide WHOSE credential this is. Nothing
+      # the wallet sends can override it.
+      KEYCLOAK_SUBJECT_CLAIM: citizenId
+      # Where the claims come from once the subject is known: the citizen's own
+      # registry record, with ageOver18/ageOver21 derived from its date of birth.
+      REGISTRY_BASE_URL: http://registry:8081
+      REGISTRY_SUBJECT_ENTITY: AgeCitizen
+      REGISTRY_SUBJECT_KEY: citizenId
+      REGISTRY_BIRTHDATE_FIELD: dateOfBirth
+      # What the citizen sees in the wallet's issuer list. Without it a wallet
+      # has only the hostname to show, and the charter's "the citizen selects the
+      # National Identity Authority" stops being a recognisable step.
+      ISSUER_DISPLAY_NAME: National Identity Authority
     healthcheck:
       test: ['CMD-SHELL', 'curl -f http://localhost:3400/health || exit 1']
       interval: 10s

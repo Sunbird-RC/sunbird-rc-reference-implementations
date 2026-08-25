@@ -86,8 +86,8 @@ if [ -d "$FORK/.git" ]; then
   # Exact count on purpose: the port is meant to stay narrow, so an unexplained
   # extra commit should show up here rather than in review. Raise it deliberately
   # when the port legitimately grows.
-  check "port branch is 3 commits off v2.1.0 (port, alg reporting, narrowing)" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "3" ]'
-  check "ported image is built" 'docker images -q sunbird-rc-oid4vc-service:v2.1.0-authcode.1583b7bd | grep -q .'
+  check "port branch is 4 commits off v2.1.0 (port, alg, narrowing, issuer display)" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "4" ]'
+  check "ported image is built" 'docker images -q sunbird-rc-oid4vc-service:v2.1.0-authcode.4889fbdb | grep -q .'
   check "compose still pins the official image" 'grep -q "ghcr.io/sunbird-rc/sunbird-rc-oid4vc-service" deploy/docker-compose.yml'
 else
   skip "fork checks" "no checkout at $FORK — set SUNBIRD_RC_CORE_PATH"
