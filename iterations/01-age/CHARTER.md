@@ -74,6 +74,7 @@ Mandatory boundaries:
 - Do not let the user select an arbitrary citizen record in a browser or request payload.
 - Do not treat Keycloak authentication alone as sufficient; the authenticated account must resolve to the correct source record.
 - Do not replace the real wallet journey with a scripted client for acceptance evidence.
+- For this demo, the wallet or its required companion configuration may contain the National Identity Authority as the relevant configured issuer. A trust registry and ecosystem onboarding are future concerns, and unrelated use-case issuers must not be added to the Age demo.
 
 ## Flow 2 — Cross-Device Web Verification by QR
 
@@ -106,6 +107,7 @@ The selected wallet may determine the exact standards-compatible invocation and 
 ## Architecture Boundaries
 
 - Use native Sunbird RC capabilities and released compatibility modes first.
+- The approved wallet-driven issuance extension belongs inside Sunbird RC's `oid4vc-service`, not the registry engine. Keycloak-backed `authorization_code` support must be optional/configurable and must preserve existing pre-authorised issuance behaviour.
 - Use one reusable verification service for both web and mobile verifier channels.
 - Keep protocol validation separate from the `ageOver18` decision rule.
 - Keep Keycloak authentication and citizen-to-record mapping separate from issuer signing keys and credential data.

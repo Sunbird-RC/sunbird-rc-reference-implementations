@@ -56,7 +56,7 @@ Sunbird RC is the showcase foundation and owns:
 - Credential schema/template configuration where supported.
 - Native credential creation, signing, verification, and lifecycle capabilities selected after compatibility validation.
 
-One shared Sunbird RC deployment may serve the demo. Logical issuers must remain distinct through issuer profiles, schemas, access boundaries, and keys.
+One shared Sunbird RC deployment may serve the demo. Logical issuers must remain distinct through issuer profiles, use-case-specific tables/entities, access boundaries, and keys.
 
 ### Standards Adapter
 
@@ -81,6 +81,12 @@ It must not become a second registry, duplicate domain data, or contain domain b
 - Exact wallet releases and compatibility modes are engineering decisions and must be recorded with the implementation evidence.
 - Wallet-specific behaviour remains outside generic issuer and verifier logic.
 - In the Age iteration, the wallet authenticates through Keycloak, discovers/selects the National Identity Authority, and initiates direct OpenID4VCI credential retrieval without an issuance QR or issuer-counter page.
+
+### Issuer Discovery
+
+In a production ecosystem, issuer discovery should be governed through a trust registry and explicit wallet-to-issuer onboarding and mapping. Building that ecosystem capability is outside the current demo scope.
+
+For these demonstrations, the relevant trusted issuer entries may be configured in the selected wallet or its required companion configuration service. Each use-case demo shows only its own relevant issuer or issuers; it must not display every showcase issuer merely to create a larger catalogue. The configuration service must remain limited to discovery/configuration and must not become another registry, issuer, credential store, identity system, or business-rules service.
 
 ### Identity and Issuance Authorisation
 
@@ -144,19 +150,20 @@ The demo trust model is a version-controlled allowlist of issuer identifiers and
 
 ## 7. Data Design
 
-Use one PostgreSQL deployment with independent database schemas:
+Use one PostgreSQL database with independent use-case-specific tables/entity labels, for example:
 
 ```text
-age.*
-agriculture.*
-education.*
-platform.*       # protocol transaction state and non-domain configuration only
+AgeCitizen and other Age tables
+Farmer, Land and other Agriculture tables
+School, College, University and other Education tables
+Protocol transaction and non-domain configuration tables
 ```
 
 Rules:
 
 - No shared cross-domain person table.
-- Synthetic identifiers may be intentionally correlated only within a use-case fixture.
+- Even where use cases portray the same synthetic person, each use case keeps its own independent record and attributes; tables and domain data do not overlap.
+- Synthetic identifiers may be intentionally correlated only through explicit test fixtures, without merging the domain records.
 - The standards adapter reads data through Sunbird RC APIs rather than directly from domain tables.
 - Presentation transaction data is short-lived and must not create a durable central history of holder activity.
 - Keys and secrets remain outside source control and domain tables.
@@ -215,7 +222,7 @@ For the Age iteration, this is a mandatory separate mobile verifier app and same
 The reference deployment uses Docker Compose and includes:
 
 - Sunbird RC and its required dependencies.
-- PostgreSQL with separated use-case schemas.
+- One PostgreSQL database with separate use-case tables/entities and no shared domain-person table.
 - Identity/access dependency required by the chosen Sunbird RC configuration.
 - Standards adapter, if the compatibility spike proves it necessary.
 - Reusable verifier service.
@@ -258,8 +265,10 @@ Add the third domain, credential filtering/discovery, and final regression cover
 1. **Sunbird RC boundary:** baseline Sunbird RC `v2.1.0` and its native `oid4vc-service`; introduce a thin standards adapter only for a demonstrated gap that configuration cannot resolve.
 2. **Wallet policy:** Kartheek selects suitable open-source wallets per use case; Inji must complete at least one full use case.
 3. **Trust model:** use a repository-controlled issuer allowlist for the demo; do not build a trust registry.
-4. **Data model:** use one PostgreSQL deployment with separate use-case schemas and no shared cross-domain person table.
+4. **Data model:** use one PostgreSQL database with separate use-case tables/entities. The same synthetic person is represented independently per use case; tables and domain data do not overlap.
 5. **Delivery order:** Age (including web and mobile verification), Agriculture, then Education.
+6. **Wallet-driven issuance extension:** add Keycloak-backed OpenID4VCI `authorization_code` support inside Sunbird RC's `oid4vc-service`, not the registry engine. The registry remains the authoritative claim source. The new grant is optional/configurable, existing pre-authorised issuance remains supported and unchanged by default, and the forked build must be pinned, tested, recorded as a deviation, and kept suitable for an upstream contribution.
+7. **Demo issuer discovery:** configure only the relevant use-case issuer entries in the wallet/companion configuration; defer trust-registry-governed discovery and onboarding.
 
 ## 14. References
 

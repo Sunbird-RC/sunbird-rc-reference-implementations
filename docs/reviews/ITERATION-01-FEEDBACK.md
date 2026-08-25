@@ -71,7 +71,7 @@ The completed evidence must include the real mobile-wallet consent screen and su
 - Clean the implementation branch so handshake-only files are not merged into `main`.
 - Enforce the approved algorithm policy or escalate a specific Design change for approval.
 - Update stale implementation-plan status.
-- Record the dedicated Age database deviation for acceptance.
+- Use one PostgreSQL database while keeping Age, Agriculture, and Education in separate non-overlapping tables/entities; update the existing dedicated-Age-database implementation accordingly.
 - Demonstrate the completed iteration to Anand and close feedback before requesting merge.
 
 ## Iteration Retrospective
@@ -144,4 +144,4 @@ Credential revocation, renewal/reissuance, recovery after wallet loss, multi-dev
 
 Keycloak-authenticated, wallet-driven issuance and same-device mobile verification were not explicit requirements of the original approved Age charter. They materially expand Iteration 01 and must not be described as failures against the earlier baseline.
 
-Product, Design, the Age charter, review feedback, and Claude instructions have now been aligned on branch `review/age-01-feedback`. Kartheek and Claude must use that revised baseline before implementation resumes.
+Product, Design, the Age charter, review feedback, and Claude instructions are now aligned on the original `iteration/age-01-verification` working branch. Kartheek and Claude must continue feedback closure on this branch.

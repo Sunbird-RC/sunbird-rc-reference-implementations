@@ -34,8 +34,8 @@ The showcase should prove that common credential capabilities can support indepe
 ## Issuers and Data
 
 - The showcase includes multiple logically independent credential issuers.
-- Issuers may share one database infrastructure for demo simplicity.
-- Each use case must retain independent tables or schemas, domain entities, credential source data, and business structures. Domain data must not be mixed.
+- Issuers may share one PostgreSQL database for demo simplicity.
+- Each use case must retain independent tables/entities, credential source data, and business structures. Even when the demos portray the same synthetic person, each use case keeps its own independent record; tables and domain data must not overlap.
 - The shared database is a demo convenience, not a target deployment model; real issuers would ordinarily control separate environments.
 - Multi-tenant issuers, sub-issuer management, organisational hierarchies, and delegated issuer administration are out of scope and must not complicate the current architecture.
 
