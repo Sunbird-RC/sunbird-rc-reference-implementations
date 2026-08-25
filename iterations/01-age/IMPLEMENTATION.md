@@ -101,6 +101,38 @@ printed once for the operator. The realm import carries users and the `citizenId
 attribute mapping, never credentials. Evidence shows the account-to-citizen mapping
 with no passwords or tokens in it.
 
+## Wallet: what the build needs
+
+The wallet is `pallakartheekreddy/paradym-wallet@v1.0.3`, which already carries the
+wallet half of Flow 1: an issuer directory, the browser sign-in step, and the
+preview-then-approve screen before anything is stored. Nothing in the wallet needs
+writing — only configuring.
+
+**One build-time variable.** `apps/wallet/app.config.js` reads
+`CREDENTIAL_ISSUER_URLS` (comma-separated) into `extra.credentialIssuerUrls`, and
+the directory hides itself when the list is empty. So the build is pointed at our
+stack by setting that to the stack's public base URL, with Kartheek's usual Expo
+build command.
+
+**No tunnel needed for the spike.** `apps/wallet/src/app/_layout.tsx` calls
+`allowInsecureOpenId4VcUrlsForDevelopment()` under `if (__DEV__)`, which its own
+comment describes as being for "a docker-compose stack on the LAN". A dev build can
+therefore talk to `http://<lan-ip>` directly.
+
+**The risk that flag may not cover.** Our issuer identity is a `did:web`, and that
+method mandates https. The flag relaxes the OID4VC libraries' URL validation; it
+may not extend to Credo's DID resolver, which would try
+`https://<lan-ip>/<uuid>/did.json` and fail when the credential is verified. If
+that happens, the fallback is the host already registered in the wallet's redirect
+URIs (`98.70.36.106.sslip.io`), which implies HTTPS is already available there.
+First thing to observe in the spike.
+
+**Redirect URI must match.** The wallet sends `allowedRedirectBaseUrls[0]`, which
+is `https://98.70.36.106.sslip.io/wallet/redirect` today. The Keycloak client in
+`deploy/keycloak/realm-age.json` lists that plus the app-scheme form. If a
+different host is used for the spike, its `/wallet/redirect` must be added there
+too, or the sign-in completes and the wallet never receives the code.
+
 ## Step E — Wallet compatibility spike *(before building the journeys)*
 
 Prove and record: sign-in inside the wallet; issuer list showing only the National
