@@ -35,7 +35,10 @@ requires, and it can only be tested if such an account exists.
 
 ## The wallet client
 
-`id.animo.paradym` is a public client with PKCE (S256). Both values come from the
+`id.animo.paradym` is a public client with PKCE (S256). Its redirect list covers
+every host the stack is demoed on — the wallet sends exactly one
+(`allowedRedirectBaseUrls[0]`), and a host that is not listed makes sign-in
+succeed while the authorization code never reaches the app. Both values come from the
 wallet itself, not from preference: `clientId` is the app scheme and the redirect
 URIs are what the wallet actually sends — see `apps/wallet/app.config.js` and
 `apps/wallet/src/constants.ts` in the wallet repository, where `walletClient` reads
