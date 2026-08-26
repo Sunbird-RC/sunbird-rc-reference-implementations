@@ -30,11 +30,18 @@ const config = createBaseConfig({
     // because those domains' assetlinks.json can't list a debug-signed cert,
     // so App Link verification fails for local dev/preview builds.
     // paradymwallet.app is fallback domain, to allow for better universal linking if both Paradym and Paradym Wallet are used (both on paradym.id)
-    allowedRedirectBaseUrls: [
-      'https://98.70.36.106.sslip.io/wallet/redirect',
-      'https://paradym.id/invitation/redirect',
-      'https://paradymwallet.app/oauth2/redirect',
-    ],
+    // Overridable at build time. Set WALLET_REDIRECT_BASE_URLS to an empty
+    // string and the wallet falls back to `<scheme>:///wallet/redirect`
+    // (constants.ts), which needs no App Link verification — the right choice
+    // for a build talking to a demo host whose assetlinks.json cannot list a
+    // locally signed certificate.
+    allowedRedirectBaseUrls: (
+      process.env.WALLET_REDIRECT_BASE_URLS ??
+      'https://98.70.36.106.sslip.io/wallet/redirect,https://paradym.id/invitation/redirect,https://paradymwallet.app/oauth2/redirect'
+    )
+      .split(',')
+      .map((url) => url.trim())
+      .filter(Boolean),
     // Comma-separated list of OID4VCI credential issuer base urls to show in the
     // issuer directory. Empty by default, which hides the directory entirely.
     credentialIssuerUrls: (process.env.CREDENTIAL_ISSUER_URLS ?? '')
