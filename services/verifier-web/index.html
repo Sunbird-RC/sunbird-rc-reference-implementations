@@ -29,6 +29,12 @@
         <p class="eyebrow" id="request-eyebrow">Start the check</p>
         <button id="start" class="primary">Start age check</button>
         <div id="qr" class="qr" hidden></div>
+        <!-- Same-device path. Opening this page ON the phone and tapping here
+             hands the request straight to the wallet through its openid4vp://
+             handler, with no camera in the loop - which is the same-device
+             journey the charter asks for, not merely a fallback for a QR that
+             will not scan. Hidden until a session exists. -->
+        <a id="open-wallet" class="open-wallet" hidden>Open in wallet</a>
         <p class="muted" id="hint" hidden>
           <span class="pulse" aria-hidden="true"></span>
           Waiting for your wallet… <span id="countdown"></span>

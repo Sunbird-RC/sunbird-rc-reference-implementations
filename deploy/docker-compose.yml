@@ -365,6 +365,12 @@ services:
         condition: service_started
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # The routes themselves, shared with the TLS overlay so both schemes serve
+      # exactly the same gateway. Split by audience: citizen/wallet routes are
+      # public, operator routes are served only on the loopback listener below.
+      - ./nginx/routes-citizen.conf:/etc/nginx/routes-citizen.conf:ro
+      - ./nginx/routes-ops.conf:/etc/nginx/routes-ops.conf:ro
+      - ./nginx/routes-denied.conf:/etc/nginx/routes-denied.conf:ro
       # The web pages are static and need no build step, so nginx serves them
       # directly instead of a container existing to hold a handful of files.
       - ../services/verifier-web:/usr/share/nginx/html/verifier:ro
@@ -372,6 +378,11 @@ services:
     ports:
       # Port 80 on purpose — see the header note about did:web and ports.
       - '80:80'
+      # The operator listener: bound to 127.0.0.1, so the unauthenticated
+      # registry/DID/schema endpoints are reachable from THIS machine only.
+      # bootstrap.sh, the seed script and the test suites use it. From another
+      # machine: ssh -L 8088:127.0.0.1:8088 user@host
+      - '127.0.0.1:8088:8088'
     healthcheck:
       # 127.0.0.1, not localhost: inside the container `localhost` resolves to
       # [::1] first and the server block only listens on IPv4, so an otherwise

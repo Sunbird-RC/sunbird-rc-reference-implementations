@@ -40,7 +40,7 @@ remains an engineering decision, and Inji doing Age also satisfies Product's
 requirement that Inji completes at least one full use case. Exact version, profile
 and compatibility mode are to be recorded when the spike runs.
 
-## Open finding — where the credential-request nonce comes from (blocking, unproven)
+## Resolved — where the credential-request nonce comes from (26 August 2026)
 
 Found by reading the Inji source available locally, **not** yet confirmed against
 the release we will pin.
@@ -51,11 +51,64 @@ calls no separate nonce endpoint. If Keycloak is the authorization server, the
 token response is Keycloak's and carries no such nonce — the proof would go out
 without one and issuance would fail.
 
-This is why Anand's answer 4 matters: he accepts **either** arrangement, so the
-issuer can be the authorization server and redirect the citizen to Keycloak to sign
-in, which keeps the nonce in the issuer's own token response. First item in the
-spike; the outcome decides the arrangement, and both are within the approved
-baseline.
+Anand's answer 4 accepts **either** arrangement, so the fallback was to make the
+issuer the authorization server and have it redirect the citizen to Keycloak,
+keeping the nonce in the issuer's own token response.
+
+**That fallback is not needed for Age.** Proven against the live deployment on
+26 August 2026: with Keycloak as the authorization server, a client that takes
+the nonce from the issuer's `nonce_endpoint` completes issuance normally. The
+arrangement recorded for Age is therefore **wallet-to-Keycloak directly**, and
+`tests/e2e/flow1-wallet-issuance.test.mjs` keeps it honest — it signs in through
+Keycloak's real login page and requests the credential exactly that way.
+
+Credo (and so Paradym) fetches the nonce from `nonce_endpoint`, which our stack
+publishes. Inji's token-response-only behaviour remains a real constraint, but
+Inji is no longer part of Age — it moves to Agriculture, where this finding
+should be re-read before that iteration commits to an arrangement.
+
+## Deployment findings (26 August 2026)
+
+Found while putting the stack on a public host, all fixed in the repository
+rather than by hand on the server.
+
+| # | Finding | Why it mattered | What changed |
+|---|---|---|---|
+| 1 | `did:web` mandates https, and the demo host had no certificate | over http the issuer's identifier only resolves for a client told to relax the rule, which a real wallet need not do | `scripts/enable-https.sh` issues a Let's Encrypt certificate for an `sslip.io` name (no DNS to own) and `deploy/docker-compose.tls.yml` puts the gateway behind it |
+| 2 | Keycloak interrupted the first sign-in with "Update Account Information" | its default user profile requires an email, so `VERIFY_PROFILE` fires **before** the wallet receives its authorization code — in the wallet that is a form in the in-app browser and the journey stalls | the realm disables `VERIFY_PROFILE` and the synthetic accounts carry complete profiles (`@citizens.invalid`, reserved by RFC 2606) |
+| 3 | The credential type URL 404ed | oid4vc-service serves SD-JWT VC Type Metadata at `/vct/<slug>` only for schemas whose stored `vct` is *relative*; ours was absolute, so our own published URL had nothing behind it. Credo fetches that document to render the credential | bootstrap stores the slug and lets the service normalise it; the published `vct` is unchanged, and it now follows `PUBLIC_URL` |
+| 4 | Changing the public origin silently kept the old identity | a `did:web` spells its host into the identifier, and identity-service still resolves an old one from its own database, so bootstrap happily reused a DID no external wallet could resolve | `mint_did` refuses a DID minted under another host and says why |
+| 5 | The stack has unauthenticated operator endpoints | not survivable on the internet: registry read **and write**, DID minting, schema creation, the pre-authorised offer endpoint, Keycloak's admin console — and `POST /oid4vc/offer`, which mints a credential from caller-supplied claims and would let anyone obtain one signed by the National Identity Authority saying anything | the gateway now has two listeners. `routes-citizen.conf` is what the internet sees; `routes-ops.conf` is served only on a listener Docker publishes on `127.0.0.1`. Endpoints sitting under wallet-facing prefixes (`/oid4vc/offer`, `/vp/request`, `/vp/status`, `/auth/admin`) are refused explicitly on the public listeners, because omission alone would leave the broader prefix serving them. The realm also enables brute-force protection, and bootstrap rotates Keycloak's default admin password |
+| 6 | An IP allowlist was the first attempt at #5, and it failed | on macOS, Docker Desktop's host-to-container NAT arrives from an unpredictable public-looking address (observed: `144.202.100.225`), so `allow 127.0.0.1; allow 10/8; …` locked the developer out of their own stack — and it meant recording an operator's home address in deployment config | replaced by the loopback listener above, which depends on no address at all. Reaching operator endpoints from another machine is an ssh port-forward: `ssh -L 8088:127.0.0.1:8088 user@host` |
+
+| 7 | The wallet reached Keycloak and the sign-in failed instantly with "something went wrong" | OID4VCI lets an issuer advertise a `scope` per credential configuration, and a standards wallet asks the authorization server for **that** scope rather than plain `openid`. Ours advertises `age-verification-credential`; Keycloak refuses any scope it does not know, answering `error=invalid_scope`, which a wallet can only report as a generic failure. Found on the device — the automated suite was signing in with `openid` and passing | every advertised scope now exists as a client scope in `deploy/keycloak/realm-age.json`, attached to the wallet client as **optional** so it is granted when asked for and does not ride along otherwise. `tests/e2e/flow1-wallet-issuance.test.mjs` now signs in with the scope metadata advertises, and asserts for **every** advertised scope that Keycloak grants it and that the token carries it |
+
+| 8 | The wallet could not scan the verifier's QR, though the same URL worked as a deep link | the payload is ~206 characters (a `did:web` `client_id` plus an https `request_uri`), so the symbol is dense. It was rendered at 320px with a 2-module quiet zone, then CSS-capped to ~296px on a cream panel — three things at once working against a phone camera aimed at a laptop screen | 480px, the spec's 4-module quiet zone, `ecl: 'L'` (one version fewer, so larger modules), and the page renders it at 24rem on **white**, because the quiet zone is part of the symbol and contrast against it is what the decoder measures |
+
+## Wallet spike results — Age, 26 August 2026
+
+Both wallet-facing journeys were run on a real device against the deployment.
+Answer 9 asked for the version and profile to be recorded after the spike:
+
+| | |
+|---|---|
+| Wallet | `pallakartheekreddy/paradym-wallet` @ `06394bd` (branch `v1.0.3`), app version 1.20.3 |
+| Build | Expo 56.0.12, React Native 0.85.3, `APP_VARIANT=preview`, arm64-v8a, package `id.paradym.wallet.preview` |
+| Protocol stack | `@credo-ts/core` and `@credo-ts/openid4vc` 0.7.1-alpha-20260707121432, `@openid4vc/openid4vci` 0.5.4, `@openid4vc/openid4vp` 0.4.6 |
+| Device | Samsung SM-A055F (Galaxy A05), Android 15 |
+| Profile exercised | OpenID4VCI `authorization_code` + PKCE with Keycloak as the authorization server, credential-scope authorization, nonce from `nonce_endpoint`, `vc+sd-jwt` issuance with `cnf.jwk` holder binding; OpenID4VP over `openid4vp://` with a signed request object fetched by `request_uri`, `direct_post` response |
+| Result | **Flow 1 and Flow 2 both work on the device.** Server-side over the same window: 12 Keycloak token exchanges, 11 credential requests, 8 credentials signed, 3 request objects fetched, 3 VP submissions, **0 verification failures** |
+
+Two things the wallet fork already handles, which removed work the plan had
+budgeted for: it picks the non-issuer entry out of `authorization_servers` and
+names it explicitly in the offer it builds (so our two-entry metadata is
+unambiguous), and it takes the credential-request nonce from the issuer's
+`nonce_endpoint` rather than the token response — which is what made
+Keycloak-as-authorization-server viable at all.
+
+Versions used: Keycloak `26.0`, certbot `v3.1.0`, `sunbird-rc-oid4vc-service:v2.1.0-authcode.4889fbdb`
+(fork branch `oid4vc-keycloak-as-v2.1.0`, source commit `4889fbdb`), every other
+Sunbird RC service on its official `ghcr.io/sunbird-rc` `v2.1.0` image.
 
 ## Compatibility Matrix
 

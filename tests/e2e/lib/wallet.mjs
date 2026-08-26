@@ -101,18 +101,46 @@ export async function proofOfPossession({ base, holder, nonce }) {
     .sign(holder.privateKey);
 }
 
-export async function requestCredential({ base, token, holder }) {
-  const proof = await proofOfPossession({ base, holder, nonce: token.c_nonce });
+/** A single-use c_nonce from the issuer's nonce endpoint. */
+export async function freshNonce(base) {
+  const body = await expectOk('nonce', http(`${base}/oid4vc/nonce`, { method: 'POST' }));
+  if (!body?.c_nonce) throw new Error(`no c_nonce in response: ${JSON.stringify(body).slice(0, 200)}`);
+  return body.c_nonce;
+}
+
+/**
+ * Requests the credential.
+ *
+ * Two grants arrive here. Redeeming a pre-authorised code returns a c_nonce in
+ * the token response and fixes the credential when the offer was made. A token
+ * from Keycloak carries neither, so the wallet takes the nonce from the issuer's
+ * nonce endpoint and names the configuration it wants — which is exactly what
+ * `extra` and the c_nonce fallback below are for.
+ */
+export async function requestCredential({ base, token, holder, extra }) {
+  const nonce = token.c_nonce || (await freshNonce(base));
+  const proof = await proofOfPossession({ base, holder, nonce });
   const body = await expectOk(
     'credential',
     http(`${base}/oid4vc/credential`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token.access_token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ proof: { proof_type: 'jwt', jwt: proof } }),
+      body: JSON.stringify({ ...extra, proof: { proof_type: 'jwt', jwt: proof } }),
     }),
   );
   if (!body?.credential) throw new Error(`no credential in response: ${JSON.stringify(body).slice(0, 200)}`);
   return { credential: body.credential, format: body.format };
+}
+
+/** Same request, without asserting success — for the refusal cases. */
+export async function tryRequestCredential({ base, token, holder, extra }) {
+  const nonce = token.c_nonce || (await freshNonce(base));
+  const proof = await proofOfPossession({ base, holder, nonce });
+  return http(`${base}/oid4vc/credential`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token.access_token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ ...extra, proof: { proof_type: 'jwt', jwt: proof } }),
+  });
 }
 
 // --- SD-JWT handling ---------------------------------------------------------
@@ -140,6 +168,11 @@ export function parseSdJwt(sdJwt) {
 /** Claim names the credential can disclose. */
 export function disclosableClaims(sdJwt) {
   return parseSdJwt(sdJwt).disclosures.map((d) => d.name).sort();
+}
+
+/** The same disclosures as a name -> value map, for comparing against the source record. */
+export function disclosableValues(sdJwt) {
+  return Object.fromEntries(parseSdJwt(sdJwt).disclosures.map((d) => [d.name, d.value]));
 }
 
 /**

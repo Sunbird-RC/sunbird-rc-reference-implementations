@@ -119,6 +119,11 @@ async function start() {
   el('qr').dataset.sessionId = body.sessionId;
   el('qr').innerHTML = body.qrSvg;
   el('qr').hidden = false;
+  // The same payload the QR encodes, as a tappable link: opening this page on
+  // the phone and tapping it hands the request to the wallet through its
+  // openid4vp:// handler, with no camera involved.
+  el('open-wallet').href = body.qrData;
+  el('open-wallet').hidden = false;
   el('hint').hidden = false;
   el('start').hidden = true;
   el('request-eyebrow').textContent = 'Scan with your wallet';

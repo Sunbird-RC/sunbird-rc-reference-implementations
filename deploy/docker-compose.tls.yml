@@ -1,0 +1,29 @@
+# HTTPS overlay for the gateway.
+#
+#   ./scripts/enable-https.sh <hostname>          issues the certificate and
+#                                                 restarts the stack with this
+#
+# Kept as an OVERLAY rather than folded into docker-compose.yml so a local
+# checkout still comes up on plain HTTP with no certificate, no hostname and no
+# Let's Encrypt account — `docker compose up -d` must keep working offline.
+#
+# Usage without the script:
+#   docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+services:
+  nginx:
+    volumes:
+      - ./nginx/nginx-tls.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/routes-citizen.conf:/etc/nginx/routes-citizen.conf:ro
+      - ./nginx/routes-ops.conf:/etc/nginx/routes-ops.conf:ro
+      - ./nginx/routes-denied.conf:/etc/nginx/routes-denied.conf:ro
+      - ../services/verifier-web:/usr/share/nginx/html/verifier:ro
+      - ../services/web-assets:/usr/share/nginx/html/assets:ro
+      # Read-only: nginx serves the certificate, certbot owns it.
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Where certbot drops the challenge file on renewal.
+      - /var/www/certbot:/var/www/certbot:ro
+    ports:
+      - '80:80'
+      - '443:443'
+      # Operator listener, loopback only — see docker-compose.yml.
+      - '127.0.0.1:8088:8088'

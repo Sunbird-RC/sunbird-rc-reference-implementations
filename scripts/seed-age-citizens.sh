@@ -19,8 +19,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$ROOT/deploy/.env"
 envval() { { grep -E "^$1=" "$ENV_FILE" 2>/dev/null || true; } | cut -d= -f2- | tr -d '\r' | tail -1; }
 
-BASE="${BASE:-$(envval PUBLIC_URL)}"
-: "${BASE:=http://localhost}"
+# The registry API is an operator route, served only on the loopback operator
+# listener (see deploy/nginx/routes-ops.conf).
+BASE="${BASE:-http://127.0.0.1:${OPS_PORT:-8088}}"
 REG="$BASE/api/v1"
 
 green() { printf '  \033[32m✓\033[0m %s\n' "$1"; }

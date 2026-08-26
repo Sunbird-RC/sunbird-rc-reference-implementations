@@ -58,12 +58,33 @@ set_env() {
 
 [ -f "$ENV_FILE" ] || { cp "$DEPLOY/env.example" "$ENV_FILE"; green "created deploy/.env from env.example"; }
 
-BASE="${BASE:-$(envval PUBLIC_URL)}"
-: "${BASE:=http://localhost}"
+# Two different addresses, and conflating them is a real bug:
+#
+#   PUBLIC — what gets PUBLISHED (the credential type, issuer metadata, DIDs).
+#            It must be the address a wallet can reach.
+#   BASE   — where this script SENDS its setup requests. On a cloud VM that
+#            usually cannot be the public address: NAT hairpinning is often
+#            disabled, so the host cannot curl its own public IP (verified:
+#            HTTP 000 on the sandbox VM).
+#
+# Overriding BASE alone used to change the published `vct` too, which silently
+# produced schemas advertising http://localhost while the verifier asked for the
+# public host — so DCQL matched nothing and every presentation failed.
+PUBLIC="${PUBLIC_URL:-$(envval PUBLIC_URL)}"
+: "${PUBLIC:=http://localhost}"
+# Everything this script does is operator work — minting DIDs, creating schemas,
+# seeding, restarting services — and those routes are served ONLY on the operator
+# listener (nginx/routes-ops.conf), which Docker publishes on 127.0.0.1. So the
+# default target is that listener, not the public origin. It also sidesteps NAT
+# hairpinning, which is what the note above was working around.
+OPS_PORT="${OPS_PORT:-8088}"
+BASE="${BASE:-http://127.0.0.1:$OPS_PORT}"
 VAULT_TOKEN_VALUE="$(envval VAULT_TOKEN)"
 : "${VAULT_TOKEN_VALUE:=local-root-token}"
 
-printf '\033[1mBootstrapping the Age stack at %s\033[0m\n' "$BASE"
+printf '\033[1mBootstrapping the Age stack\033[0m\n'
+printf '  publishing as : %s\n' "$PUBLIC"
+printf '  setting up via: %s (operator listener)\n' "$BASE"
 
 # --- 1. wait for the stack ---------------------------------------------------
 say "1. Waiting for services"
@@ -115,9 +136,23 @@ say "3. Identities (did:web, so standards wallets can resolve them)"
 # which then reaches .env, the schema `author` field and the trust allowlist.
 # (Found exactly that way on the first run: the allowlist held an ANSI-coloured
 # sentence and the verifier trusted nobody real.)
+# The host the published origin implies, e.g. `135.235.192.9.sslip.io` from
+# https://135.235.192.9.sslip.io. A did:web spells its host into the identifier,
+# so this is what a reusable DID has to match.
+PUBLIC_DID_HOST="$(printf '%s' "${PUBLIC#*://}" | cut -d/ -f1 | cut -d: -f1)"
+
 mint_did() {
   local env_key="$1" label="$2" existing resp did
   existing="$(envval "$env_key")"
+  if [ -n "$existing" ] && [ "${existing#did:}" != "$existing" ] \
+     && [ "${existing#did:web:$PUBLIC_DID_HOST}" = "$existing" ]; then
+    # A DID minted under a DIFFERENT origin. identity-service still resolves it
+    # from its own database, so the reuse check below would happily keep it --
+    # and every credential would carry an issuer identifier that no external
+    # wallet can resolve. Mint a new one instead, and say why.
+    warn "$label: $existing was minted under another host; minting under $PUBLIC_DID_HOST" >&2
+    existing=""
+  fi
   if [ -n "$existing" ] && [ "${existing#did:}" != "$existing" ] \
      && curl -fksS -o /dev/null --max-time 5 "$BASE/did/resolve/$existing" 2>/dev/null; then
     green "$label: reusing $existing" >&2
@@ -149,7 +184,18 @@ green "DIDs recorded in deploy/.env"
 
 # --- 4. credential schemas ---------------------------------------------------
 say "4. Credential schema: Age Verification Credential (vc+sd-jwt)"
-VCT="$BASE/vct/age-verification-credential"
+# The schema stores the vct as a bare SLUG, not an absolute URL, and
+# oid4vc-service normalises it to <publicUrl>/vct/<slug> in issuer metadata.
+# Two reasons that matters, both found the hard way:
+#
+#   1. The service serves SD-JWT VC Type Metadata at /vct/<slug> ONLY for
+#      schemas whose stored vct is relative — an absolute one is taken to be
+#      somebody else's document to host, so our own URL 404s. Credo (and
+#      therefore Paradym) fetches that document to render the credential.
+#   2. A relative vct follows PUBLIC_URL, so changing the public origin does not
+#      leave the credential type pointing at the old host.
+VCT_SLUG="age-verification-credential"
+VCT="$PUBLIC/vct/$VCT_SLUG"
 
 # The schema body generator lives in a temp file rather than a heredoc inside
 # $(...): bash 3.2 — still the default on macOS — cannot parse that combination
@@ -228,7 +274,7 @@ create_schema() {
     green "$name (author ${author##*:}) already present"
     return 0
   fi
-  body="$(python3 "$SCHEMA_PY" "$name" "$sid" "$author" "$VCT")"
+  body="$(python3 "$SCHEMA_PY" "$name" "$sid" "$author" "$VCT_SLUG")"
   # POST to /credential-schema — the controller is mounted at that prefix and
   # serves POST at its root.
   resp="$(curl -fsS -X POST "$BASE/credential-schema" -H 'content-type: application/json' -d "$body")" \
@@ -285,6 +331,26 @@ kcadm() {
 kcadm config credentials --server http://localhost:8080/auth \
   --realm master --user "$KC_ADMIN_USER" --password "$KC_ADMIN_PASS" >/dev/null 2>&1 \
   || die "could not authenticate to Keycloak as $KC_ADMIN_USER"
+
+# The image starts with admin/admin. Keycloak's admin console is restricted to
+# the operator allowlist in nginx, but a default credential should not survive a
+# deployment either way, so rotate it once and record it beside the demo
+# password. Re-runs reuse the recorded value.
+if [ "$KC_ADMIN_PASS" = "admin" ]; then
+  NEW_KC_PASS="kcadmin-$(python3 -c 'import secrets; print(secrets.token_hex(6))')"
+  if kcadm set-password -r master --username "$KC_ADMIN_USER" --new-password "$NEW_KC_PASS" >/dev/null 2>&1; then
+    set_env KEYCLOAK_ADMIN_PASSWORD "$NEW_KC_PASS"
+    KC_ADMIN_PASS="$NEW_KC_PASS"
+    kcadm config credentials --server http://localhost:8080/auth \
+      --realm master --user "$KC_ADMIN_USER" --password "$KC_ADMIN_PASS" >/dev/null 2>&1 \
+      || die "rotated the Keycloak admin password but could not re-authenticate"
+    green "rotated the Keycloak admin password and recorded it in deploy/.env"
+  else
+    warn "could not rotate the Keycloak admin password; it is still the image default"
+  fi
+else
+  info "reusing the Keycloak admin password already in deploy/.env"
+fi
 
 for u in citizen.meera citizen.arjun citizen.nikhil citizen.sana citizen.unmapped; do
   if kcadm set-password -r age --username "$u" --new-password "$CITIZEN_PASSWORD" >/dev/null 2>&1; then

@@ -1,6 +1,9 @@
 # Iteration 01 — Age Verification: implementation plan
 
-**Status:** Approved scope, in progress. Flow 1 unblocked.
+**Status:** Approved scope, in progress. **Flow 1 and Flow 2 both run on a real
+device** against the public deployment (26 August 2026, Samsung SM-A055F,
+Android 15). What remains for the demo: the continuous recordings answer 6
+requires, and Flow 3's separately installed mobile verifier app.
 **Supersedes:** the plan of 24 August 2026, written while the Flow 1 gap was open
 **Charter:** [`CHARTER.md`](CHARTER.md)
 **Review:** [`../../docs/reviews/ITERATION-01-FEEDBACK.md`](../../docs/reviews/ITERATION-01-FEEDBACK.md)
@@ -108,30 +111,133 @@ wallet half of Flow 1: an issuer directory, the browser sign-in step, and the
 preview-then-approve screen before anything is stored. Nothing in the wallet needs
 writing — only configuring.
 
-**One build-time variable.** `apps/wallet/app.config.js` reads
-`CREDENTIAL_ISSUER_URLS` (comma-separated) into `extra.credentialIssuerUrls`, and
-the directory hides itself when the list is empty. So the build is pointed at our
-stack by setting that to the stack's public base URL, with Kartheek's usual Expo
-build command.
+### The build, exactly as it was produced
 
-**No tunnel needed for the spike.** `apps/wallet/src/app/_layout.tsx` calls
-`allowInsecureOpenId4VcUrlsForDevelopment()` under `if (__DEV__)`, which its own
-comment describes as being for "a docker-compose stack on the LAN". A dev build can
-therefore talk to `http://<lan-ip>` directly.
+`pallakartheekreddy/paradym-wallet@v1.0.3` (local fork at
+`../paradym-wallet`), Expo 56 / React Native 0.85.3, built locally — no Expo
+account or cloud build involved, because the project id in `app.config.js`
+belongs to Animo.
 
-**The risk that flag may not cover.** Our issuer identity is a `did:web`, and that
-method mandates https. The flag relaxes the OID4VC libraries' URL validation; it
-may not extend to Credo's DID resolver, which would try
-`https://<lan-ip>/<uuid>/did.json` and fail when the credential is verified. If
-that happens, the fallback is the host already registered in the wallet's redirect
-URIs (`98.70.36.106.sslip.io`), which implies HTTPS is already available there.
-First thing to observe in the spike.
+```bash
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17          # AGP wants 17, not 11/21/23
+export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
+export APP_VARIANT=preview                             # release build, no dev server
+export CREDENTIAL_ISSUER_URLS=https://135.235.192.9.sslip.io
+export WALLET_REDIRECT_BASE_URLS=""                    # see below
+cd apps/wallet && npx expo prebuild --platform android --no-install
+cd android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+```
 
-**Redirect URI must match.** The wallet sends `allowedRedirectBaseUrls[0]`, which
-is `https://98.70.36.106.sslip.io/wallet/redirect` today. The Keycloak client in
-`deploy/keycloak/realm-age.json` lists that plus the app-scheme form. If a
-different host is used for the spike, its `/wallet/redirect` must be added there
-too, or the sign-in completes and the wallet never receives the code.
+`reactNativeArchitectures` matters. The generated `gradle.properties` builds all
+four ABIs, which compiles every native module (Skia, Askar, AnonCreds, Nitro,
+Reanimated) four times — hours of CPU and enough intermediate object files to
+exhaust a nearly full disk, which is exactly how the first attempt died at 2h14m
+in Skia's JNI compile. One ABI is correct here: every Android phone since about
+2017 is `arm64-v8a`.
+
+Built artifact, verified by `aapt2` and `apksigner` rather than assumed:
+
+| | |
+|---|---|
+| Package | `id.paradym.wallet.preview`, label "Sunbird Wallet (Preview)" |
+| Version | 1.20.3 (versionCode 1) |
+| Size / ABI | 74 MB, `arm64-v8a` only |
+| compileSdk / targetSdk | 36 / 36 |
+| Signature | `CN=Android Debug` — SHA-256 `fac61745…33b9c` |
+| Embedded config | `assets/app.config` carries `credentialIssuerUrls: ["https://135.235.192.9.sslip.io"]` and `allowedRedirectBaseUrls: []` |
+
+That last row is the one worth checking after any rebuild: the issuer directory
+is driven by build-time environment, so an APK built without those variables
+looks identical and silently shows no issuer at all.
+
+Two facts about the result worth recording:
+
+- The package is `id.paradym.wallet.preview` and the app is "Sunbird Wallet
+  (Preview)", so it installs **alongside** any Paradym build already on the
+  phone rather than replacing it.
+- Expo's Android template signs release builds with the debug key, which is why
+  no keystore is needed. It is installable and fine for a demo; it is not
+  distributable.
+
+### Why the redirect is the app scheme, not an https URL
+
+The wallet sends `allowedRedirectBaseUrls[0]` as its `redirect_uri`, and that
+list was pinned to `https://98.70.36.106.sslip.io/wallet/redirect` — a host we
+do not control. An https redirect only returns to the app if Android has
+**verified** the App Link, which requires that host to serve an
+`assetlinks.json` naming this build's signing certificate. A debug-signed local
+build cannot be listed there.
+
+Making the list build-time configurable (one change in `app.config.js`, mirroring
+how `credentialIssuerUrls` already works) and setting it empty makes the wallet
+fall back to `id.animo.paradym:///wallet/redirect`, which `constants.ts` already
+defines and `+native-intent.tsx` already handles as `isDeeplinkRedirect`. The
+custom scheme needs no verification, and the Keycloak client in
+`deploy/keycloak/realm-age.json` already lists it.
+
+**One build-time variable**, and it now has a value:
+
+```
+CREDENTIAL_ISSUER_URLS=https://135.235.192.9.sslip.io
+```
+
+`apps/wallet/app.config.js` reads it (comma-separated) into
+`extra.credentialIssuerUrls`, and the directory hides itself when the list is
+empty. Nothing else in the wallet needs changing.
+
+**No development flag needed, and the `did:web` risk is gone.** The earlier plan
+relied on `allowInsecureOpenId4VcUrlsForDevelopment()` and flagged the risk that
+it relaxes the OID4VC libraries' URL checks but not Credo's DID resolver — which
+would have tried `https://<lan-ip>/<uuid>/did.json` and failed at verification
+time. The deployment is now genuinely https with a public certificate, so the
+issuer's `did:web` resolves the ordinary way and the flag is irrelevant. The
+credential type URL resolves too, which Credo fetches for rendering.
+
+**Redirect URI must match.** The wallet sends `allowedRedirectBaseUrls[0]`,
+`https://98.70.36.106.sslip.io/wallet/redirect` today. The Keycloak client in
+`deploy/keycloak/realm-age.json` lists that, the app-scheme form
+(`id.animo.paradym:///wallet/redirect`) and this deployment's
+`https://135.235.192.9.sslip.io/wallet/redirect`. If the wallet is built to send
+a different one, add it there or the sign-in completes and the wallet never
+receives the code.
+
+## Deployed environment *(pinned, 26 August 2026)*
+
+The public origin had to be pinned before anything demoable was issued, because
+it is part of both the issuer's `did:web` and the credential type. It now is:
+
+| | |
+|---|---|
+| Origin | `https://135.235.192.9.sslip.io` (Let's Encrypt, real certificate) |
+| Verifier page | `https://135.235.192.9.sslip.io/verifier/` |
+| Issuer metadata | `https://135.235.192.9.sslip.io/.well-known/openid-credential-issuer` |
+| Authorization server | `https://135.235.192.9.sslip.io/auth/realms/age` |
+| Host | the sandbox VM, alongside the previous RC stack, which is backed up, restorable and currently stopped (their ports are mutually exclusive) |
+
+`sslip.io` resolves `<ip>.sslip.io` to that address, so a public certificate can
+be issued with no DNS to own — enough to satisfy `did:web`'s https requirement
+without inventing a domain for a demo.
+
+Two things this deployment made necessary, both now in the repository:
+
+- **The public internet can reach it**, so the gateway now has two listeners.
+  Port 80/443 serve `routes-citizen.conf` — the wallet and verifier routes, and
+  nothing else. The stack's unauthenticated operator endpoints (registry API read
+  and write, DID minting, schema creation, the pre-authorised offer endpoint,
+  Keycloak's admin console, and `POST /oid4vc/offer`, which mints a credential
+  from claims the caller supplies) are served only on a listener Docker publishes
+  on `127.0.0.1:8088`. Verified against the deployment: every one of those paths
+  answers 403 or 404 from the internet, port 8088 refuses off-box connections,
+  and every wallet- and verifier-facing route answers 200.
+
+  Operator work therefore happens on the box, or over an ssh port-forward:
+
+  ```bash
+  ssh -L 8088:127.0.0.1:8088 rc@<host>
+  PUBLIC_URL=https://<host> OPS_URL=http://127.0.0.1:8088 npm run test:e2e
+  ```
+- **Re-running setup is safe.** `scripts/enable-https.sh` is idempotent, and
+  `bootstrap.sh` now refuses to reuse a DID minted under a different origin.
 
 ## Step E — Wallet compatibility spike *(before building the journeys)*
 
@@ -148,12 +254,112 @@ decides the Keycloak arrangement.
 2. **Flow 1:** wallet signs the citizen in, lists the issuer, fetches the
    credential. No QR, no issuer page. Negative paths as tests: wrong password,
    unmapped account, manipulated citizen identifier.
+   **Server side done and proven** by `tests/e2e/flow1-wallet-issuance.test.mjs`
+   against the live deployment: it drives Keycloak's real login page, exchanges
+   the code with PKCE, takes the nonce from the issuer's nonce endpoint, and
+   receives a credential built from that citizen's own registry record and bound
+   to the requesting wallet key — then presents it and gets APPROVED. All three
+   negative paths above are covered, plus a random bearer token, an unpublished
+   credential type, and a regression that pre-authorised issuance still works
+   with Keycloak enabled. 11 tests. What is left is the wallet's own UI on a
+   device: the issuer list, the in-app browser, the approve screen, the
+   recordings.
 3. **Flow 2:** cross-device QR on a device. Pin the public HTTPS host *before*
    issuing anything demoable — it is baked into the issuer identifier and the
    credential type, so changing it invalidates credentials already issued.
 4. **Flow 3:** installed Android app, built on `services/verifier`, displaying only
    what that service decides. Android because the wallet is Android — an
    engineering decision, recorded.
+
+### Running the journeys on the device
+
+Install (USB debugging on, phone unlocked):
+
+```bash
+adb install -r apps/wallet/android/app/build/outputs/apk/release/app-release.apk
+```
+
+**Flow 1 — the wallet fetches the credential.** Record from the home screen.
+
+1. Open Sunbird Wallet (Preview) → the issuer directory shows **National
+   Identity Authority**, and nothing else. If the directory is missing entirely,
+   `CREDENTIAL_ISSUER_URLS` was not set at build time.
+2. Tap it → an in-app browser opens Keycloak at
+   `https://135.235.192.9.sslip.io/auth/realms/age`.
+3. Sign in as `citizen.meera` with the password from `deploy/.env` on the host.
+   Expect **no** "Update Account Information" form — that was a finding, and the
+   realm now disables it.
+4. The browser closes and the wallet shows the credential **before** storing it,
+   with `ageOver18` visible. Approve.
+5. The credential is in the wallet. Close it, reopen, unlock: still there.
+6. On the host, end the Keycloak session
+   (`kcadm.sh delete users/<id>/sessions`, or just wait out
+   `ssoSessionIdleTimeout`), reopen the wallet: the credential is still there and
+   was not reissued — answer 7 wants both halves shown.
+
+Negative paths, same build: `citizen.unmapped` (signs in, receives nothing) and a
+wrong password (never reaches the wallet).
+
+**Flow 2 — cross-device presentation.** Open
+`https://135.235.192.9.sslip.io/verifier/` on a laptop, scan the QR from the
+wallet, check that the consent screen names the verifier and asks for
+`ageOver18` **only**, approve, and watch the page decide. Repeat with the minor's
+credential for DENIED — a verified DENIED, not a failure.
+
+### What the device run proved, and what it cost
+
+Both journeys work. Three defects surfaced only on the device, all fixed in the
+repository rather than by hand on the server — and each one is now covered so it
+cannot come back silently:
+
+| Symptom on the phone | Cause | Now guarded by |
+|---|---|---|
+| "Something went wrong" the instant the wallet opened Keycloak | our issuer metadata advertises a `scope` per credential, a standards wallet asks for exactly that scope, and Keycloak rejects scopes it does not know (`invalid_scope`) | the realm carries every advertised scope as an optional client scope, and the Flow 1 suite signs in with the advertised scope and asserts Keycloak grants **all** of them |
+| Onboarding stalled on "Update Account Information" | Keycloak's default user profile requires an email, so `VERIFY_PROFILE` fires before the wallet receives its code | the realm disables it; `verify.sh` checks that |
+| The QR would not scan | dense payload rendered small, with a 2-module quiet zone, on a cream panel | 480px, 4-module quiet zone, `ecl: 'L'`, rendered at 24rem on white |
+
+The first one is the instructive one: the automated suite was passing while a real
+wallet could not get past the login screen, because the suite asked for `openid`
+and a wallet asks for what metadata advertises. Tests that model the client
+loosely will keep doing this. Worth remembering before Agriculture.
+
+## Recording shot list *(answer 6: one continuous take per journey)*
+
+Recorded with the phone's own screen recorder rather than adb: `screenrecord`
+caps a clip at 180 seconds, and the USB link dropped three times during testing —
+a poor bet for evidence that has to be uninterrupted.
+
+**Take 1 — Flow 1, issuance inside the wallet.** Start on the phone's home
+screen, recorder already running.
+
+1. Open Sunbird Wallet (Preview), unlock. Credential list visible.
+2. Issuer directory shows **National Identity Authority**, and only that issuer.
+3. Tap it, then **Age Verification Credential**.
+4. Keycloak opens *inside* the wallet. Sign in as `citizen.meera`. No profile
+   form appears — the fixed `VERIFY_PROFILE` finding, on camera.
+5. The wallet shows the credential **before** storing it. Hold on `ageOver18`
+   long enough to read. Approve.
+6. The credential is in the list. Lock the app, reopen, unlock: still there.
+
+**Take 2 — Flow 2, presentation, APPROVED.** Either scan the QR from a laptop, or
+open the verifier page on the phone and tap **Open in wallet** — the same-device
+hand-off, which needs no camera.
+
+1. Consent screen names the verifier and asks for `ageOver18` **only**.
+2. Approve. The verifier page shows **APPROVED** — captured separately when the
+   page is on a second screen.
+
+**Take 3 — Flow 2 again, verified DENIED.** Same as take 2 with the minor's
+credential (`citizen.arjun`, AGE-000002), ending in **DENIED**. The point is that
+this is a *verified* denial: every signature check passed and the policy said no.
+
+Boundary pair worth filming while the dates hold: `citizen.nikhil` turns 18
+**today** (APPROVED) and `citizen.sana` **tomorrow** (DENIED). Re-run
+`./scripts/seed-age-citizens.sh` first on any later day — it refreshes drifted
+boundary dates so the pair keeps straddling the birthday.
+
+Videos stay out of the repository — large, and re-creatable. They belong in the
+demo evidence pack beside the account-to-citizen mapping.
 
 ## Step G — Evidence
 

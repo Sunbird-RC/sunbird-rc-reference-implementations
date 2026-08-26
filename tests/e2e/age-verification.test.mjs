@@ -40,7 +40,7 @@ import {
   forgeDisclosureValue,
 } from './lib/wallet.mjs';
 
-const { base, ageIssuerDid, untrustedIssuerDid } = deployEnv();
+const { base, opsBase, ageIssuerDid, untrustedIssuerDid } = deployEnv();
 const QUERY_ID = 'age_cred';
 const ADULT = 'AGE-000001';
 const MINOR = 'AGE-000002';
@@ -140,7 +140,7 @@ describe('issuer-side backend', () => {
 
   test('an unknown citizen is refused', async () => {
     guard();
-    const res = await json(`${base}/api/issuer/offers`, {
+    const res = await json(`${opsBase}/api/issuer/offers`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ citizenId: 'AGE-999999' }),
@@ -154,7 +154,7 @@ describe('issuer-side backend', () => {
     // Names the minor, but also tries to assert adulthood in every shape the
     // endpoint might plausibly accept. The registry record must win.
     const holder = await createHolder();
-    const res = await json(`${base}/api/issuer/offers`, {
+    const res = await json(`${opsBase}/api/issuer/offers`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -198,7 +198,7 @@ describe('privacy and minimum disclosure', () => {
 
     // And the withheld values are absent from the wire, not merely unread. The
     // signed payload holds salted digests, so they are unrecoverable.
-    const seeded = await json(`${base}/api/v1/AgeCitizen/search`, {
+    const seeded = await json(`${opsBase}/api/v1/AgeCitizen/search`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ filters: { citizenId: { eq: ADULT } } }),
@@ -273,7 +273,7 @@ describe('domain decision', () => {
     // the verifier's decision agrees with what the registry's date of birth
     // implies today — and it holds on any day.
     for (const citizenId of ['AGE-000003', 'AGE-000004']) {
-      const seeded = await json(`${base}/api/v1/AgeCitizen/search`, {
+      const seeded = await json(`${opsBase}/api/v1/AgeCitizen/search`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ filters: { citizenId: { eq: citizenId } } }),
@@ -300,7 +300,7 @@ describe('domain decision', () => {
     // than let the suite look stronger than it is.
     const dobs = {};
     for (const citizenId of ['AGE-000003', 'AGE-000004']) {
-      const seeded = await json(`${base}/api/v1/AgeCitizen/search`, {
+      const seeded = await json(`${opsBase}/api/v1/AgeCitizen/search`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ filters: { citizenId: { eq: citizenId } } }),

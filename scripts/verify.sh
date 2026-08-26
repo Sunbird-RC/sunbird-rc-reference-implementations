@@ -49,7 +49,7 @@ gone "README has no dangling handshake links" 'grep -q "docs/start" README.md'
 head_ '4. Rejected work removed (review item)'
 gone "services/issuer-web deleted" '[ -d services/issuer-web ]'
 gone "compose no longer mounts it" 'grep -q "issuer-web" deploy/docker-compose.yml'
-gone "nginx no longer routes /issuer/" 'grep -q "location /issuer/" deploy/nginx/nginx.conf'
+gone "nginx no longer routes /issuer/" 'grep -q "location /issuer/" deploy/nginx/routes.conf'
 gone "age-issuer dropped the QR dependency" 'grep -q "qrcode-svg" services/age-issuer/package.json'
 gone "verifier page no longer prints wallet.sh" 'grep -q "wallet.sh" services/verifier-web/app.js'
 
@@ -78,7 +78,30 @@ else
   skip "running-stack checks" "stack not up at $BASE — cd deploy && docker compose up -d"
 fi
 
-head_ '7. Data model matches the approved design'
+head_ '7. Gateway exposure (public deployment)'
+check "routes are split by audience" '[ -f deploy/nginx/routes-citizen.conf ] && [ -f deploy/nginx/routes-ops.conf ] && [ -f deploy/nginx/routes-denied.conf ]'
+check "the public listeners serve citizen routes plus refusals" 'grep -q "routes-citizen.conf" deploy/nginx/nginx.conf && grep -q "routes-denied.conf" deploy/nginx/nginx.conf && grep -q "routes-denied.conf" deploy/nginx/nginx-tls.conf'
+check "operator routes are served ONLY on the loopback listener" '! grep -q "routes-ops.conf" <(awk "/listen 80;/,/^}/" deploy/nginx/nginx.conf) && grep -q "routes-ops.conf" <(awk "/listen 8088;/,/^}/" deploy/nginx/nginx.conf)'
+check "the operator listener is published on 127.0.0.1 only" 'grep -q "127.0.0.1:8088:8088" deploy/docker-compose.yml && grep -q "127.0.0.1:8088:8088" deploy/docker-compose.tls.yml'
+for route in "/api/issuer/" "/api/v1" "/registry/" "/credential-schema" "/credentials" "/did" "/utils" "/auth/admin"; do
+  check "operator-only: $route" "grep -q \"location $route\" deploy/nginx/routes-ops.conf && ! grep -q \"location $route \" deploy/nginx/routes-citizen.conf"
+done
+# These sit UNDER wallet-facing prefixes, so omission is not enough - they must
+# be refused explicitly or the broader prefix serves them.
+for route in "/oid4vc/offer" "/vp/request" "/vp/status" "/auth/admin"; do
+  check "refused on public listeners: $route" "grep -q \"$route\" deploy/nginx/routes-denied.conf"
+done
+check "the TLS overlay exists and mounts the certificate read-only" 'grep -q "/etc/letsencrypt:/etc/letsencrypt:ro" deploy/docker-compose.tls.yml'
+check "setup scripts use the operator listener, not the public origin" 'grep -q "127.0.0.1:\$OPS_PORT" scripts/bootstrap.sh && grep -q "127.0.0.1:\${OPS_PORT:-8088}" scripts/seed-age-citizens.sh'
+check "the suites know where operator endpoints live" 'grep -q "export function opsBase" tests/e2e/lib/stack.mjs'
+check "Keycloak brute-force protection is on in the realm" 'python3 -c "import json;raise SystemExit(0 if json.load(open(\"deploy/keycloak/realm-age.json\"))[\"bruteForceProtected\"] else 1)"'
+check "the realm does not interrupt first sign-in with a profile form" 'python3 -c "import json;r=json.load(open(\"deploy/keycloak/realm-age.json\"));raise SystemExit(0 if all(not a[\"enabled\"] for a in r[\"requiredActions\"] if a[\"alias\"]==\"VERIFY_PROFILE\") else 1)"'
+check "bootstrap rotates Keycloak's default admin password" 'grep -q "rotated the Keycloak admin password" scripts/bootstrap.sh'
+check "schemas store the vct as a slug, so type metadata resolves" 'grep -q "VCT_SLUG" scripts/bootstrap.sh'
+check "a DID from another origin is never reused" 'grep -q "was minted under another host" scripts/bootstrap.sh'
+check "enabling https is a script, not a runbook" '[ -x scripts/enable-https.sh ]'
+
+head_ '8. Data model matches the approved design'
 # A generated .env silently overrides both the compose default and env.example.
 # That is exactly how the registry ended up still pointing at a per-domain
 # database after the design changed to one shared database - it started, failed
@@ -86,7 +109,7 @@ head_ '7. Data model matches the approved design'
 check "deploy/.env points the registry at the shared database" 'grep -q "^AGE_REGISTRY_JDBC=jdbc:postgresql://db:5432/registry$" deploy/.env'
 gone "no per-use-case database remains" 'docker compose -f deploy/docker-compose.yml exec -T db psql -U postgres -At -c "select datname from pg_database" 2>/dev/null | grep -qxE "age|agriculture|education"'
 
-head_ '8. Fork: the prepared oid4vc-service port'
+head_ '9. Fork: the prepared oid4vc-service port'
 if [ -d "$FORK/.git" ]; then
   check "fork main is untouched (== origin/main)" 'git -C "$FORK" rev-parse main | grep -q "$(git -C "$FORK" rev-parse origin/main)"'
   check "fork main sits on the v2.1.0 tag" 'git -C "$FORK" rev-parse main | grep -q "$(git -C "$FORK" rev-parse v2.1.0)"'
@@ -106,7 +129,7 @@ else
   skip "fork checks" "no checkout at $FORK — set SUNBIRD_RC_CORE_PATH"
 fi
 
-head_ '9. Test suites'
+head_ '10. Test suites'
 if [ "$RUN_TESTS" = "1" ]; then
   if npm run --silent test:unit >/tmp/verify-unit.log 2>&1; then
     ok "unit: $(grep -E '^. pass' /tmp/verify-unit.log | tail -1 | tr -s ' ')"
@@ -141,17 +164,26 @@ cat <<'NOTDONE'
   run above does not mean the iteration is complete.
 
   Flow 1  authenticated wallet-driven issuance, no QR
-          SERVER SIDE READY: Keycloak is the authorization server, the signed-in
-          citizen resolves to their own record, and the issuer names itself for a
-          wallet's issuer list. NEVER YET RUN WITH A REAL WALLET - which is the
-          only thing that counts as acceptance.
-  Flow 2  cross-device web QR — protocol works, but the REAL WALLET consent
-          screen has never been captured
-  Flow 3  same-device mobile verifier by deep link — does not exist yet
+          RUN ON A REAL DEVICE, 26 Aug 2026 (Samsung SM-A055F, Android 15):
+          the wallet listed the issuer, signed the citizen in at Keycloak, and
+          fetched the credential. Also covered end to end by
+          tests/e2e/flow1-wallet-issuance.test.mjs, including the credential
+          scope a real wallet actually asks for.
+          STILL MISSING: the continuous recording answer 6 requires, and the
+          returning-citizen halves (reopen after unlock, fresh Keycloak session).
+  Flow 2  cross-device web QR — RUN ON THE SAME DEVICE, same session. The
+          same-device deep-link path is proven too (the wallet accepts the
+          openid4vp:// URL directly).
+          STILL MISSING: the recording, and the minor's verified DENIED captured
+          on the device rather than only in the suite.
+  Flow 3  installed mobile verifier app — does not exist yet. This is the one
+          genuinely unbuilt journey.
 
-  Also outstanding: the wallet build pointed at this stack, an installed mobile
-  verifier app for Flow 3, and the real-device recordings that are now the
-  required form of evidence (answer 6).
+  Also outstanding: an installed mobile verifier app for Flow 3, and the
+  real-device recordings that are now the required form of evidence (answer 6).
+  The wallet build itself is done: pallakartheekreddy/paradym-wallet@06394bd,
+  built arm64-v8a with CREDENTIAL_ISSUER_URLS pointed at the deployment, and
+  installed on the demo phone.
 NOTDONE
 
 head_ 'Summary'

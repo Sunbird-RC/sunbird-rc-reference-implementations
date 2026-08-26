@@ -73,7 +73,14 @@ async function createSession() {
       // The deep link, and a rendering of it. The wallet gets everything it
       // needs from the QR; nothing about the holder is in it.
       qrData: vp.qr_data,
-      qrSvg: new QRCode({ content: vp.qr_data, padding: 2, width: 320, height: 320, ecl: 'M' }).svg(),
+      // Sized and quiet-zoned for a PHONE CAMERA pointed at a laptop screen,
+      // which is the actual demo. The payload is ~200 characters (a did:web
+      // client_id plus an https request_uri), so the symbol is dense; at 320px
+      // with a 2-module quiet zone a Galaxy A05 could not lock onto it. 480px
+      // and the spec's 4-module quiet zone fixes it, and 'L' error correction
+      // drops a version — fewer, larger modules — which matters far more here
+      // than resilience to a smudged print.
+      qrSvg: new QRCode({ content: vp.qr_data, padding: 4, width: 480, height: 480, ecl: 'L' }).svg(),
       requestedClaims: [AGE_CLAIM],
       expiresInSeconds: SESSION_TTL_SECONDS,
     },

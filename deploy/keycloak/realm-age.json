@@ -11,6 +11,14 @@
   "accessTokenLifespan": 300,
   "ssoSessionIdleTimeout": 1800,
   "ssoSessionMaxLifespan": 36000,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 20,
+  "waitIncrementSeconds": 30,
+  "maxFailureWaitSeconds": 900,
+  "maxDeltaTimeSeconds": 3600,
+  "quickLoginCheckMilliSeconds": 1000,
+  "minimumQuickLoginWaitSeconds": 60,
   "clientScopes": [
     {
       "name": "citizen-record",
@@ -36,6 +44,26 @@
           }
         }
       ]
+    },
+    {
+      "name": "age-verification-credential",
+      "description": "OID4VCI scope for the Age Verification Credential, as advertised in issuer metadata",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": []
+    },
+    {
+      "name": "age-verification-credential-unlisted-issuer",
+      "description": "OID4VCI scope for the negative-fixture credential from the unlisted issuer",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": []
     }
   ],
   "defaultDefaultClientScopes": [
@@ -59,7 +87,9 @@
         "https://paradymwallet.app/oauth2/redirect",
         "id.animo.paradym:///wallet/redirect",
         "http://135.235.192.9/wallet/redirect",
-        "https://135.235.192.9.sslip.io/wallet/redirect"
+        "https://135.235.192.9.sslip.io/wallet/redirect",
+        "http://localhost/wallet/redirect",
+        "http://localhost:3000/wallet/redirect"
       ],
       "webOrigins": [
         "+"
@@ -73,14 +103,17 @@
         "profile",
         "openid"
       ],
-      "optionalClientScopes": []
+      "optionalClientScopes": [
+        "age-verification-credential",
+        "age-verification-credential-unlisted-issuer"
+      ]
     }
   ],
   "users": [
     {
       "username": "citizen.meera",
       "enabled": true,
-      "emailVerified": false,
+      "emailVerified": true,
       "firstName": "Meera",
       "lastName": "Nair",
       "attributes": {
@@ -88,6 +121,7 @@
           "AGE-000001"
         ]
       },
+      "email": "citizen-meera@citizens.invalid",
       "realmRoles": [
         "default-roles-age"
       ]
@@ -95,7 +129,7 @@
     {
       "username": "citizen.arjun",
       "enabled": true,
-      "emailVerified": false,
+      "emailVerified": true,
       "firstName": "Arjun",
       "lastName": "Das",
       "attributes": {
@@ -103,6 +137,7 @@
           "AGE-000002"
         ]
       },
+      "email": "citizen-arjun@citizens.invalid",
       "realmRoles": [
         "default-roles-age"
       ]
@@ -110,7 +145,7 @@
     {
       "username": "citizen.nikhil",
       "enabled": true,
-      "emailVerified": false,
+      "emailVerified": true,
       "firstName": "Nikhil",
       "lastName": "Rao",
       "attributes": {
@@ -118,6 +153,7 @@
           "AGE-000003"
         ]
       },
+      "email": "citizen-nikhil@citizens.invalid",
       "realmRoles": [
         "default-roles-age"
       ]
@@ -125,7 +161,7 @@
     {
       "username": "citizen.sana",
       "enabled": true,
-      "emailVerified": false,
+      "emailVerified": true,
       "firstName": "Sana",
       "lastName": "Iqbal",
       "attributes": {
@@ -133,6 +169,7 @@
           "AGE-000004"
         ]
       },
+      "email": "citizen-sana@citizens.invalid",
       "realmRoles": [
         "default-roles-age"
       ]
@@ -140,13 +177,34 @@
     {
       "username": "citizen.unmapped",
       "enabled": true,
-      "emailVerified": false,
+      "emailVerified": true,
       "firstName": "Unmapped",
       "lastName": "Account",
       "attributes": {},
+      "email": "citizen-unmapped@citizens.invalid",
       "realmRoles": [
         "default-roles-age"
       ]
+    }
+  ],
+  "requiredActions": [
+    {
+      "alias": "VERIFY_PROFILE",
+      "name": "Verify Profile",
+      "providerId": "VERIFY_PROFILE",
+      "enabled": false,
+      "defaultAction": false,
+      "priority": 90,
+      "config": {}
+    },
+    {
+      "alias": "UPDATE_PASSWORD",
+      "name": "Update Password",
+      "providerId": "UPDATE_PASSWORD",
+      "enabled": false,
+      "defaultAction": false,
+      "priority": 30,
+      "config": {}
     }
   ]
 }

@@ -8,13 +8,46 @@ import { dirname, join } from 'node:path';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..', '..');
 
-/** Reads deploy/.env, which bootstrap.sh fills in with the minted DIDs. */
+/**
+ * Where the stack under test is, and who its issuers are.
+ *
+ * Reads deploy/.env by default, but every value can be overridden from the
+ * environment — which is what makes it possible to drive a REMOTE deployment
+ * from a developer machine without a checkout or Node on that host:
+ *
+ *   PUBLIC_URL=http://host AGE_ISSUER_DID=did:web:... ./scripts/demo.sh
+ *
+ * The DIDs are public identifiers, not secrets, so passing them this way is safe.
+ */
 export function deployEnv() {
+  const fromEnvironment = {
+    base: process.env.PUBLIC_URL,
+    ageIssuerDid: process.env.AGE_ISSUER_DID,
+    verifierDid: process.env.VERIFIER_DID,
+    untrustedIssuerDid: process.env.UNTRUSTED_ISSUER_DID,
+    // Generated at bootstrap, never committed. Absent means the Keycloak-backed
+    // tests skip rather than guess.
+    demoPassword: process.env.DEMO_CITIZEN_PASSWORD,
+  };
+  if (fromEnvironment.base && fromEnvironment.ageIssuerDid) {
+    return {
+      base: fromEnvironment.base.replace(/\/+$/, ''),
+      ageIssuerDid: fromEnvironment.ageIssuerDid,
+      verifierDid: fromEnvironment.verifierDid || '',
+      untrustedIssuerDid: fromEnvironment.untrustedIssuerDid || '',
+      demoPassword: fromEnvironment.demoPassword || '',
+      opsBase: opsBase(),
+    };
+  }
+
   let text = '';
   try {
     text = readFileSync(join(ROOT, 'deploy', '.env'), 'utf8');
   } catch {
-    throw new Error('deploy/.env is missing — run: cd deploy && cp env.example .env && docker compose up -d');
+    throw new Error(
+      'deploy/.env is missing and no PUBLIC_URL/AGE_ISSUER_DID in the environment — ' +
+        'run: cd deploy && cp env.example .env && docker compose up -d',
+    );
   }
   const env = {};
   for (const line of text.split('\n')) {
@@ -26,7 +59,24 @@ export function deployEnv() {
     ageIssuerDid: env.AGE_ISSUER_DID || '',
     verifierDid: env.VERIFIER_DID || '',
     untrustedIssuerDid: env.UNTRUSTED_ISSUER_DID || '',
+    demoPassword: process.env.DEMO_CITIZEN_PASSWORD || env.DEMO_CITIZEN_PASSWORD || '',
+    opsBase: opsBase(),
   };
+}
+
+/**
+ * Where the OPERATOR endpoints are.
+ *
+ * Seeding, offer creation and schema listing are not citizen traffic, and the
+ * gateway serves them only on a listener Docker publishes on 127.0.0.1 (see
+ * deploy/nginx/routes-ops.conf). Locally that is simply reachable. Against a
+ * remote deployment, forward the port first and point OPS_URL at the tunnel:
+ *
+ *   ssh -L 8088:127.0.0.1:8088 user@host
+ *   PUBLIC_URL=https://host OPS_URL=http://127.0.0.1:8088 npm run test:e2e
+ */
+export function opsBase() {
+  return (process.env.OPS_URL || `http://127.0.0.1:${process.env.OPS_PORT || 8088}`).replace(/\/+$/, '');
 }
 
 export async function json(url, init) {
@@ -57,6 +107,20 @@ export async function requireStack(base) {
   } catch (err) {
     return `stack not reachable at ${base} (${err.message}) — run: cd deploy && docker compose up -d && ../scripts/bootstrap.sh`;
   }
+  // Seeding, offer creation and schema listing all go through the operator
+  // listener, so a suite that can reach only the public origin would fail deep
+  // inside a test rather than saying what is actually missing.
+  try {
+    const res = await fetch(`${opsBase()}/api/v1/AgeCitizen/search`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.status === 403) throw new Error('403: this is a public listener, not the operator one');
+  } catch (err) {
+    return `operator endpoints not reachable at ${opsBase()} (${err.message}) — locally they are published on 127.0.0.1:8088; against a remote deployment forward the port: ssh -L 8088:127.0.0.1:8088 user@host, then set OPS_URL`;
+  }
   return null;
 }
 
@@ -64,7 +128,9 @@ export async function requireStack(base) {
 export function issueOfferFor(base, citizenId) {
   return ok(
     `issue offer for ${citizenId}`,
-    json(`${base}/api/issuer/offers`, {
+    // The issuer counter is an operator endpoint: it mints a credential for a
+    // named citizen with no authentication, so it is not on the public listener.
+    json(`${opsBase()}/api/issuer/offers`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ citizenId }),
@@ -82,13 +148,13 @@ export function issueOfferFor(base, citizenId) {
  * meaningful.
  */
 export async function issueAsIssuer({ base, issuerDid, credentialName, claims }) {
-  const configs = await ok('list oid4vci configs', json(`${base}/credential-schema/oid4vci-configs`));
+  const configs = await ok('list oid4vci configs', json(`${opsBase()}/credential-schema/oid4vci-configs`));
   const cfg = (configs || []).find((c) => c.name === credentialName && c.author === issuerDid);
   if (!cfg) throw new Error(`no ${credentialName} schema authored by ${issuerDid} — run scripts/bootstrap.sh`);
   const configurationId = (cfg.formats || []).length > 1 ? `${cfg.schemaId}_vc+sd-jwt` : cfg.schemaId;
   const offer = await ok(
     'create offer',
-    json(`${base}/oid4vc/offer`, {
+    json(`${opsBase()}/oid4vc/offer`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({

@@ -255,11 +255,15 @@ button:focus-visible {
 
 /* ---- QR ---------------------------------------------------------------- */
 .qr {
-  width: 18.5rem;
+  /* Sized for a phone camera, not for the layout. The symbol is dense (~200
+     characters), and at 18.5rem on the ivory panel a phone could not lock onto
+     it. Pure white, not --ivory: the quiet zone is part of the code, and
+     contrast against it is what the decoder actually measures. */
+  width: 24rem;
   max-width: 100%;
-  padding: 0.85rem;
+  padding: 1rem;
   border-radius: var(--radius-inner);
-  background: var(--ivory);
+  background: #fff;
   border: 1px solid var(--hairline);
 }
 
@@ -546,3 +550,18 @@ footer strong {
   padding: 0.35rem 0.6rem;
   user-select: all;
 }
+
+/* ---- same-device hand-off ---------------------------------------------- */
+.open-wallet {
+  display: block;
+  margin: 1rem auto 0;
+  max-width: 24rem;
+  padding: 0.9rem 1.25rem;
+  border-radius: var(--radius-inner);
+  background: var(--espresso, #43301f);
+  color: #fff;
+  text-align: center;
+  font-weight: 600;
+  text-decoration: none;
+}
+.open-wallet:active { opacity: 0.85; }
