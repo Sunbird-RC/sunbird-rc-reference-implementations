@@ -1,0 +1,188 @@
+import { defineMessage } from '@lingui/core/macro'
+import { useLingui } from '@lingui/react/macro'
+import { useHaptics } from '@package/app'
+import { InfoButton } from '@package/ui'
+import { formatRelativeDate } from '@package/utils'
+import { useActivities, useCredentials } from '@paradym/wallet-sdk'
+import { useRouter } from 'expo-router'
+import { useMemo } from 'react'
+
+const recentActivityTitle = defineMessage({
+  id: 'activity.latest.title',
+  message: 'Recent activity',
+  comment: 'Section title for the latest activity card',
+})
+
+const noActivityDescription = defineMessage({
+  id: 'activity.latest.noActivity',
+  message: 'No activity yet',
+  comment: 'Description shown if the user has no activity history',
+})
+
+const sharingFailed = defineMessage({
+  id: 'activity.latest.sharingFailed',
+  message: 'Sharing failed',
+  comment: 'Shown if the last sharing activity failed or was stopped',
+})
+
+const sharedCard = defineMessage({
+  id: 'activity.latest.sharedCard',
+  message: 'Shared card',
+  comment: 'Shown if a single credential was shared successfully',
+})
+
+const sharedCards = defineMessage({
+  id: 'activity.latest.sharedCards',
+  message: 'Shared cards',
+  comment: 'Shown if multiple credentials were shared successfully',
+})
+
+const signingFailed = defineMessage({
+  id: 'activity.latest.signingFailed',
+  message: 'Signing failed',
+  comment: 'Shown if signing a document failed or was cancelled',
+})
+
+const signedDocument = defineMessage({
+  id: 'activity.latest.signedDocument',
+  message: 'Signed document',
+  comment: 'Shown if a document was signed successfully',
+})
+
+const paymentFailed = defineMessage({
+  id: 'activity.latest.paymentFailed',
+  message: 'Payment failed',
+  comment: 'Shown if a payment failed or was cancelled',
+})
+
+const paymentSuccessful = defineMessage({
+  id: 'activity.latest.paymentMade',
+  message: 'Payment successful',
+  comment: 'Shown if a payment was made successfully',
+})
+
+const paymentPending = defineMessage({
+  id: 'activity.latest.paymentPending',
+  message: 'Payment pending',
+  comment: 'Shown when a payment is pending settlement on the bank side',
+})
+
+const paymentRejected = defineMessage({
+  id: 'activity.latest.paymentRejected',
+  message: 'Payment rejected',
+  comment: 'Shown when a payment was rejected by the bank',
+})
+
+const fallbackCardName = defineMessage({
+  id: 'activity.latest.newCardFallback',
+  message: 'new card',
+  comment: 'Fallback name if a received credential has no display name',
+})
+
+export function LatestActivityCard() {
+  const { push } = useRouter()
+  const { withHaptics } = useHaptics()
+  const { activities } = useActivities()
+  const { t } = useLingui()
+  const latestActivity = activities[0]
+  const { credentials } = useCredentials()
+
+  const pushToActivity = withHaptics(() => push('/activity'))
+
+  const content = useMemo(() => {
+    if (!latestActivity) {
+      return {
+        title: t(recentActivityTitle),
+        description: t(noActivityDescription),
+      }
+    }
+
+    const date = formatRelativeDate(new Date(latestActivity.date))
+
+    if (latestActivity.type === 'shared') {
+      const isPlural = latestActivity.request.credentials.length > 1
+      const description = ['failed', 'stopped'].includes(latestActivity.status)
+        ? t(sharingFailed)
+        : isPlural
+          ? t(sharedCards)
+          : t(sharedCard)
+
+      return { title: date, description }
+    }
+
+    if (latestActivity.type === 'signed') {
+      const description = ['failed', 'stopped'].includes(latestActivity.status) ? t(signingFailed) : t(signedDocument)
+
+      return { title: date, description }
+    }
+
+    if (latestActivity.type === 'payment') {
+      let description: string
+      if (['failed', 'stopped'].includes(latestActivity.status)) {
+        description = t(paymentFailed)
+      } else if (latestActivity.transactionStatus === 'RJCT') {
+        description = t(paymentRejected)
+      } else if (latestActivity.transactionStatus === 'ACSC') {
+        description = t(paymentSuccessful)
+      } else {
+        description = t(paymentPending)
+      }
+
+      return { title: date, description }
+    }
+
+    if (latestActivity.type === 'received') {
+      switch (latestActivity.status) {
+        case 'failed':
+        case 'stopped': {
+          const name = latestActivity.deferredCredentials?.[0]?.name ?? fallbackCardName.message
+          return {
+            title: date,
+            description: t({
+              id: 'activity.latest.failedCard',
+              message: `Failed to add ${name}`,
+              comment: 'Shown when it has failed to add a new card',
+            }),
+          }
+        }
+        case 'success': {
+          const credential = credentials.find((c) => c.id === latestActivity.credentialIds[0])
+          const name = credential?.display.name ?? fallbackCardName.message
+          return {
+            title: date,
+            description: t({
+              id: 'activity.latest.addedCard',
+              message: `Added ${name}`,
+              comment: 'Shown when a new card has been added',
+            }),
+          }
+        }
+        case 'pending': {
+          const name = latestActivity.deferredCredentials?.[0]?.name ?? fallbackCardName.message
+          return {
+            title: date,
+            description: t({
+              id: 'activity.latest.pendingCard',
+              message: `Pending ${name}`,
+              comment: 'Shown when a new card is pending',
+            }),
+          }
+        }
+      }
+    }
+
+    return null
+  }, [latestActivity, credentials, t])
+
+  if (!content) return null
+
+  return (
+    <InfoButton
+      ariaLabel={t(recentActivityTitle)}
+      noIcon
+      title={content.title}
+      description={content.description}
+      onPress={pushToActivity}
+    />
+  )
+}

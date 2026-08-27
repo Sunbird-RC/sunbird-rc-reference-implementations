@@ -1,0 +1,166 @@
+import {
+  AnimatedStack,
+  Heading,
+  HeroIcons,
+  IconContainer,
+  Image,
+  Paragraph,
+  Stack,
+  useScaleAnimation,
+  XStack,
+  YStack,
+} from '@package/ui'
+import { sanitizeString } from '@package/utils'
+import type { CredentialMetadata, DisplayImage, FormattedAttribute, FormattedAttributeArray } from '@paradym/wallet-sdk'
+import { useRouter } from 'expo-router'
+import { useMemo } from 'react'
+import { BlurBadge } from './BlurBadge'
+
+interface CardWithAttributesProps {
+  id?: string
+  name: string
+  backgroundColor?: string
+  textColor?: string
+  issuerImage?: DisplayImage
+  backgroundImage?: DisplayImage
+  formattedDisclosedAttributes: string[]
+  disclosedPayload?: FormattedAttribute[]
+  disclosedMetadata?: CredentialMetadata
+  isExpired?: boolean
+  isRevoked?: boolean
+  isNotYetActive?: boolean
+}
+
+export function CardWithAttributes({
+  id,
+  name,
+  backgroundColor,
+  issuerImage,
+  textColor,
+  backgroundImage,
+  formattedDisclosedAttributes,
+  disclosedPayload,
+  disclosedMetadata,
+  isNotYetActive = false,
+  isExpired = false,
+  isRevoked = false,
+}: CardWithAttributesProps) {
+  const { handlePressIn, handlePressOut, pressStyle } = useScaleAnimation()
+  const router = useRouter()
+
+  const groupedAttributes = useMemo(() => {
+    const result: Array<[string, string | undefined]> = []
+    for (let i = 0; i < formattedDisclosedAttributes.length; i += 2) {
+      result.push([formattedDisclosedAttributes[i], formattedDisclosedAttributes[i + 1]])
+    }
+    return result
+  }, [formattedDisclosedAttributes])
+
+  const onPress = () => {
+    if (id) {
+      router.push(
+        `/credentials/requestedAttributes?id=${id}&disclosedPayload=${encodeURIComponent(
+          JSON.stringify(disclosedPayload ?? [])
+        )}&disclosedMetadata=${encodeURIComponent(
+          JSON.stringify(disclosedMetadata ?? {})
+        )}&disclosedAttributeLength=${formattedDisclosedAttributes?.length}`
+      )
+    } else {
+      const params = new URLSearchParams({
+        item: JSON.stringify({
+          path: [],
+          type: 'array',
+          rawValue: [],
+          value: disclosedPayload ?? [],
+        } satisfies FormattedAttributeArray),
+      })
+
+      if (name) params.set('parentName', name)
+
+      router.push(`/credentials/id/nested?${params.toString()}`)
+    }
+  }
+
+  const isRevokedOrExpired = isRevoked || isExpired
+  const disabledNav = !disclosedPayload
+
+  return (
+    <AnimatedStack
+      br="$6"
+      borderWidth="$0.5"
+      borderColor="$borderTranslucent"
+      overflow="hidden"
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      style={disabledNav ? undefined : pressStyle}
+      onPress={disabledNav ? undefined : onPress}
+      tabIndex={0}
+      role={disabledNav ? undefined : 'button'}
+      aria-label={`Shared attributes from ${name.toLocaleUpperCase()}`}
+    >
+      <Stack px="$4" py="$3" pos="relative" bg={backgroundColor ?? '$grey-900'}>
+        {backgroundImage?.url && (
+          <Stack pos="absolute" top={0} left={0} right={0} bottom={0}>
+            <Image
+              src={backgroundImage.url}
+              alt={backgroundImage.altText}
+              contentFit="cover"
+              height="100%"
+              width="100%"
+            />
+          </Stack>
+        )}
+        <XStack ai="center" jc="space-between">
+          <YStack f={1}>
+            <Heading heading="sub2" fontSize={14} fontWeight="$bold" numberOfLines={1} color={textColor ?? '$grey-200'}>
+              {name.toLocaleUpperCase()}
+            </Heading>
+          </YStack>
+          <XStack h="$3">
+            {issuerImage?.url && !isRevokedOrExpired && (
+              <Image circle src={issuerImage.url} alt={issuerImage.altText} width={36} height={36} />
+            )}
+          </XStack>
+        </XStack>
+      </Stack>
+      <YStack px="$4" pt="$3" pb="$4" gap="$4" bg="$white">
+        <YStack gap="$2" fg={1} pr="$4">
+          {groupedAttributes.map(([first, second], index) => (
+            <XStack key={first + second} gap="$4" minHeight="$3.5">
+              <Stack flexGrow={1} flexBasis={0}>
+                <Paragraph fontSize={15}>{sanitizeString(first)}</Paragraph>
+              </Stack>
+              <Stack flexGrow={1} flexBasis={0}>
+                <Paragraph
+                  fontSize={15}
+                  numberOfLines={index === groupedAttributes.length - 1 ? 1 : undefined}
+                  ellipsizeMode={index === groupedAttributes.length - 1 ? 'tail' : undefined}
+                  pr={index === groupedAttributes.length - 1 ? '$5' : undefined}
+                >
+                  {second ? sanitizeString(second) : ''}
+                </Paragraph>
+              </Stack>
+            </XStack>
+          ))}
+          {!disabledNav && (
+            <Stack pos="absolute" bottom="$0" right="$0">
+              <IconContainer onPress={onPress} icon={<HeroIcons.ArrowRight />} />
+            </Stack>
+          )}
+        </YStack>
+      </YStack>
+      {(isRevoked || isExpired || isNotYetActive) && (
+        <>
+          <Stack bg="$grey-900" pos="absolute" top="$0" left="$0" right="$0" bottom="$0" opacity={0.2} zIndex={0} />
+          <Stack pos="absolute" top="$3.5" right="$2.5">
+            <BlurBadge
+              tint="dark"
+              color={textColor}
+              label={isExpired ? 'Card expired' : isRevoked ? 'Card revoked' : 'Card inactive'}
+            />
+          </Stack>
+        </>
+      )}
+    </AnimatedStack>
+  )
+}

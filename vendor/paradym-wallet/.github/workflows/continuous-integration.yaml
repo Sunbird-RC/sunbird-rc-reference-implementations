@@ -1,0 +1,36 @@
+name: Continuous Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    name: Validate
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+
+      - uses: pnpm/action-setup@v6
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Compile
+        run: pnpm build
+
+      - name: Check Style
+        run: pnpm style:check
+
+      - name: Check Types
+        run: pnpm types:check
