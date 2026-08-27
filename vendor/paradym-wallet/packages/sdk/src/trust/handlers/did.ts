@@ -35,11 +35,21 @@ export const getTrustedEntitiesForDidForOpenId4Vp = async (
   const effectiveClientId = options.resolvedAuthorizationRequest.verifier.effectiveClientId
   const trustedEntities: TrustedEntity[] = []
 
-  // Check if the DID matches a hardcoded trusted entity
-  const matchedDid = effectiveClientId
-    ? options.trustMechanismConfiguration.trustedDidEntities.find(
-        (e) => effectiveClientId === `decentralized_identifier:${e.did}`
-      )
+  // Normalise the client id before matching it against the configured entities.
+  //
+  // `effectiveClientId` is the `client_id` verbatim, so it only carries the
+  // `decentralized_identifier:` prefix when the verifier actually sent one.
+  // OpenID4VP before draft 26 uses the bare `did:` form, which the library still
+  // resolves to this trust mechanism (`did` maps to the `decentralized_identifier`
+  // uniform prefix), so comparing against the prefixed string alone can never
+  // match such a verifier and no configured entity would ever be found.
+  //
+  // Strip the prefix and any key fragment, then prefix-match, as the OpenID4VCI
+  // path below already does — that also lets one configured entity cover every
+  // DID issued under a host.
+  const baseDid = effectiveClientId?.replace(/^decentralized_identifier:/, '').split('#')[0]
+  const matchedDid = baseDid
+    ? options.trustMechanismConfiguration.trustedDidEntities.find((e) => baseDid.startsWith(e.did))
     : undefined
 
   // Prefer metadata from the request over the hardcoded entity data
@@ -62,7 +72,7 @@ export const getTrustedEntitiesForDidForOpenId4Vp = async (
     relyingParty: {
       organizationName,
       logoUri,
-      entityId: effectiveClientId.replace('decentralized_identifier:', ''),
+      entityId: baseDid,
     },
     trustedEntities,
   }
