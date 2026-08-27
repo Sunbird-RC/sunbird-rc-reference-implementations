@@ -1,6 +1,6 @@
 # Agriculture / Rural Credit — Requirements
 
-**Status:** Ready for requirements review  
+**Status:** Updated after Iteration 01; ready for final requirements review
 **Iteration:** 02
 
 ## 1. Required Demonstration Workflows
@@ -23,6 +23,9 @@
 4. The wallet or caller cannot select an arbitrary Farmer ID or Land ID.
 5. The issuer returns a holder-bound credential derived from the Land record.
 6. The farmer previews, accepts, and stores the credential.
+
+After both issuance flows, the wallet must be completely closed, cold-started,
+unlocked, and shown to retain both credentials.
 
 ### R3 — Bank farm-credit verification
 
@@ -57,6 +60,8 @@ No Agriculture-specific mobile verifier is required. Web QR verification is the 
 - Each issuer has independent signing material and credential configuration.
 - Each issuer reads only its authorised source data through Sunbird RC APIs.
 - The wallet lists only Farmer Registry and Land Registry for this demo.
+- The wallet clearly names both issuers. Issuance must not proceed through an
+  unexplained unknown- or unverified-organisation warning.
 - Issuer configuration may be demo-configured in the wallet; production trust-registry discovery is deferred.
 - Issuance is initiated from the wallet and must not require an issuance QR or issuer-counter webpage.
 
@@ -87,6 +92,8 @@ Rules:
 
 - Both credentials use the compatible SD-JWT VC profile supported by Sunbird RC and the pinned Inji release.
 - Both credentials are bound to the wallet holder key.
+- A combined presentation must prove that both credentials are controlled by the
+  same presenting wallet key; matching `farmerId` values alone are insufficient.
 - `cultivatedAreaAcres` must be greater than or equal to zero and cannot exceed `landAreaAcres`.
 - `cropType` must use a controlled demo vocabulary.
 - Credential claims must be derived from registry data, not accepted from the wallet or bank.
@@ -154,7 +161,12 @@ SUGARCANE  ₹50,000/acre
 ## 8. Security and Privacy Requirements
 
 - Validate credential signatures and approved algorithms.
+- If the pinned Inji/Sunbird RC exchange does not expose enough information to
+  enforce the approved algorithm policy, stop and obtain Anand's decision on a
+  documented deviation. Do not claim an unenforced allowlist.
 - Validate each issuer against the correct trust entry and credential type.
+- Enforce issuer roles: the trusted Farmer issuer cannot satisfy the Land role,
+  and the trusted Land issuer cannot satisfy the Farmer role.
 - Validate holder/key binding for every presented credential.
 - Validate audience, nonce, expiry, response mode, and atomic single-use transaction state.
 - Reject tampering and replay.
@@ -170,6 +182,7 @@ SUGARCANE  ₹50,000/acre
 - Continuous real-device recording of Farmer credential issuance.
 - Continuous real-device recording of Land credential issuance.
 - Continuous cross-device bank verification recording showing the wallet and bank result.
+- Continuous cold-restart recording showing both stored credentials still present.
 - Eligible Paddy or Wheat result with the calculation visible.
 - Valid ineligible result.
 - Cancellation with no disclosure.
@@ -178,9 +191,29 @@ SUGARCANE  ₹50,000/acre
 - Exact Sunbird RC, Inji, Keycloak, protocol-profile, fork, image, and configuration versions.
 - Clean-checkout setup, test, and demo instructions.
 - Regression results for all accepted Age capabilities.
+- A line-by-line acceptance table that links each requirement to the recording,
+  automated test, configuration, or other reproducible evidence that closes it.
 
 ## 10. Completion Gate
 
 The iteration is ready for acceptance only when every required workflow has real-device evidence, the requirements checklist maps to repository evidence, known deviations are explicit, Age regression is green, and Anand has reviewed the customer demonstration.
 
 Nothing may merge into `main` without Anand's explicit sign-off.
+
+## 11. Mandatory Inji Handshake Before Full Implementation
+
+Before building the complete registries and bank journey, prove on the pinned
+Inji Wallet build:
+
+1. The wallet lists only the Farmer Registry and Land Registry.
+2. Keycloak `authorization_code` authentication returns correctly to Inji.
+3. Both issuers can issue holder-bound SD-JWT VCs directly without issuance QR.
+4. Both credentials can be stored together and survive a cold restart.
+5. One OpenID4VP request can be satisfied using both credentials.
+6. Only the approved claims are disclosed.
+7. The named bank, requested claims, consent, cancellation, and QR response are
+   presented correctly.
+
+If any item fails, capture the exact version, configuration and sanitised
+protocol exchange, then escalate options to Anand before changing the journey,
+replacing Inji, or adding an adapter.

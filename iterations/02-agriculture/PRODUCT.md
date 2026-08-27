@@ -1,8 +1,8 @@
 # Agriculture / Rural Credit — Product Definition
 
-**Status:** Ready for Product review  
+**Status:** Updated after Iteration 01; ready for final Product review
 **Iteration:** 02  
-**Depends on:** Accepted Age iteration wallet, identity, credential, verifier, security, and deployment foundation
+**Depends on:** Accepted Age iteration identity, credential, verifier, security, deployment, testing, and evidence foundation. Agriculture uses Inji Wallet and must prove its compatibility independently.
 
 ## Purpose
 
@@ -28,11 +28,12 @@ The demonstration must prove:
 - Independent Farmer Registry and Land Registry issuers.
 - Direct issuance of both credentials into Inji Wallet.
 - Storage of credentials from two issuers in one wallet.
+- Persistence of both credentials after the wallet is completely closed, reopened, and unlocked.
 - One consented presentation containing the required information from both credentials.
 - Verification of both issuers, holder binding, transaction integrity, and minimum disclosure.
 - Correlation using Farmer ID without disclosing National ID.
 - A crop-specific loan calculation using verified land data.
-- Clear **ELIGIBLE — Maximum Loan ₹X** or **NOT ELIGIBLE** results.
+- Four clearly separated outcomes: **ELIGIBLE — Maximum Loan ₹X**, **NOT ELIGIBLE**, **REJECTED / UNABLE TO VERIFY**, and **NO DATA SHARED**.
 
 ## Actors
 
@@ -166,13 +167,20 @@ Cryptographic, trust, holder-binding, correlation-integrity, or transaction fail
 
 - A real farmer journey completes issuance of both credentials into Inji Wallet.
 - The wallet clearly shows the two independent issuers.
+- Only the Farmer Registry and Land Registry appear in the Agriculture issuer directory; Age and unrelated issuers do not appear.
+- Both credentials remain available after a complete wallet restart.
 - The mock bank requests and receives the minimum information from both credentials through a web QR flow.
-- The farmer sees the bank, purpose, credentials, requested information, and consent action.
+- The farmer sees a clearly named and trusted bank, the purpose, credentials, requested information, and consent action.
 - Matching valid credentials produce the correct crop-based loan amount.
 - A valid ineligible case produces **NOT ELIGIBLE**.
 - Mismatched, untrusted, tampered, replayed, or incorrectly bound credentials are rejected.
 - Cancellation shares nothing and produces no loan decision.
 - Previously accepted Age capabilities do not regress.
+
+Inji Wallet is an explicit Product requirement for this iteration. The accepted
+Age implementation used a different open-source wallet, so its wallet behaviour
+must not be assumed to transfer to Inji. Replacing Inji or materially changing
+the journey requires Anand's decision.
 
 ## Out of Scope
 

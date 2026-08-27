@@ -31,6 +31,10 @@ Across these use cases, the showcase includes Inji Wallet interoperability, suit
 - [Compatibility Baseline](docs/design/COMPATIBILITY.md)
 - [Coding Agent Instructions](CLAUDE.md)
 - [Iteration 01 — Age Verification](iterations/01-age/CHARTER.md)
+- [Iteration 02 — Agriculture Product](iterations/02-agriculture/PRODUCT.md)
+- [Iteration 02 — Agriculture Requirements](iterations/02-agriculture/REQUIREMENTS.md)
+- [Iteration 02 — Agriculture Design](iterations/02-agriculture/DESIGN.md)
+- [Iteration 02 — Final Demo Expectations](iterations/02-agriculture/DEMO.md)
 
 These documents are the authoritative project baseline. Architecture and implementation must remain aligned with them.
 

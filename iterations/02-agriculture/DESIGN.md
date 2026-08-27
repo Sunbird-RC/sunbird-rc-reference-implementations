@@ -1,6 +1,6 @@
 # Agriculture / Rural Credit — Architecture and Design
 
-**Status:** Ready for Design review  
+**Status:** Updated after Iteration 01; ready for final Design review
 **Iteration:** 02  
 **Product:** [`PRODUCT.md`](PRODUCT.md)  
 **Requirements:** [`REQUIREMENTS.md`](REQUIREMENTS.md)
@@ -36,7 +36,7 @@ Extend the accepted Age foundation to demonstrate independent issuers, multi-cre
 
 ## 3. Reused Foundation
 
-Reuse from the accepted Age implementation:
+Reuse from the accepted Age implementation after it is merged into `main`:
 
 - Sunbird RC `v2.1.0` registry and credential services.
 - Approved optional Keycloak-backed wallet-driven issuance extension.
@@ -45,9 +45,14 @@ Reuse from the accepted Age implementation:
 - Issuer identity, DID, key, and HTTPS approach.
 - SD-JWT VC issuance and holder binding.
 - Reusable OpenID4VP verifier service.
-- Trust allowlist, algorithm policy, nonce, audience, expiry, and replay protection.
+- Trust allowlist, nonce, audience, expiry, replay protection, and the recorded
+  Age algorithm-policy limitation that Agriculture must resolve explicitly.
 - Public citizen routes and loopback-only operator routes.
 - Evidence, version pinning, sanitisation, and test conventions.
+
+The customized Age wallet is not the Agriculture wallet baseline. Agriculture
+must use the pinned Inji Wallet build and pass the compatibility gate below.
+Backend and verifier reuse must not be treated as proof of Inji compatibility.
 
 Agriculture-specific code is limited to registry entities, issuer configurations, credential schemas, correlation, decision rules, bank UI, fixtures, and Inji compatibility configuration.
 
@@ -79,6 +84,7 @@ Agriculture-specific code is limited to registry entities, issuer configurations
 - Shows only Farmer Registry and Land Registry in this use-case configuration.
 - Completes authenticated wallet-driven issuance from both issuers.
 - Stores both credentials.
+- Retains both credentials through a complete close, cold start, and unlock.
 - Matches the bank's multi-credential request.
 - Shows the bank, purpose, credentials, disclosures, and consent action.
 - Creates the selective, holder-bound presentation.
@@ -88,6 +94,8 @@ Agriculture-specific code is limited to registry entities, issuer configurations
 - Creates the multi-credential OpenID4VP request.
 - Validates both credential and presentation layers.
 - Applies issuer/type-specific trust rules.
+- Enforces the Farmer and Land issuer roles independently; one trusted issuer
+  cannot substitute for the other role.
 - Produces verified, normalised claims only after all checks pass.
 - Sends no raw credentials or undisclosed claims to the bank UI or decision module.
 
@@ -283,11 +291,15 @@ Before full implementation, prove on the pinned Inji build:
 - SD-JWT VC format and holder binding.
 - Storage of both credentials.
 - One OpenID4VP request satisfied by both credentials.
+- Same-wallet holder binding across both presented credentials.
 - Selective disclosure of the exact bank claims.
 - Consent, cancellation, and cross-device QR response.
 - Nonce source, authorization-server arrangement, request-object mode, callback mode, and exact component versions.
 
 If any required capability fails, record the exact exchange and return to Anand with options before changing the Product journey or introducing an adapter.
+
+Paradym or another wallet must not be substituted for Inji without Anand's
+explicit approval.
 
 ## 11. Security and Trust
 
@@ -296,7 +308,10 @@ If any required capability fails, record the exact exchange and return to Anand 
 - No caller-selected record identifiers.
 - Issuer and credential type pinned per requested role.
 - Same-holder proof across the multi-credential presentation.
-- Algorithm allowlist, signature, nonce, audience, expiry, and replay validation.
+- Signature, nonce, audience, expiry, replay, and issuer-role validation.
+- Enforce the approved algorithm policy where the protocol output makes it
+  enforceable. If it is not enforceable, record the exact limitation and obtain
+  Anand's approval before treating it as an accepted deviation.
 - Farmer ID equality checked only after verification.
 - Loan policy executed only over verified normalised claims.
 - National ID and undisclosed metadata excluded from verifier outputs and logs.
@@ -340,3 +355,5 @@ Real-device evidence remains mandatory for the primary customer journey.
 - Synchronise this branch with the resulting accepted `main` without losing its definition history.
 - Run the Inji compatibility gate.
 - Convert the approved Product, Requirements, and Design into the final iteration charter and acceptance checklist.
+- Use [`DEMO.md`](DEMO.md) as the required customer-demonstration sequence and
+  evidence outline.
