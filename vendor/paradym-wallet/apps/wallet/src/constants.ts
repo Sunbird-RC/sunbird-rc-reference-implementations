@@ -207,6 +207,32 @@ export const trustedDidEntities = [
     url: 'https://legoland.animo.id',
     demo: true,
   },
+  // Sunbird RC Age showcase — the age-restricted service that asks for `ageOver18`
+  // (`services/verifier-web` and the `Age Check` mobile app share one verifier DID).
+  //
+  // Two entries on purpose. The first pins the DID minted by the current
+  // deployment, which is what makes the wallet show a recognised organisation:
+  // the trust badge is only `positive` when a trusted entity's `entityId` equals
+  // the full client id, fragment and uuid included. The second is a host-scoped
+  // fallback, so re-provisioning the demo — which mints a new uuid — still names
+  // the organisation instead of reverting to "Organization not verified", without
+  // needing a wallet rebuild. Order matters: the lookup takes the first match.
+  {
+    entityId: 'did:web:135.235.192.9.sslip.io:dae56d5f-3b42-437c-9c72-675d7b4e006d',
+    did: 'did:web:135.235.192.9.sslip.io:dae56d5f-3b42-437c-9c72-675d7b4e006d',
+    logoUri: 'https://135.235.192.9.sslip.io/assets/logos/age-check.png',
+    name: 'Age Check',
+    url: 'https://135.235.192.9.sslip.io/verifier/',
+    demo: true,
+  },
+  {
+    entityId: 'did:web:135.235.192.9.sslip.io',
+    did: 'did:web:135.235.192.9.sslip.io',
+    logoUri: 'https://135.235.192.9.sslip.io/assets/logos/age-check.png',
+    name: 'Age Check',
+    url: 'https://135.235.192.9.sslip.io/verifier/',
+    demo: true,
+  },
 ] satisfies Array<TrustedDidEntity>
 
 export const trustedOpenId4VciIssuerEntities = [
@@ -248,6 +274,18 @@ export const trustedOpenId4VciIssuerEntities = [
     logoUri: 'https://playground.paradym.id/logo.png',
     name: 'Paradym Playground',
     url: 'https://playground.paradym.id',
+    demo: true,
+  },
+  // Sunbird RC Age showcase — the Age credential issuer. Its issuer metadata is
+  // unsigned, so this runs through the fallback ('none') mechanism, which matches
+  // on an issuer prefix. Host-scoped is therefore both sufficient and stable
+  // across re-provisioning.
+  {
+    entityId: 'https://135.235.192.9.sslip.io',
+    issuer: 'https://135.235.192.9.sslip.io',
+    logoUri: 'https://135.235.192.9.sslip.io/assets/logos/national-identity-authority.png',
+    name: 'National Identity Authority',
+    url: 'https://135.235.192.9.sslip.io',
     demo: true,
   },
 ] satisfies Array<TrustedOpenId4VciEntity>
