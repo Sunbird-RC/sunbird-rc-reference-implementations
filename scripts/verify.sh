@@ -180,9 +180,15 @@ check "the importer is re-runnable for the next upstream bump" '[ -x scripts/ven
 # to "Organization not verified" with nothing in any log to say why. That failure
 # is invisible until someone points a phone at a QR, on camera.
 C="$W/apps/wallet/src/constants.ts"
-if [ -f deploy/.env ]; then
+# Env first, deploy/.env second — the same override the e2e suite takes, so this
+# can be pointed at the deployment the APK was actually built for rather than
+# only at whatever stack this checkout last bootstrapped.
+VDID="${VERIFIER_DID:-}"; PURL="${PUBLIC_URL:-}"
+if [ -z "$VDID$PURL" ] && [ -f deploy/.env ]; then
   VDID="$(grep '^VERIFIER_DID=' deploy/.env | cut -d= -f2-)"
   PURL="$(grep '^PUBLIC_URL=' deploy/.env | cut -d= -f2-)"
+fi
+if [ -n "$PURL" ]; then
   # The host the wallet was built for, taken from the logo URLs, which only this
   # repository serves. A local .env legitimately describes a different deployment
   # from the one the installed APK targets, and comparing the two then reports a
@@ -196,7 +202,7 @@ if [ -f deploy/.env ]; then
     skip "wallet trust pinning" "the wallet is built for ${WHOST:-an unknown host}; this deploy/.env describes ${EHOST:-nothing}"
   fi
 else
-  skip "wallet trust pinning" "no deploy/.env - run scripts/bootstrap.sh"
+  skip "wallet trust pinning" "no PUBLIC_URL in the environment or deploy/.env"
 fi
 
 # Drift: when the fork is still around, every vendored blob must match it apart
