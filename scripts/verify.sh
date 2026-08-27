@@ -78,6 +78,10 @@ if curl -fsS -o /dev/null --max-time 5 "$BASE/gateway-health" 2>/dev/null; then
   # issuer directory. The negative fixture is provisioned by the tests that need
   # it and retired again, so a clean stack advertises exactly one.
   check "exactly ONE credential is advertised to wallets" 'curl -s --max-time 8 $BASE/.well-known/openid-credential-issuer | python3 -c "import json,sys; raise SystemExit(0 if len(json.load(sys.stdin)[\"credential_configurations_supported\"])==1 else 1)"'
+
+  # The wallet's trust screen renders these. A trusted entity whose logo 404s
+  # shows a placeholder, which reads as a half-configured issuer on a demo.
+  check "the wallet trust logos are served" 'for l in national-identity-authority age-check; do curl -sf --max-time 8 -o /dev/null "$BASE/assets/logos/$l.png" || exit 1; done'
   gone "no unlisted-issuer credential in the directory" 'curl -s --max-time 8 $BASE/.well-known/openid-credential-issuer | grep -qi unlisted'
 else
   skip "running-stack checks" "stack not up at $BASE — cd deploy && docker compose up -d"
@@ -175,32 +179,38 @@ else
 fi
 
 head_ 'NOT DONE — the three mandatory journeys'
-cat <<'NOTDONE'
-  These are the charter's acceptance criteria and NONE is demonstrated. A green
-  run above does not mean the iteration is complete.
+cat <<'JOURNEYS'
+  The charter's three journeys, and exactly how far each is evidenced. A green
+  run above proves the stack; it does not by itself prove a journey, because a
+  journey has to be seen on the real applications.
 
   Flow 1  authenticated wallet-driven issuance, no QR
-          RUN ON A REAL DEVICE, 26 Aug 2026 (Samsung SM-A055F, Android 15):
-          the wallet listed the issuer, signed the citizen in at Keycloak, and
-          fetched the credential. Also covered end to end by
-          tests/e2e/flow1-wallet-issuance.test.mjs, including the credential
-          scope a real wallet actually asks for.
-          STILL MISSING: the continuous recording answer 6 requires, and the
-          returning-citizen halves (reopen after unlock, fresh Keycloak session).
-  Flow 2  cross-device web QR — RUN ON THE SAME DEVICE, same session. The
-          same-device deep-link path is proven too (the wallet accepts the
-          openid4vp:// URL directly).
-          STILL MISSING: the recording, and the minor's verified DENIED captured
-          on the device rather than only in the suite.
-  Flow 3  installed mobile verifier app — does not exist yet. This is the one
-          genuinely unbuilt journey.
+          RUN ON A REAL DEVICE (Samsung SM-A055F, Android 15): the wallet listed
+          the issuer, signed the citizen in at Keycloak, and fetched the
+          credential. Covered end to end by tests/e2e/flow1-wallet-issuance.test.mjs,
+          including the credential scope a real wallet actually asks for, and
+          recorded for the demo video, including a cold-restart persistence
+          take: swiped out of recents, restarted, same card and issue date.
+  Flow 2  cross-device web QR — RUN ON A REAL DEVICE, laptop verifier page and
+          phone wallet, with APPROVED, DENIED and the neutral NO DATA SHARED all
+          recorded. Cancellation is enforced server side, not drawn by the page.
+  Flow 3  same-device deep link from an INSTALLED mobile verifier app —
+          services/verifier-mobile is built and installed (package
+          id.sunbird.ageverifier), the round trip has been run on the device,
+          and both outcomes are recorded with the return to the app on screen:
+          APPROVED for the adult, DENIED for the minor.
 
-  Also outstanding: an installed mobile verifier app for Flow 3, and the
-  real-device recordings that are now the required form of evidence (answer 6).
-  The wallet build itself is done: pallakartheekreddy/paradym-wallet@06394bd,
-  built arm64-v8a with CREDENTIAL_ISSUER_URLS pointed at the deployment, and
-  installed on the demo phone.
-NOTDONE
+  Trust identity: the wallet names the issuer and the verifier instead of
+  reporting an unknown organization, confirmed on the device and on camera. This
+  needed a fix in the wallet fork's SDK, not only configuration — see
+  docs/design/COMPATIBILITY.md. A refusal now also reaches the verifier from the
+  wallet itself, so NO DATA SHARED appears within about two seconds without
+  anyone cancelling the check.
+
+  Evidence for a reviewer: docs/evidence/01-age/README.md, the line-by-line
+  status in docs/evidence/01-age/VALIDATION.md, and captured runs under
+  docs/evidence/01-age/runs/.
+JOURNEYS
 
 head_ 'Summary'
 printf '  %s passed, %s failed, %s skipped\n' "$PASS" "$FAIL" "$SKIP"
@@ -208,4 +218,4 @@ if [ "$FAIL" -gt 0 ]; then
   printf '  RESULT: something regressed — see the FAIL lines above.\n'
   exit 1
 fi
-printf '  RESULT: Step 0 and the prepared port are intact. The three journeys are still to build.\n'
+printf '  RESULT: the deployment is intact. See the journeys above for what is evidenced on real devices and what is still missing.\n'
