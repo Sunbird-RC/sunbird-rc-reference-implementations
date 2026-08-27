@@ -15,3 +15,12 @@ docs/evidence/01-age/artifacts/
 # next prebuild silently discards. Native config belongs in app.config.js and
 # plugins/ instead (that is why with-openid4vp-query.js exists).
 services/verifier-mobile/android/
+
+# The vendored Paradym Wallet fork brings upstream's own .gitignore with it, and
+# a nested ignore file is the right authority for that subtree: it already covers
+# node_modules, the Expo prebuild output (android/, ios/), .expo/, dist/, build/,
+# .env and *.keystore, and it stays correct when upstream changes it. Two things
+# it never needed, because upstream's release artefacts were only ever built in
+# the cloud by EAS:
+vendor/paradym-wallet/**/*.apk
+vendor/paradym-wallet/**/*.aab
