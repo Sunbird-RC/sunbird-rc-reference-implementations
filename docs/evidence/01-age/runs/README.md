@@ -6,9 +6,9 @@ the host, Node version and timestamp.
 
 | File | Command | Result |
 |---|---|---|
-| [`test-unit.txt`](test-unit.txt) | `npm run test:unit` | 39 passed, 0 failed |
+| [`test-unit.txt`](test-unit.txt) | `npm run test:unit` | 43 passed, 0 failed |
 | [`test-e2e.txt`](test-e2e.txt) | `npm run test:e2e` against the live deployment | 50 passed, 0 failed |
-| [`verify.txt`](verify.txt) | `./scripts/verify.sh` against the live deployment | 76 passed, 0 failed, 0 skipped |
+| [`verify.txt`](verify.txt) | `./scripts/verify.sh` against the live deployment | 90 passed, 0 failed, 0 skipped |
 
 ## Regenerating them
 
@@ -41,5 +41,11 @@ tree is clean, so the captured run is necessarily from a committed state:
 
 ```bash
 BASE=https://<demo-host> OPS_URL=http://127.0.0.1:8089 \
+  PUBLIC_URL=https://<demo-host> VERIFIER_DID=<from deploy/.env on the host> \
   ./scripts/verify.sh | tee docs/evidence/01-age/runs/verify.txt
 ```
+
+`PUBLIC_URL` and `VERIFIER_DID` matter for one check: the vendored wallet's trust
+entries are compiled into an APK, so the check that they still match the
+deployment can only assert when it is told which deployment the APK was built
+for. Without them it skips and says so.

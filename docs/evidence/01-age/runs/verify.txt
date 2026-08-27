@@ -2,7 +2,7 @@
 # BASE=https://135.235.192.9.sslip.io, operator endpoints via ssh -L
 # host: Darwin 25.2.0 arm64, node v22.16.0
 
-Iteration 01 verification — 2026-08-27 12:24 UTC
+Iteration 01 verification — 2026-08-27 13:27 UTC
 repo: /Users/kartheek/Documents/Workspace/Sunbird/Sunbird_RC/Fork/sunbird-rc-reference-implementations
 fork: /Users/kartheek/Documents/Workspace/Sunbird/Sunbird_RC/Fork/sunbird-rc-reference-implementations/../sunbird-rc-core
 
@@ -93,12 +93,30 @@ fork: /Users/kartheek/Documents/Workspace/Sunbird/Sunbird_RC/Fork/sunbird-rc-ref
   PASS  port branch is 4 commits off v2.1.0 (port, alg, narrowing, issuer display)
   PASS  ported image is built
   PASS  the ported build is pinned by source commit in its tag
+
+10. Committed secrets
   PASS  the generated demo password is absent from every tracked file
   PASS  the realm import carries no credentials
   PASS  no demo password of any known shape is committed
 
-10. Test suites
-  PASS  unit: # pass 39
+11. The vendored wallet
+  PASS  the wallet is vendored, not a sibling checkout
+  PASS  no wallet .git came along
+  PASS  upstream's Apache-2.0 licence is retained
+  PASS  NOTICE states that files were modified, and by whom
+  PASS  the change index names the upstream commit we forked from
+  PASS  no Expo prebuild output is tracked
+  PASS  no build output, APK or keystore is tracked
+  PASS  the vendored tree stays source-only (under 20 MB tracked)
+  PASS  Animo's release identity is not carried
+  PASS  building the wallet is a script, not a runbook
+  PASS  the importer is re-runnable for the next upstream bump
+  PASS  the wallet pins THIS deployment's verifier DID
+  PASS  the wallet pins THIS deployment's issuer origin
+  PASS  the vendored copy matches the fork, apart from the recorded adaptation
+
+12. Test suites
+  PASS  unit: # pass 43
   PASS  e2e: # pass 50
   PASS  fork port branch: Tests: 131 passed, 131 total
 
@@ -135,5 +153,5 @@ NOT DONE — the three mandatory journeys
   docs/evidence/01-age/runs/.
 
 Summary
-  76 passed, 0 failed, 0 skipped
+  90 passed, 0 failed, 0 skipped
   RESULT: the deployment is intact. See the journeys above for what is evidenced on real devices and what is still missing.
