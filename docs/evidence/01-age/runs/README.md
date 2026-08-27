@@ -8,6 +8,7 @@ the host, Node version and timestamp.
 |---|---|---|
 | [`test-unit.txt`](test-unit.txt) | `npm run test:unit` | 39 passed, 0 failed |
 | [`test-e2e.txt`](test-e2e.txt) | `npm run test:e2e` against the live deployment | 50 passed, 0 failed |
+| [`verify.txt`](verify.txt) | `./scripts/verify.sh` against the live deployment | 76 passed, 0 failed, 0 skipped |
 
 ## Regenerating them
 
@@ -32,11 +33,13 @@ retires it again, so a run leaves the deployment advertising exactly one credent
 
 ## The verification script
 
-`./scripts/verify.sh` is not captured here yet, because its first check is that the
-working tree is clean and this work was deliberately left uncommitted for Kartheek
-to stage. Its last run against the deployment was **75 of 76 checks passed**, with
-that working-tree check as the only failure. Capture it after the commit:
+`./scripts/verify.sh` checks the environment, the gateway's public and operator
+surfaces, the one-credential directory, the removal of the old issuer page, the
+committed-secret backstop, and then runs every suite — including the
+`oid4vc-service` fork's own 131 jest tests. Its first check is that the working
+tree is clean, so the captured run is necessarily from a committed state:
 
 ```bash
-BASE=https://<demo-host> ./scripts/verify.sh | tee docs/evidence/01-age/runs/verify.txt
+BASE=https://<demo-host> OPS_URL=http://127.0.0.1:8089 \
+  ./scripts/verify.sh | tee docs/evidence/01-age/runs/verify.txt
 ```
