@@ -112,6 +112,12 @@ async function poll() {
     });
   }
   if (body.state === 'waiting') return;
+  if (body.state === 'cancelled') {
+    return showResult({
+      nothingShared: true,
+      reason: 'The check was cancelled. Nothing was disclosed and no approval was produced.',
+    });
+  }
   if (body.state === 'declined') {
     return showResult({
       nothingShared: true,
@@ -127,6 +133,16 @@ async function poll() {
 el('enlarge').addEventListener('click', () => {
   const large = document.body.classList.toggle('qr-large');
   el('enlarge').textContent = large ? 'Back to normal size' : 'Enlarge for scanning';
+});
+
+el('cancel').addEventListener('click', async () => {
+  const id = state.sessionId;
+  stopPolling();
+  if (id) await api(`/sessions/${id}/cancel`, { method: 'POST' });
+  showResult({
+    nothingShared: true,
+    reason: 'The check was cancelled. Nothing was disclosed and no approval was produced.',
+  });
 });
 
 async function start() {
@@ -150,6 +166,7 @@ async function start() {
   el('open-wallet').href = body.qrData;
   el('open-wallet').hidden = false;
   el('enlarge').hidden = false;
+  el('cancel').hidden = false;
   el('hint').hidden = false;
   el('start').hidden = true;
   el('request-eyebrow').textContent = 'Scan with your wallet';

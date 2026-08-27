@@ -87,9 +87,31 @@ async function createSession() {
   };
 }
 
+/**
+ * Sessions the verifier has given up on.
+ *
+ * Needed because a wallet that declines tells us NOTHING: Paradym posts no
+ * response at all on refusal (observed 27 August 2026), so a declined request is
+ * indistinguishable from one the holder simply ignored, and the only terminal
+ * signal would be the TTL — minutes of an empty screen.
+ *
+ * Cancelling is therefore the verifier's own decision: it stops waiting, and it
+ * will not report a decision for that request afterwards even if a presentation
+ * turns up late. That last part is why this is enforced here rather than by a
+ * timer in the UI: a client-side "cancelled" label over a session still capable
+ * of returning APPROVED would be a lie.
+ */
+const abandoned = new Set();
+
 async function readSession(sessionId) {
   const session = sessions.get(sessionId);
   if (!session) return { status: 404, body: { state: 'expired' } };
+  if (abandoned.has(sessionId)) {
+    return {
+      status: 200,
+      body: { state: 'cancelled', reason: 'the check was cancelled before a presentation arrived' },
+    };
+  }
 
   let status;
   try {
@@ -207,6 +229,14 @@ const server = createServer(async (req, res) => {
     if (req.method === 'POST' && path === '/sessions') {
       const result = await createSession();
       return send(result.status, result.body);
+    }
+    const cancelMatch = /^\/sessions\/([A-Za-z0-9_-]+)\/cancel$/.exec(path);
+    if (req.method === 'POST' && cancelMatch) {
+      const id = cancelMatch[1];
+      if (!sessions.get(id)) return send(404, { state: 'expired' });
+      abandoned.add(id);
+      console.log(`[verifier] session ${id} cancelled by the verifier; no decision will be reported`);
+      return send(200, { state: 'cancelled' });
     }
     const match = /^\/sessions\/([A-Za-z0-9_-]+)$/.exec(path);
     if (req.method === 'GET' && match) {

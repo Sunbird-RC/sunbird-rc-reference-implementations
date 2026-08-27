@@ -40,6 +40,9 @@
              backlit laptop panel needs bigger modules than the layout wants.
              This trades page composition for module pitch on demand. -->
         <button id="enlarge" class="ghost" hidden>Enlarge for scanning</button>
+        <!-- A declining wallet posts nothing, so the verifier has to be able to
+             stop waiting itself. Told to the service, not faked in the page. -->
+        <button id="cancel" class="ghost" hidden>Cancel this check</button>
         <p class="muted" id="hint" hidden>
           <span class="pulse" aria-hidden="true"></span>
           Waiting for your wallet… <span id="countdown"></span>

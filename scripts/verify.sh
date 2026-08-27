@@ -107,6 +107,7 @@ check "a DID from another origin is never reused" 'grep -q "was minted under ano
 check "enabling https is a script, not a runbook" '[ -x scripts/enable-https.sh ]'
 check "a refusal is distinguished from a verification failure" 'grep -q "declined" services/verifier/src/server.mjs && grep -q "REFUSAL_SIGNATURES" services/verifier/src/core/checks.mjs'
 check "the page renders a refusal without a failure verdict" 'grep -q "NO DATA SHARED" services/verifier-web/app.js && grep -q "decision.neutral" services/web-assets/styles.css'
+check "a cancelled check is enforced server-side, not just labelled" 'grep -q "sessions/:id/cancel\|abandoned" services/verifier/src/server.mjs && grep -q "cancel" services/verifier-mobile/App.js'
 check "the negative fixture is owned by the tests, not bootstrap" 'grep -q "ensureNegativeFixture" tests/e2e/lib/stack.mjs && ! grep -q "create_schema .Age Verification Credential (unlisted" scripts/bootstrap.sh'
 check "the installed mobile verifier exists and calls the shared service" '[ -f services/verifier-mobile/App.js ] && grep -q "api/verifier/sessions" services/verifier-mobile/App.js'
 gone "the mobile verifier does not verify anything itself" 'grep -qiE "jose|sd-jwt|verifyJwt|createHash" services/verifier-mobile/App.js'

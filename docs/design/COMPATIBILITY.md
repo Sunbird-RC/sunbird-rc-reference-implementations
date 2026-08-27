@@ -85,6 +85,8 @@ rather than by hand on the server.
 
 | 8 | The wallet could not scan the verifier's QR, though the same URL worked as a deep link | the payload is ~206 characters (a `did:web` `client_id` plus an https `request_uri`), so the symbol is dense. It was rendered at 320px with a 2-module quiet zone, then CSS-capped to ~296px on a cream panel — three things at once working against a phone camera aimed at a laptop screen | 480px, the spec's 4-module quiet zone, `ecl: 'L'` (one version fewer, so larger modules), and the page renders it at 24rem on **white**, because the quiet zone is part of the symbol and contrast against it is what the decoder measures |
 
+| 12 | The wallet posts **nothing** when the holder declines a presentation | observed on the device, 27 August 2026: the wallet fetched the request object and then sent no response at all — no `error=access_denied`, no empty `vp_token`. So a refusal is indistinguishable from a request the holder ignored, and the only terminal signal is the session TTL — minutes of a spinner in front of an audience | the verifier gained `POST /api/verifier/sessions/:id/cancel`, which marks the request abandoned and then **refuses to report a decision for it even if a presentation arrives late**. Enforced in the service rather than labelled in the UI, because a client-side "cancelled" caption over a session that could still return APPROVED would be untrue. The `declined` state added earlier remains, for wallets that do report a refusal |
+
 ## Wallet spike results — Age, 26 August 2026
 
 Both wallet-facing journeys were run on a real device against the deployment.

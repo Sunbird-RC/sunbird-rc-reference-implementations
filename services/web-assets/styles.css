@@ -259,7 +259,11 @@ button:focus-visible {
      characters), and at 18.5rem on the ivory panel a phone could not lock onto
      it. Pure white, not --ivory: the quiet zone is part of the code, and
      contrast against it is what the decoder actually measures. */
-  width: 24rem;
+  /* Big BY DEFAULT, not behind a button: module pitch is the only lever that
+     works against a phone camera on a backlit LCD, and asking someone to
+     remember a toggle mid-demo is how a take gets lost. Scales on the viewport's
+     short edge so it stays square-ish on a laptop and cannot overflow a phone. */
+  width: min(90vw, 78vh);
   max-width: 100%;
   padding: 1rem;
   border-radius: var(--radius-inner);

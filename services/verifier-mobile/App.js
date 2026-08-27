@@ -91,6 +91,7 @@ export default function App() {
         case 'decided':
           return finish('decided', body);
         case 'declined':
+        case 'cancelled':
           return finish('nothing', body);
         case 'expired':
           return finish('nothing', {
@@ -143,6 +144,28 @@ export default function App() {
     }
   }, [poll, stop]);
 
+  /**
+   * Give up on this request.
+   *
+   * A wallet that declines posts nothing back, so the service cannot tell a
+   * refusal from silence — the verifier has to decide to stop waiting. Told to
+   * the service rather than handled locally, so the session genuinely will not
+   * report a decision afterwards.
+   */
+  const cancel = useCallback(async () => {
+    const id = session.current;
+    stop();
+    if (id) {
+      try {
+        await fetch(`${BASE}/api/verifier/sessions/${id}/cancel`, { method: 'POST' });
+      } catch {
+        // The screen is honest either way: nothing was shared.
+      }
+    }
+    setResult({ reason: 'The check was cancelled. Nothing was disclosed and no approval was produced.' });
+    setPhase('nothing');
+  }, [stop]);
+
   const reset = () => {
     stop();
     session.current = null;
@@ -187,6 +210,11 @@ export default function App() {
             </Text>
             {typeof secondsLeft === 'number' && phase === 'waiting' && (
               <Text style={styles.muted}>{secondsLeft}s left</Text>
+            )}
+            {phase === 'waiting' && (
+              <Pressable style={styles.secondary} onPress={cancel}>
+                <Text style={styles.secondaryText}>Cancel this check</Text>
+              </Pressable>
             )}
           </View>
         )}

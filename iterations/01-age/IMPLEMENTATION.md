@@ -322,44 +322,103 @@ The first one is the instructive one: the automated suite was passing while a re
 wallet could not get past the login screen, because the suite asked for `openid`
 and a wallet asks for what metadata advertises. Tests that model the client
 loosely will keep doing this. Worth remembering before Agriculture.
-
 ## Recording shot list *(answer 6: one continuous take per journey)*
 
-Recorded with the phone's own screen recorder rather than adb: `screenrecord`
-caps a clip at 180 seconds, and the USB link dropped three times during testing —
-a poor bet for evidence that has to be uninterrupted.
+Six takes, one per journey, in the order Anand's storyline runs: authenticate →
+receive credential → consent → share only age status → verify → APPROVED or
+DENIED. Recorded with the phone's own screen recorder, not adb — `screenrecord`
+caps a clip at 180 seconds and the USB link proved unreliable.
 
-**Take 1 — Flow 1, issuance inside the wallet.** Start on the phone's home
-screen, recorder already running.
+### Pre-flight, once, before any recording
 
-1. Open Sunbird Wallet (Preview), unlock. Credential list visible.
-2. Issuer directory shows **National Identity Authority**, and only that issuer.
-3. Tap it, then **Age Verification Credential**.
-4. Keycloak opens *inside* the wallet. Sign in as `citizen.meera`. No profile
-   form appears — the fixed `VERIFY_PROFILE` finding, on camera.
-5. The wallet shows the credential **before** storing it. Hold on `ageOver18`
-   long enough to read. Approve.
-6. The credential is in the list. Lock the app, reopen, unlock: still there.
+```bash
+./scripts/seed-age-citizens.sh          # refreshes drifted boundary dates
+curl -s https://<host>/.well-known/openid-credential-issuer \
+  | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["credential_configurations_supported"]))'   # must print 1
+grep DEMO_CITIZEN_PASSWORD deploy/.env  # the password to type; never write it down elsewhere
+```
 
-**Take 2 — Flow 2, presentation, APPROVED.** Either scan the QR from a laptop, or
-open the verifier page on the phone and tap **Open in wallet** — the same-device
-hand-off, which needs no camera.
+Then on the phone: both apps installed, screen brightness to maximum, and
+notifications silenced so nothing lands mid-take.
 
-1. Consent screen names the verifier and asks for `ageOver18` **only**.
-2. Approve. The verifier page shows **APPROVED** — captured separately when the
-   page is on a second screen.
+**The one rule that decides whether a take works:** before invoking the wallet
+from anywhere, the wallet must be **backgrounded and already unlocked** — open it,
+unlock it, press Home. With it in the foreground Android never delivers the
+request; force-stopped, it loses the destination through its own PIN gate.
 
-**Take 3 — Flow 2 again, verified DENIED.** Same as take 2 with the minor's
-credential (`citizen.arjun`, AGE-000002), ending in **DENIED**. The point is that
-this is a *verified* denial: every signature check passed and the policy said no.
+### Take 1 — Issuance inside the wallet (the adult)
 
-Boundary pair worth filming while the dates hold: `citizen.nikhil` turns 18
-**today** (APPROVED) and `citizen.sana` **tomorrow** (DENIED). Re-run
-`./scripts/seed-age-citizens.sh` first on any later day — it refreshes drifted
-boundary dates so the pair keeps straddling the birthday.
+The wallet's data is cleared, so this starts from onboarding — which makes a
+better opener than a wallet that already holds cards, and makes take 6 mean
+something.
 
-Videos stay out of the repository — large, and re-creatable. They belong in the
-demo evidence pack beside the account-to-citizen mapping.
+1. Open Sunbird Wallet → choose a PIN (the "fresh wallet" beat).
+2. **Get a card** → the directory lists **National Identity Authority**, and only
+   that. One credential under it — the negative fixture is gone.
+3. Tap **Age Verification Credential** → the wallet warns it cannot verify the
+   organisation, then asks the citizen to authorise.
+4. Keycloak opens *inside* the wallet. Sign in as `citizen.meera`.
+5. The wallet shows what arrived **before** storing it: `ageOver18` **true**,
+   `ageOver21` true. Hold long enough to read. Approve.
+6. The card is in the list — the wallet's first credential.
+
+~2 min including onboarding. Point being made: issuance begins in the wallet,
+there is no issuance QR, and the holder sees the claims before anything is
+stored.
+
+### Take 2 — Cross-device presentation, APPROVED
+
+Laptop shows `https://<host>/verifier/`; phone in hand. Record both screens.
+
+1. **Start age check** → **Enlarge for scanning**.
+2. Wallet → **Scan QR-code**, phone 15–25 cm back, steady.
+3. Consent screen names the verifier and asks for `ageOver18` **only**. Approve.
+4. Laptop: **APPROVED**, issuer named, `ageOver18 = true`, the withheld claims
+   struck through, seven checks green.
+
+~60 s. Uses the credential from take 1. If the symbol will not decode,
+stop and say so on camera rather than switching to the same-device path — Anand
+asked for this one specifically.
+
+### Take 3 — Installed mobile verifier, same device (Flow 3)
+
+Wallet unlocked and backgrounded. Start on the phone's home screen.
+
+1. Open **Age Check**. Read the line: it asks for one thing only.
+2. **Start age check** → the wallet comes forward with the request.
+3. Consent → approve.
+4. Back in Age Check: **APPROVED**, issuer, `ageOver18 = true`, seven checks, and
+   the footer stating the decision is the verifier service's, not the app's.
+
+~60 s. This is the journey the mobile web page could not stand in for.
+
+### Take 4 — Ineligible citizen, verified DENIED
+
+First, off camera, repeat take 1 signing in as `citizen.arjun` so the wallet holds
+the minor's credential too. Then, same steps as take 3, choosing that credential.
+
+1. **Start age check** → consent → approve.
+2. **DENIED**, and every one of the seven checks still green.
+
+~45 s. Say the important part out loud: this is a *verified* refusal. The
+signatures were all valid; the policy said no.
+
+### Take 5 — Cancellation
+
+1. **Start age check** → the wallet shows the request.
+2. **Decline** it.
+3. The verifier shows **NO DATA SHARED** — "nothing was disclosed and no approval
+   was produced". No verdict chip, no red failure, no claim values anywhere.
+
+~40 s. If the wallet posts nothing at all rather than an explicit refusal, the
+same panel appears when the request expires; either way the screen is honest.
+
+### Take 6 — Credential persistence
+
+1. Close the wallet, reopen it, unlock.
+2. The credentials are still listed. Open one and show its attributes.
+
+~30 s.
 
 ## Showcase review round two (27 August 2026)
 
