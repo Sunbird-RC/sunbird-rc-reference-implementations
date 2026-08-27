@@ -1,50 +1,53 @@
 # Iteration 01 — Age Verification: evidence
 
-**Status:** implemented and verified end to end on a laptop stack. The on-device
-run with Paradym is the one criterion still outstanding.
+**Status:** all three charter journeys implemented, run on real applications, and
+recorded. Every line item in the consolidated validation is closed — see
+[VALIDATION.md](VALIDATION.md). Two known deviations remain, both recorded below
+and neither presented as verified: revocation is a default rather than a check,
+and the algorithm allowlist is recorded rather than enforced.
 **Branch:** `iteration/age-01-verification`
 **Charter:** [`../../../iterations/01-age/CHARTER.md`](../../../iterations/01-age/CHARTER.md)
-**Plan:** [`../../../iterations/01-age/IMPLEMENTATION.md`](../../../iterations/01-age/IMPLEMENTATION.md)
-**Verified:** 24 August 2026
+**Implementation log:** [`../../../iterations/01-age/IMPLEMENTATION.md`](../../../iterations/01-age/IMPLEMENTATION.md)
+**Verified:** 27 August 2026, against `https://135.235.192.9.sslip.io`
 
-This is the handoff artifact. Anything not marked verified has not been run.
+This is the handoff artefact. Anything not marked verified has not been run.
+
+> Read [VALIDATION.md](VALIDATION.md) first if you are reviewing against the
+> consolidated validation table — it answers those 18 line items directly. This
+> file describes what was built and how to reproduce it.
 
 ## What was built
 
 | Component | Path | Role |
 |---|---|---|
-| Local stack | `deploy/` | Sunbird RC `v2.1.0` from `ghcr.io/sunbird-rc/*`, plus Postgres, Vault, Redis and a single-origin nginx |
+| Deployment | `deploy/` | Sunbird RC `v2.1.0` from `ghcr.io/sunbird-rc/*`, plus Keycloak, Postgres, Vault, Redis and an nginx gateway with two listeners |
 | Age source data | `registry-schemas/AgeCitizen.json` | National Identity Authority entity; the only source of credential claims |
-| Issuer counter | `services/age-issuer/` | Reads the registry through its API, derives `ageOver18`/`ageOver21`, creates a pre-authorised OpenID4VCI offer |
-| Verifier service | `services/verifier/` | Generic: checks gate → disclosure policy → issuer trust allowlist → domain decision. Age is one module (`src/domains/age/`) |
-| Issuer counter page | `services/issuer-web/` | Static. Lists the seeded citizens and shows the OpenID4VCI offer as a **scannable QR** — a phone cannot consume JSON. No login, no record editing |
+| Issuer service | `services/age-issuer/` | Resolves the authenticated citizen's registry record, derives `ageOver18`/`ageOver21`, and drives OpenID4VCI issuance |
+| Verifier service | `services/verifier/` | Generic and reused by both channels: checks gate → disclosure policy → issuer trust allowlist → domain decision. Age is one module (`src/domains/age/`) |
 | Verifier page | `services/verifier-web/` | Static. Shows the presentation QR and the decision; talks only to the verifier service |
-| Shared web assets | `services/web-assets/` | One Spark stylesheet and one Rubik woff2, served at `/assets/`, so the two pages cannot drift |
+| Mobile verifier app | `services/verifier-mobile/` | Installed Expo/React Native app (`id.sunbird.ageverifier`, "Age Check"). Starts a session, hands off to the wallet by deep link, polls for the outcome. Displays only; it never verifies |
+| Shared web assets | `services/web-assets/` | One stylesheet, one woff2, and the wallet trust logos, served at `/assets/` |
 | Trust allowlist | `config/trust/issuers.json` | Version-controlled demo trust model (DESIGN §6) |
-| Tests | `tests/unit`, `tests/e2e` | 39 unit + 29 end-to-end |
+| Tests | `tests/unit`, `tests/e2e` | 39 unit + 50 end-to-end |
 
-**No standards adapter was needed.** Sunbird RC `v2.1.0`'s native `oid4vc-service`
-covered OpenID4VCI issuance, `vc+sd-jwt` selective disclosure, holder binding,
-OpenID4VP with DCQL and QR, and single-use transaction state — confirmed by the
-run, not just by reading the source.
+There is **no issuance QR and no issuer counter page**. Flow 1 is wallet-driven:
+the citizen picks the issuer inside the wallet and authenticates at Keycloak. An
+earlier revision of this iteration had a `services/issuer-web/` page that showed
+the offer as a QR; the charter forbids it, the page is gone, and `scripts/verify.sh`
+asserts it stays gone.
 
-## Flow 1 server side — ready (25 August 2026)
+**No standards adapter was needed on the Sunbird RC side.** Native
+`oid4vc-service` covered OpenID4VCI issuance, `vc+sd-jwt` selective disclosure,
+holder binding, OpenID4VP with DCQL, and single-use transaction state. Two changes
+sit outside it and are recorded as deviations: the Keycloak-backed
+`authorization_code` capability (a fork of `oid4vc-service`, approved) and one fix
+in the wallet fork's own SDK (see deviation 1).
 
-The stack now supports authenticated wallet-driven issuance. What a wallet sees:
+## The account-to-citizen mapping
 
-```json
-"authorization_servers": ["http://localhost/auth/realms/age", "http://localhost"],
-"nonce_endpoint":        "http://localhost/oid4vc/nonce",
-"display":               [{ "name": "National Identity Authority", "locale": "en-US" }]
-```
-
-Keycloak is advertised first, the service keeps itself second so pre-authorised
-issuance still works, and the issuer names itself so a wallet's issuer list reads
-"National Identity Authority" rather than a hostname.
-
-**The account-to-citizen mapping**, which is what decides whose credential gets
-issued. Verified by generating the access token Keycloak would mint for the wallet
-client: `citizen.meera` produces `citizenId: AGE-000001`.
+What decides whose credential gets issued. The wallet authenticates a person; the
+issuer then resolves *that account* to exactly one registry record and derives the
+claim from the record — never from anything the caller sends.
 
 | Keycloak account | Citizen record | Expected |
 |---|---|---|
@@ -54,83 +57,120 @@ client: `citizen.meera` produces `citizenId: AGE-000001`.
 | `citizen.sana` | `AGE-000004` (turns 18 tomorrow) | boundary |
 | `citizen.unmapped` | *none* | authenticates, **no credential** |
 
-Passwords are generated by `scripts/bootstrap.sh`, printed once to the operator and
-kept in the gitignored `deploy/.env`. Nothing is committed, per answer 3.
+Asserted by `tests/e2e/flow1-wallet-issuance.test.mjs`, which signs in through
+Keycloak's real login page: each citizen receives their own record's claims, and
+naming a different citizen in the credential request does not reach that citizen's
+data.
 
-The negative-fixture issuer publishes its credential under a **different name**
-("Age Verification Credential (unlisted issuer)") but the **same `vct`**. The name
-keeps a wallet's issuer list unambiguous; the shared `vct` is what makes the trust
-test real, since the presentation satisfies the DCQL query and is refused only by
-the allowlist.
-
-### Defects found while wiring this up
-
-Each would have passed a code review:
-
-1. A `_comment` key in the Keycloak realm file aborted the import outright —
-   Keycloak rejects unknown fields. The rationale moved to
-   `deploy/keycloak/README.md`.
-2. My Keycloak healthcheck hand-rolled an HTTP request through bash's `/dev/tcp`
-   with escaped CRLF in YAML. It always failed while Keycloak was perfectly
-   healthy and the realm imported. Replaced with a TCP connect, with realm
-   readiness proven by bootstrap instead.
-3. nginx was still serving a six-hour-old config, so `/auth` 404'd while Keycloak
-   answered fine directly. A mounted config is not a reloaded config.
-4. `tr -dc … < /dev/urandom | head -c 10` for the generated password: `head` closes
-   the pipe, `tr` takes a SIGPIPE, and under `set -euo pipefail` bootstrap died
-   mid-step with no message at all.
-5. Admin calls through the gateway are refused with `HTTPS required` — the master
-   realm demands TLS for proxied requests. Admin work now runs through Keycloak's
-   own CLI inside the container, which is treated as local.
+Passwords are generated by `scripts/bootstrap.sh`, printed once to the operator,
+and kept in the gitignored `deploy/.env`. Nothing is committed — `verify.sh`
+carries a denylist backstop that fails if a password of any known demo shape
+appears in the repository.
 
 ## Versions
 
-Pinned tags with the digests this evidence was produced against:
+| Component | Tag / version |
+|---|---|
+| `sunbird-rc-core` (registry) | `v2.1.0` |
+| `identity-service` | `v2.1.0` |
+| `credential-schema` | `v2.1.0` |
+| `credentials-service` | `v2.1.0` |
+| `oid4vc-service` | **`v2.1.0-authcode.4889fbdb`** — local build of the fork branch `oid4vc-keycloak-as-v2.1.0`, 4 commits off the `v2.1.0` tag |
+| `keycloak` | `quay.io/keycloak/keycloak:26.0` |
+| `postgres` | `14` |
+| `hashicorp/vault` | `1.13.3` |
+| `redis` | `7-alpine` |
+| `nginx` | `alpine` |
+| Services + tests | `node:22-alpine` (images), Node 25.6.1 (host) |
+| Scripted wallet | `jose` 6.1.0 |
+| Device wallet | Paradym Wallet fork `v1.0.3`, package `id.paradym.wallet.preview`, "Sunbird Wallet (Preview)", built arm64-v8a |
+| Mobile verifier | Expo 56.0.12, React Native 0.85.3, React 19.2.3, package `id.sunbird.ageverifier` |
+| Demo device | Samsung SM-A055F, Android 15 |
+| TLS | Let's Encrypt via sslip.io, issued by `scripts/enable-https.sh` |
 
-| Component | Tag | Digest |
-|---|---|---|
-| `sunbird-rc-core` (registry) | `v2.1.0` | `sha256:8ea8cf87caf402cec92af276dc5c5bff8dc321ab75023693b558d12cc76b8859` |
-| `identity-service` | `v2.1.0` | `sha256:f6697e181a19f9862f2925cfe8e9ed006fa19616d16ce0ffddcb00f0418024ff` |
-| `credential-schema` | `v2.1.0` | `sha256:0f69ac5c3a1e7f6164204a79555e3dd12e3fa56074593c2f9c560bdc9763935d` |
-| `credentials-service` | `v2.1.0` | `sha256:51240b2fd5786d2cd034bdcac485352fd5b86e012584095f413aa902e7885b5c` |
-| `oid4vc-service` | **`v2.1.0-authcode.4889fbdb`** — local build, not a release | fork branch `oid4vc-keycloak-as-v2.1.0`, 4 commits off the `v2.1.0` tag |
-| `keycloak` | `quay.io/keycloak/keycloak:26.0` | authorization server for Flow 1 |
-| `postgres` | `14` | `sha256:2fdfb9b432d4a73bd3eea3d989752c1e669b68d502347e0bfd2cc6d709f3d6b4` |
-| `hashicorp/vault` | `1.13.3` | `sha256:5eba321fbeb624163a45c1aee5379caf6ec16fe6f644cc89f203a209eafba5eb` |
-| `redis` | `7-alpine` | `sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf` |
-| `nginx` | `alpine` | `sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913` |
-| Services + tests | `node:22-alpine` (images), Node 25.6.1 (host) | — |
-| Wallet — scripted | `jose` 6.1.0 | — |
-| Wallet — device | Paradym Wallet | **pending the on-device run** |
+Digests for the pinned images are in `deploy/docker-compose.yml`.
 
-Source of truth for released behaviour: local checkout of `sunbird-rc-core` at
-tag `v2.1.0` (`2ade66c`).
+### Building the two mobile apps
+
+The full recipe is in
+[`IMPLEMENTATION.md`](../../../iterations/01-age/IMPLEMENTATION.md#the-build-exactly-as-it-was-produced).
+Every variable in it is load-bearing, and two are easy to skip:
+
+```bash
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17                 # a JDK 17 exactly
+export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
+export APP_VARIANT=preview                                    # or the package becomes id.paradym.wallet
+export CREDENTIAL_ISSUER_URLS=https://135.235.192.9.sslip.io   # empty hides the issuer directory entirely
+export WALLET_REDIRECT_BASE_URLS=""                            # falls back to the app scheme, which needs no App Link verification
+cd apps/wallet && npx expo prebuild --platform android --no-install
+cd android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+```
+
+`JAVA_HOME` must be a **JDK 17 exactly**, not merely 17-or-newer. On 21 or 23,
+Gradle tries to provision a 17 toolchain through the `foojay-resolver` 0.5.0 that
+`@react-native/gradle-plugin` pins, and that version references a Gradle API
+removed in 9.x, so configuration dies with `JvmVendorSpec … IBM_SEMERU` — a
+message that says nothing about JDK versions.
+
+`APP_VARIANT` decides the package name, so omitting it does not fail cleanly: the
+namespace becomes `id.paradym.wallet` while generated autolinking sources still
+reference `id.paradym.wallet.preview`, and the build fails in `javac` complaining
+that a package does not exist. It also means the APK would install beside the
+existing wallet instead of upgrading it.
+
+`prebuild` does not write `android/local.properties`, so `ANDROID_HOME` has to be
+exported or the SDK location is not found.
+
+`reactNativeArchitectures` matters too: the generated `gradle.properties` builds
+all four ABIs, which compiles every native module four times — that is how the
+first attempt died at 2 h 14 m in Skia's JNI compile. Every Android phone since
+roughly 2017 is `arm64-v8a`.
 
 ## Configuration that matters
 
 | Flag | Value | Why |
 |---|---|---|
-| `OID4VP_SIGN_REQUEST` | `true` | Paradym is Credo-based: it fetches the request object as `application/oauth-authz-req+jwt` and answers **406** to an unsigned one |
+| `OID4VP_SIGN_REQUEST` | `true` | The wallet is Credo-based: it fetches the request object as `application/oauth-authz-req+jwt` and answers **406** to an unsigned one |
 | `VERIFIER_DID` | minted `did:web` | Signing refuses a `did:rcw`, which no third-party wallet can resolve |
 | `DRAFT13_COMPAT_MODE` | `false` | Final OpenID4VCI 1.0. Draft-13 is Inji's idiom, for Iteration 02 |
 | `SESSION_STORE` | `redis` | Single-use codes and nonces must survive a restart for the replay tests to mean anything |
 | `STATUS_LIST_ENABLED` | `false` | Revocation infrastructure is out of scope (PRODUCT) |
-| `ENABLE_AUTH` | `false` | No Keycloak in this stack; `age-issuer` is the only caller of `POST /oid4vc/offer` |
-| `authentication_enabled` (registry) | `false` | Same reason |
-| `search_providerName` | `NativeSearchService` | No Elasticsearch in the stack |
-| `AGE_REGISTRY_JDBC` | `jdbc:postgresql://db:5432/age` | The Age domain's own database — see deviation 2 |
+| `SESSION_TTL_SECONDS` | `240` | Long enough for a person to unlock a phone, read a request and consent |
+| `ENABLE_AUTH` | `false` | Registry and protocol services are reachable only through the gateway; the operator listener is loopback-only |
 
-Three identities are minted, all `did:web`:
+Three identities are minted, all `did:web` under the public host:
 
 | Identity | Role |
 |---|---|
 | National Identity Authority | Issues the credential; its DID is the credential `iss` and the single allowlist entry |
-| Age-restricted service | The **verifier's** DID, used to sign OID4VP request objects. A separate party deserves a separate key |
+| Age-restricted service | The **verifier's** DID, used to sign OID4VP request objects and shown to the wallet as the requesting party |
 | Unlisted issuer | Publishes the same credential type from an untrusted DID, so "wrong issuer" is tested with a cryptographically **valid** credential |
+
+The unlisted-issuer fixture is **not** part of the deployment. Issuer metadata is
+built from every published schema with no filter, so a fixture that exists at
+setup time appears in the wallet's issuer directory beside the real credential —
+which is exactly what a customer-facing stack must not show. It is provisioned by
+the test that needs it and retired again afterwards, and both `verify.sh` and the
+e2e suite assert that exactly one credential is advertised.
+
+## The gateway has two listeners
+
+Because the demo is on the public internet, citizen traffic and operator traffic
+are not the same surface.
+
+| Listener | Reachable from | Serves |
+|---|---|---|
+| `:80` / `:443` | anywhere | the verifier page, the wallet-facing OpenID4VCI and OpenID4VP endpoints, Keycloak's realm endpoints, `did.json`, `/vct`, `/assets` |
+| `127.0.0.1:8088` | the host only, via `ssh -L` | seeding, the issuer counter API, schema listing, registry search |
+
+`deploy/nginx/routes-denied.conf` additionally refuses `/auth/admin`,
+`POST /oid4vc/offer`, `POST /vp/request` and `/vp/status` on the public listener —
+endpoints that sit under wallet-facing prefixes but are not citizen traffic.
 
 ## Credential design
 
-`AgeVerificationCredential`, `vc+sd-jwt`, ES256, every claim selectively disclosable:
+`AgeVerificationCredential`, `vc+sd-jwt`, ES256, every claim selectively
+disclosable:
 
 | Claim | Derived? | Disclosed to the age verifier |
 |---|---|---|
@@ -141,9 +181,8 @@ Three identities are minted, all `did:web`:
 
 `dateOfBirth` and `name` are in the credential on purpose: a credential holding
 only the answer would make selective disclosure untestable, because "nothing
-leaked" would just mean "there was nothing to leak". The e2e suite asserts both
-halves — that the credential *can* disclose four claims, and that exactly one
-travels.
+leaked" would just mean "there was nothing to leak". The suite asserts both halves
+— that the credential *can* disclose four claims, and that exactly one travels.
 
 DCQL requests `ageOver18` plus the protocol claim `iss`, pins the type through
 `meta.vct_values`, and puts **no `values` constraint** on the age claim:
@@ -152,206 +191,236 @@ constraining it to `true` would turn a legitimate minor into a verification
 
 ## Test results — executed
 
+Captured output for each run is in [`runs/`](runs/).
+
 ```
 $ npm run test:unit
 tests 39   pass 39   fail 0
 
 $ npm run test:e2e
-tests 29   pass 29   fail 0
+tests 50   pass 50   fail 0
 ```
 
-Unit coverage: calendar-correct age derivation (18th-birthday boundary,
-leap-day births, month boundaries), rejection of impossible dates and of records
-with no date of birth, the decision truth table including the `"false"`-is-truthy
-trap, the trust allowlist (unexpanded `${VAR}` is a startup failure, not a
-wildcard), DCQL minimality, the verification gate treating a *missing* check as a
-failure, and session expiry.
+**Unit:** calendar-correct age derivation (18th-birthday boundary, leap-day
+births, month boundaries), rejection of impossible dates and of records with no
+date of birth, the decision truth table including the `"false"`-is-truthy trap,
+the trust allowlist (an unexpanded `${VAR}` is a startup failure, not a wildcard),
+DCQL minimality, the verification gate treating a *missing* check as a failure,
+and session expiry.
 
-End-to-end, against the real protocol with a scripted holder wallet: issuance
-into the wallet, holder binding via `cnf.jwk`, minimum disclosure asserted
-against the raw presentation, APPROVED/DENIED decisions, the boundary and
-leap-day fixtures, and ten negative cases.
+**End-to-end**, against the real protocol on the live deployment:
 
-### Scripted demo
-
-`./scripts/demo.sh` — all four cases behaved as expected:
-
-| Case | Result |
+| Area | What is asserted |
 |---|---|
-| Adult | **APPROVED**, seven checks OK |
-| Minor | **DENIED**, seven checks OK — a verified refusal, not a failure |
-| Tampered disclosure | rejected, HTTP 403 from the stack |
-| Unlisted issuer, valid signature | seven checks OK, rejected by the **trust allowlist** |
+| Flow 1, wallet-driven | Keycloak's real login page drives `authorization_code` + PKCE; the credential comes from the authenticated citizen's own record; every scope the issuer advertises is a scope Keycloak will actually grant |
+| The artefact | `typ: vc+sd-jwt`, `alg: ES256`, `_sd_alg`, one digest per disclosure, claims present as disclosures rather than plain claims, resolvable `vct`, `cnf.jwk` is the requesting wallet's key, no private key present |
+| Minimum disclosure | Exactly one disclosure travels; withheld values are absent from the wire in plain and base64 form; the verifier's response carries no holder identifier |
+| Decisions | APPROVED, DENIED as a *verified* refusal, and the two boundary fixtures |
+| Refusal | A declined presentation is reported `declined`, not as a failure, and leaks nothing |
+| Cancellation | A cancelled session stays cancelled even when a valid presentation arrives afterwards |
+| Expiry | A session the verifier no longer holds is reported `expired` and never decided |
+| Issuer directory | Exactly one credential is advertised, in `vc+sd-jwt` |
+| Trust identity | The verifier's `client_id` is a bare `did:web` under the deployment host, the issuer advertises the deployment origin, and both trust logos are served |
+| Negative | Tampered credential and tampered disclosure, untrusted issuer with a valid signature, wrong holder key, wrong nonce, wrong audience, replay, and a pre-authorised code redeemed twice |
+| Isolation | One database, no shared cross-domain person table, no table overlap, protocol stores separate from domain data |
 
-The last row is the one worth reading twice: every cryptographic check passes and
-the presentation is still refused, because the issuer is not on the allowlist.
-
-### Browser
-
-`http://localhost/issuer/` lists the five seeded citizens and renders the credential
-offer as a QR with the claim names beside it — this is what a phone scans, and it is
-what makes the on-device run possible at all.
-
-`http://localhost/verifier/` was driven in Chrome for both outcomes: **APPROVED**
-(`ageOver18 = true`) and **DENIED** (`ageOver18 = false`), each showing the issuer
-name, the single disclosed claim, the withheld claims struck through, and all
-seven checks as pass pills. The decision is computed server-side; the page only
-renders it.
-
-## Acceptance checklist
-
-### Positive flow
-- [x] A synthetic eligible citizen receives an `AgeVerificationCredential` in a wallet
-- [x] The wallet scans the web verifier's QR request
-- [~] The wallet shows that only `ageOver18` is requested and obtains consent — *protocol verified; the consent **screen** needs the Paradym device run*
-- [x] The issuance offer is presented as a scannable QR (`/issuer/`)
-- [x] The wallet presents `ageOver18 = true` without unrelated identity claims
-- [x] The verifier validates the presentation and displays **APPROVED**
-
-### Negative and privacy flows
-- [x] A valid `ageOver18 = false` presentation returns **DENIED**
-- [x] User denial/cancellation discloses nothing and does not approve
-- [x] Tampered credential and tampered disclosure are rejected
-- [x] An issuer outside the allowlist is rejected, with a cryptographically valid credential
-- [x] Wrong holder key is rejected
-- [x] Incorrect nonce and incorrect audience are rejected
-- [x] Expired/unknown transaction and replayed presentation are rejected
-- [x] Verifier output carries no undisclosed identity claims, and no holder identifier
-- [x] A pre-authorised code cannot be redeemed twice
-
-### Engineering evidence
-- [x] A clean checkout starts the stack with documented commands — *proven by three full `down -v` rebuilds*
-- [x] Automated tests cover the decision logic and the required verification failures
-- [x] Integration tests cover the issuance and presentation endpoints
-- [x] Use-case data remains logically separated (`tests/e2e/data-isolation.test.mjs`)
-- [x] Versions, configuration mode and limitations recorded
-- [ ] Paradym device run: consent screen, and OpenID4VCI collection on this stack.
-      **Blocked on the deferred exposure decision**: a phone cannot reach
-      `http://localhost`, and `did:web:localhost` is not resolvable off-box, so this
-      needs the HTTPS host with `PUBLIC_URL`/`PUBLIC_HOST` set and a re-bootstrap on a
-      clean stack (changing the host invalidates every `did:web` and every credential
-      already issued)
-- [ ] Kartheek demonstrates the flow to Anand
+`./scripts/verify.sh` runs 76 environment and regression checks against a live
+deployment, including gateway exposure, the one-credential directory, the removal
+of the issuer page, and the committed-secret backstop.
 
 ## Reproducing
 
+Run instructions for a clean checkout are in the
+[root README](../../../README.md#running-the-age-verification-showcase). Against
+the live deployment, the operator endpoints need a tunnel:
+
 ```bash
-cd deploy && cp env.example .env && docker compose up -d   # registry ~1-4 min
-../scripts/bootstrap.sh          # Vault kv, three did:web identities, schemas
-../scripts/seed-age-citizens.sh  # synthetic citizens
-cd .. && npm install
-npm run test:unit
-npm run test:e2e
-./scripts/demo.sh                # headless walkthrough, positive + negatives
+ssh -L 8089:127.0.0.1:8088 rc@<demo-host>
+
+PUBLIC_URL=https://<demo-host> OPS_URL=http://127.0.0.1:8089 \
+  AGE_ISSUER_DID=<from deploy/.env on the host> \
+  DEMO_CITIZEN_PASSWORD=<from deploy/.env on the host> \
+  npm run test:e2e
 ```
 
-### Checking both UIs by hand
-
-Two pages, one per role:
+### Checking the verifier by hand
 
 | URL | Role | What to look for |
 |---|---|---|
-| `http://localhost/issuer/` | National Identity Authority | The seeded citizens; pick one and the credential offer appears as a QR, with the claim names that will be issued |
-| `http://localhost/verifier/` | Age-restricted service | "Start age check" produces the presentation QR; the result shows APPROVED/DENIED, the issuer, the one disclosed claim, and the seven checks |
+| `https://<demo-host>/verifier/` | Age-restricted service | "Start age check" produces the presentation QR; the result shows APPROVED, DENIED or the neutral NO DATA SHARED, plus the issuer, the one disclosed claim and the checks |
 
-With a phone, scan the issuer QR, then the verifier QR — no other step. On a
-laptop there is no wallet in the browser, so the verifier page prints the command
-that answers the session it is showing:
+On a laptop there is no wallet in the browser, so the page prints the command that
+answers the session it is showing:
 
 ```bash
 ./scripts/wallet.sh AGE-000001 <sessionId>   # collect, then present
 ./scripts/wallet.sh AGE-000002 <sessionId>   # the minor: expect DENIED
-./scripts/wallet.sh AGE-000001               # collect only
 ```
 
 `scripts/wallet.sh` is the same holder the e2e suite uses — real ES256 keys, a
 real proof of possession, a real SD-JWT presentation with a Key Binding JWT. It
-stands in for the phone; it does not stand in for the verification.
+stands in for the phone; it does not stand in for the verification, and per the
+charter it is never acceptance evidence for a user journey.
 
-## Defects found by running it
+### Confirming the trust screen by hand
 
-Recorded because each one would have passed a code review:
+The wallet asks for its app PIN, so this last step needs a person. With the phone
+connected and the wallet **fully closed**:
 
-1. The Postgres init script was mounted as `.sh` and failed with
-   `/bin/bash: bad interpreter: Permission denied` — and the entrypoint carried
-   on and started the server. The extra databases and the Age namespace were
-   silently never created. Now plain `.sql`, which psql runs directly.
-2. `?currentSchema=age` does nothing for the registry (see deviation 2).
-3. `bootstrap.sh`'s `mint_did` printed status to stdout, which is the DID being
-   captured by `$(...)` — so an ANSI-coloured sentence ended up in `.env`, in the
-   schema `author`, and in the trust allowlist. The verifier reported one trusted
-   issuer and trusted nobody real. Status now goes to stderr, and a value that is
-   not a `did:web` is fatal.
-4. `set_env` used a grep alternation with an empty branch, which BSD grep rejects
-   (`empty (sub)expression`); the `|| true` then truncated `.env` and took the
-   DIDs with it.
-5. nginx waited on verifier health, but the verifier fails closed without a trust
-   DID that `bootstrap.sh` mints *through nginx* — a first-run deadlock on a
-   clean checkout. nginx now waits only for the service to start, which is safe
-   because every `proxy_pass` resolves per request.
-6. `[hidden]` was overridden by `.panel { display: grid }`, so the result panel
-   was visible before any check had run.
+```bash
+URL=$(curl -s -X POST https://<demo-host>/api/verifier/sessions \
+        -H 'content-type: application/json' -d '{}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["qrData"])')
+adb shell am force-stop id.paradym.wallet.preview
+adb shell am start -a android.intent.action.VIEW -d "$URL"
+```
+
+Unlock with the PIN. The screen must read **"Do you trust Age Check?"** with a
+recognised-organisation badge, not "Organization not verified". The wallet has to
+be closed first: an already-foregrounded task does not receive the new intent.
+
+## Charter acceptance checklist
+
+Against [`CHARTER.md`](../../../iterations/01-age/CHARTER.md). `[x]` means run;
+`[~]` means implemented and partially evidenced, with the gap named.
+
+### Environment and identity
+- [x] A clean checkout starts the stack using documented steps — three full `down -v` rebuilds, plus this deployment from scratch
+- [x] Deterministic eligible and ineligible synthetic citizens exist
+- [x] Each demo Keycloak account maps to the correct citizen record
+- [x] Exact versions and compatibility mode recorded
+
+### Direct issuance
+- [x] The wallet authenticates an eligible citizen through Keycloak
+- [x] The wallet lists the National Identity Authority as an available issuer
+- [x] The citizen selects the issuer and requests the credential in the wallet — on the device, and recorded with the directory held long enough to read
+- [x] The issuer derives the claim from the authenticated citizen's record
+- [x] The wallet receives and stores the holder-bound SD-JWT VC directly, with no issuance QR or counter page
+- [x] After closing/reopening the wallet, the credential is still there — swiped out of recents, cold-started, same card and issue date
+- [x] The ineligible citizen receives a valid credential with the negative assertion
+- [x] Invalid credentials, wrong passwords, unmapped accounts and cross-citizen requests fail safely
+
+### Cross-device web verification
+- [x] The website displays a QR request for only `ageOver18`
+- [x] The real mobile wallet scans it and shows verifier, request, selection and consent
+- [x] Consent produces a selective presentation containing only the requested assertion
+- [x] APPROVED for an eligible citizen, DENIED for an ineligible one
+- [x] Cancellation discloses nothing and does not approve
+
+### Same-device mobile verification
+- [x] A separate installed app initiates the request and opens the wallet by deep link
+- [x] The wallet shows verifier, request, selection and consent
+- [x] The presentation returns and is validated by the reusable verifier service
+- [x] The app displays APPROVED or DENIED correctly — recorded for both, with the return to the app on screen rather than inferred
+- [x] Cancellation and invalid responses fail safely
+
+### Security, privacy, and negative tests
+- [x] Tampered credential or disclosure rejected
+- [x] Wrong or untrusted issuer rejected
+- [x] Wrong holder key rejected
+- [x] Incorrect nonce or audience rejected
+- [x] Expired and replayed presentations rejected
+- [ ] Unapproved algorithm rejected — **recorded as a deviation, not enforced** (limitation 3)
+- [x] Captured evidence proves undisclosed claims do not reach the verifier
+- [x] Automated tests cover decision logic, mapping, issuance authorisation, verification failures, privacy and regression
+
+### Demonstration and handoff
+- [x] All three journeys demonstrated to Anand — one 4 min 45 s narrated video, every cue checked against its frame
+- [x] Test results reproducible from documented commands
+- [x] Known issues, deviations and material decisions explicit
+- [x] No change merged to `main`
 
 ## Known limitations and deviations
 
-1. **v2.1.0's verifier does not check issuer identity.** Its checks cover
-   signature, nonce, audience, holder binding, revocation and DCQL — never
-   *whose* signature. `services/verifier` enforces the allowlist, as DESIGN §4
-   and §6 require. Demonstrated by the demo's case 4. Worth reporting upstream.
-2. **The Age namespace is a database, not a schema.** DESIGN §7 says `age.*`
-   schemas. The registry exposes only a JDBC URI (`connectionInfo_uri`) and
-   leaves table placement to Sqlg, which puts unqualified vertex labels in
-   `public`: with `?currentSchema=age` the run produced `public.V_AgeCitizen` and
-   an empty `age` schema. There is no supported setting for it, so the boundary
-   is a dedicated `age` **database** — stronger isolation, still one PostgreSQL
-   deployment, and Agriculture/Education get their own the same way. The intent
-   of §7 holds; the mechanism differs. **Flagged for Anand's awareness.**
+1. **The wallet fork's trust lookup could not match our verifier.** The `did`
+   trust mechanism compared the client id against a `decentralized_identifier:`
+   prefixed string, while our bare `did:web:` client id — the pre-draft-26 form —
+   arrives unprefixed, so no configured entity could ever match. Fixed in the fork
+   by normalising and prefix-matching; a genuine upstream defect with a removal
+   path. Detail in [VALIDATION.md](VALIDATION.md#item-15-the-trust-warning-was-a-wallet-sdk-defect).
+2. **v2.1.0's verifier does not check issuer identity.** Its checks cover
+   signature, nonce, audience, holder binding, revocation and DCQL — never *whose*
+   signature. `services/verifier` enforces the allowlist, as DESIGN §4 and §6
+   require. Demonstrated by the untrusted-issuer test, which passes every
+   cryptographic check and is still refused. Worth reporting upstream.
 3. **The algorithm allowlist is absent by decision.** A presentation's JWS `alg`
    is not observable through `/vp/status`, so a policy field for it would be a
-   control that does nothing — the trap upstream calls out for `tx_code`. The
-   constraint holds by construction (identity-service signs SD-JWT VCs with
-   ES256) and is recorded here instead of being faked in code.
+   control that does nothing. The constraint holds by construction
+   (identity-service signs SD-JWT VCs with ES256) and is recorded here instead of
+   being faked in code.
 4. **`revocation: OK` is a default, not a check** (`STATUS_LIST_ENABLED=false`).
    Out of scope per PRODUCT; must not be presented as verified revocation.
-5. **`did:web` on localhost is not externally resolvable.** The method mandates
-   https; identity-service resolves its own DIDs from its database, so local
-   flows work. A phone needs the HTTPS host, and `PUBLIC_URL` must be pinned
-   before any demo credential is issued — changing it invalidates every `did:web`
-   and every credential already issued.
-6. **`platform.*` stays empty.** Protocol transaction state lives in Redis and
-   each protocol service keeps its own database.
-7. **Turning on `ENABLE_AUTH` will require a token in the verifier service.**
-   `POST /vp/request` and `GET /vp/status/:id` carry `@UseGuards(KeycloakAuthGuard)`
-   — a no-op at `ENABLE_AUTH=false`, but on the dev deployment `services/verifier`
-   will need a `client_credentials` token for both. The posture is otherwise
-   ready: we never use the registry offer hook, which is the caller that cannot
-   send one.
-8. **Wallet choice deviates from COMPATIBILITY's candidate** (EUDI Android) in
-   favour of Paradym, which is already exercised against these APIs. That document
-   leaves wallet selection to Kartheek. Upstream evidence covers Paradym for
-   *presentation* only; collection is evidenced by the `demo-oid4vc` round-trip on
-   an interim image, so issuance into Paradym must be re-confirmed on this stack.
-9. **The verifier page is static, not the React app** the plan mentioned adapting
-   from `demo-oid4vc/verifier-app`. It needs no build step, so the stack builds
-   offline; the Sunbird Spark theme is applied directly (see below).
-10. **One unexplained e2e failure.** A single run failed on
-    `the credential is holder-bound…` while a browser session was concurrently
-    polling the verifier; it did not reproduce in six subsequent runs, alone or in
-    suite. The e2e files now run with `--test-concurrency=1` because they share
-    one stack. Recorded rather than dismissed — worth watching in Iteration 02.
-11. **The iteration branch was cut from `docs/first-handshake`, not `main`.** That
-    branch is three documentation commits ahead of `main` and carries the handshake
-    docs this work references. GIT-WORKING-MODEL says an iteration branch starts
-    from the latest accepted `main`; flagged rather than quietly rebased.
+5. **One database, separated by entity tables.** Per Anand's answer 10: the
+   registry names tables after the entity (`V_AgeCitizen`), which needs neither a
+   schema nor a database of its own. The earlier `?currentSchema=age` finding —
+   Sqlg places unqualified vertex labels in `public` regardless — still holds and
+   simply stops mattering. `tests/e2e/data-isolation.test.mjs` asserts the rules
+   that now apply.
+6. **`did:web` pins the host.** The method mandates https, and changing the public
+   origin invalidates every `did:web` and every credential already issued, so
+   `PUBLIC_URL` must be fixed before any demo credential is minted. `bootstrap.sh`
+   fails rather than proceed if it finds DIDs minted under another host.
+7. **The verifier page is static, not a React app.** It needs no build step, so
+   the stack builds offline.
+8. **Keycloak-backed issuance runs on a fork of `oid4vc-service`.** Approved as a
+   material decision; the capability is optional and preserves pre-authorised
+   issuance.
+9. **`platform.*` stays empty.** Protocol transaction state lives in Redis and each
+   protocol service keeps its own database.
+10. **The iteration branch was cut from `docs/first-handshake`, not `main`** — three
+    documentation commits ahead. Flagged rather than quietly rebased.
+
+## Defects found by running it
+
+Recorded because each would have passed a code review.
+
+1. **Keycloak's `VERIFY_PROFILE` interrupted first sign-in.** The wallet's in-app
+   browser showed an "Update Account Information" form mid-issuance. Disabled in
+   the realm, and the synthetic accounts now carry `@citizens.invalid` emails.
+2. **`invalid_scope`.** Issuer metadata advertises a per-credential `scope`, the
+   wallet asks for it, and Keycloak refused it — the wallet could only say
+   "something went wrong". My suite had been passing because it asked for plain
+   `openid`, which a real wallet does not do. Fixed by adding the client scopes,
+   *and* by adding the test that would have caught it.
+3. **A silent decline.** Refusing in the wallet left the verifier waiting: the
+   wallet recorded the refusal locally and told nobody. The fork now posts an
+   Authorization Error Response (`error=access_denied`) for `direct_post`, and the
+   verifier reports `declined`.
+4. **Cancellation was a client-side label.** The page drew "cancelled" while the
+   session remained capable of producing a decision, so a presentation landing a
+   moment later would still have approved a check the operator had given up on.
+   Now enforced server side, and tested.
+5. **`demo.sh` re-dirtied the issuer directory.** It provisioned the
+   unlisted-issuer fixture and left it advertised. It now retires it before exit.
+6. **A password reached a committed document.** The existing check only compared
+   against the current `.env` value, so a rotated one slipped through. Removed, and
+   a denylist backstop added.
+7. **An IP allowlist broke local development.** Docker Desktop's NAT made requests
+   arrive from an unexpected address. Replaced with a loopback-only operator
+   listener, which is a property of the topology rather than of an address.
+8. **`Linking.canOpenURL` returned false for a wallet that handles the scheme.**
+   Android 11+ package visibility: without a `<queries>` entry the check fails
+   even though the intent would resolve. Added via a config plugin, and the
+   hand-off no longer gates on the probe.
+9. **The Postgres init script was mounted as `.sh`** and failed with
+   `bad interpreter: Permission denied` — and the entrypoint carried on. The extra
+   databases were silently never created. Now plain `.sql`.
+10. **`bootstrap.sh`'s `mint_did` printed status to stdout**, which is the DID being
+    captured by `$(...)`, so an ANSI-coloured sentence ended up in `.env`, in the
+    schema author, and in the trust allowlist. The verifier reported one trusted
+    issuer and trusted nobody real. Status now goes to stderr, and a value that is
+    not a `did:web` is fatal.
+11. **nginx waited on verifier health**, but the verifier fails closed without a
+    trust DID that `bootstrap.sh` mints *through nginx* — a first-run deadlock on a
+    clean checkout.
+12. **`tr -dc … < /dev/urandom | head -c 10`** for the generated password: `head`
+    closes the pipe, `tr` takes a SIGPIPE, and under `set -euo pipefail` bootstrap
+    died mid-step with no message at all.
 
 ## UI theme
 
-The verifier page follows the **Sunbird Spark** design system, read from the
-Figma file itself (`figma.com/design/gdTmBeuK9os2NxeLZIi5rq`, "Color palette and
-font" frame, node `13-89`) and cross-checked against the Spark portal's shipped
-CSS, which encodes the same system.
-
-Palette, hex verbatim from the file's Primary/Secondary Palette:
+Both verifier surfaces follow the **Sunbird Spark** design system, read from the
+Figma file (`figma.com/design/gdTmBeuK9os2NxeLZIi5rq`, "Color palette and font"
+frame, node `13-89`) and cross-checked against the Spark portal's shipped CSS.
 
 | Token | Hex | Used for |
 |---|---|---|
@@ -362,19 +431,4 @@ Palette, hex verbatim from the file's Primary/Secondary Palette:
 | INK | `#376673` | secondary/status text |
 | WAVE | `#70adbf` | focus rings, the waiting pulse |
 | FOREST / MOSS | `#82a668` / `#66a682` | APPROVED |
-| JAMUN | `#540f3b` | DENIED — BRICK is the primary action colour here, so a refusal needs a different, unmistakable tone from the same palette |
-
-Type is Rubik throughout, per the file's own note ("HEADINGS & LARGER TEXT:
-Rubik / PARAGRAPH & BODY TEXT: Rubik"), self-hosted from the same `woff2` the
-Spark portal ships — no CDN, so the stack still runs with no network. Card titles
-are Rubik Medium 20 in the file, which is the scale used here.
-
-Composition follows the file's screens rather than being invented: white cards
-with a hairline border on a light page, `#F4F4F4` frame fill, SUNFLOWER pill
-chips with dark text, dot-separated meta lines (the file's idiom for card
-metadata), BRICK section labels with a `→`, and a near-black footer band with the
-wordmark in GINGER.
-
-Verified in Chrome for both outcomes after the restyle. Dev Mode inspect was not
-available (the file is on a Free team plan, so exact spacing tokens could not be
-exported); geometry was read from the Design panel and from the rendered frames.
+| JAMUN | `#540f3b` | DENIED — BRICK is the primary action colour, so a refusal needs a different, unmistakable tone from the same palette |

@@ -119,7 +119,7 @@ account or cloud build involved, because the project id in `app.config.js`
 belongs to Animo.
 
 ```bash
-export JAVA_HOME=/opt/homebrew/opt/openjdk@17          # AGP wants 17, not 11/21/23
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17          # 17 EXACTLY — see below
 export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 export APP_VARIANT=preview                             # release build, no dev server
 export CREDENTIAL_ISSUER_URLS=https://135.235.192.9.sslip.io
@@ -127,6 +127,18 @@ export WALLET_REDIRECT_BASE_URLS=""                    # see below
 cd apps/wallet && npx expo prebuild --platform android --no-install
 cd android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
 ```
+
+Both of the first two lines are easy to skip and neither fails clearly. Without
+`JAVA_HOME` on a **17**, Gradle tries to provision a 17 toolchain through the
+`foojay-resolver` 0.5.0 that `@react-native/gradle-plugin` pins; that version
+touches a Gradle API removed in 9.x, and configuration dies with
+`JvmVendorSpec … IBM_SEMERU`, which says nothing about JDK versions. 21 and 23
+both fail this way. Without `APP_VARIANT`, the namespace becomes
+`id.paradym.wallet` while the generated autolinking sources still reference
+`id.paradym.wallet.preview`, so the build fails in `javac` with "package does not
+exist" — and the resulting APK would install beside the existing wallet rather
+than upgrading it. `prebuild` also does not write `android/local.properties`, so
+`ANDROID_HOME` has to be exported.
 
 `reactNativeArchitectures` matters. The generated `gradle.properties` builds all
 four ABIs, which compiles every native module (Skia, Askar, AnonCreds, Nitro,

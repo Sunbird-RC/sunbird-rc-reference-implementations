@@ -20,7 +20,47 @@ Across these use cases, the showcase includes Inji Wallet interoperability, suit
 
 - **PRODUCT:** approved and baselined in `main`.
 - **DESIGN:** approved and baselined.
-- **IMPLEMENTATION:** next stage; work proceeds through use-case iteration branches.
+- **IMPLEMENTATION:** Iteration 01 (Age verification) is built and running on
+  `iteration/age-01-verification`, pending Anand's sign-off. Nothing is merged to
+  `main` before that gate.
+
+## Running the Age Verification showcase
+
+A clean checkout to a working stack. Docker and Node 22+ are the only
+prerequisites; the registry takes one to four minutes to become healthy on first
+start.
+
+```bash
+cd deploy && cp env.example .env && docker compose up -d
+../scripts/bootstrap.sh          # Vault kv, three did:web identities, schemas, Keycloak realm
+../scripts/seed-age-citizens.sh  # deterministic synthetic citizens
+cd .. && npm install
+
+npm run test:unit                # 39 tests, no stack needed
+npm run test:e2e                 # 50 tests against the running stack
+./scripts/demo.sh                # headless walkthrough: positive and negative cases
+./scripts/verify.sh              # 76 environment and regression checks
+```
+
+`bootstrap.sh` prints the generated demo password once and writes it to the
+gitignored `deploy/.env`. Nothing sensitive is committed.
+
+Then open `http://localhost/verifier/` — "Start age check" shows the presentation
+QR and the decision. There is deliberately no issuer web page: issuance is
+wallet-driven through Keycloak, with no QR code, as the iteration charter requires.
+
+**For a phone to take part**, the stack needs a public HTTPS origin: `did:web`
+mandates https, and the origin is baked into every DID and credential, so it has
+to be fixed *before* any demo credential is issued. `scripts/enable-https.sh`
+obtains a Let's Encrypt certificate for a host reachable on ports 80 and 443.
+
+| I want to | Read |
+|---|---|
+| Review Iteration 01 against the validation table | [docs/evidence/01-age/VALIDATION.md](docs/evidence/01-age/VALIDATION.md) |
+| See what was built, versions, deviations and defects | [docs/evidence/01-age/README.md](docs/evidence/01-age/README.md) |
+| See captured test and verification runs | [docs/evidence/01-age/runs/](docs/evidence/01-age/runs/) |
+| Build the wallet or the mobile verifier app | [docs/evidence/01-age/README.md](docs/evidence/01-age/README.md#building-the-two-mobile-apps) |
+| Understand a protocol or wallet compatibility finding | [docs/design/COMPATIBILITY.md](docs/design/COMPATIBILITY.md) |
 
 ## Project Documents
 
@@ -32,6 +72,8 @@ Across these use cases, the showcase includes Inji Wallet interoperability, suit
 - [Coding Agent Instructions](CLAUDE.md)
 - [Iteration 01 — Age Verification](iterations/01-age/CHARTER.md)
 - [Iteration 01 review feedback](docs/reviews/ITERATION-01-FEEDBACK.md)
+- [Iteration 01 review feedback, round 2](docs/reviews/ITERATION-01-FEEDBACK-ROUND2.md)
+- [Iteration 01 evidence](docs/evidence/01-age/README.md)
 
 These documents are the authoritative project baseline. Architecture and implementation must remain aligned with them.
 
