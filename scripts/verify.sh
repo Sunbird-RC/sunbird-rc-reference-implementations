@@ -169,7 +169,9 @@ gone "no build output, APK or keystore is tracked" 'git ls-files $W | grep -qE "
 check "the vendored tree stays source-only (under 20 MB tracked)" '[ "$(git ls-files -z $W | xargs -0 du -ck 2>/dev/null | tail -1 | cut -f1)" -lt 20480 ]'
 # Someone running `eas build` here would build against another organisation's
 # Expo project and App Store listing.
-gone "Animo's release identity is not carried" 'git ls-files -z $W | xargs -0 grep -lE "b5f457fa-bcab-4c6e-8092-8cdf1239027a|ascAppId|owner: .animo-id." 2>/dev/null | grep -q .'
+# Excluding the change index, which names these identifiers precisely because it
+# records their removal. The same trap the demo-password check fell into once.
+gone "Animo's release identity is not carried" 'git ls-files -z $W | xargs -0 grep -lE "b5f457fa-bcab-4c6e-8092-8cdf1239027a|ascAppId|owner: .animo-id." 2>/dev/null | grep -v "SUNBIRD-CHANGES.md" | grep -q .'
 check "building the wallet is a script, not a runbook" '[ -x scripts/build-wallet.sh ]'
 check "the importer is re-runnable for the next upstream bump" '[ -x scripts/vendor-wallet.sh ]'
 
@@ -177,12 +179,22 @@ check "the importer is re-runnable for the next upstream bump" '[ -x scripts/ven
 # re-bootstrap mints a new verifier DID and the installed wallet silently reverts
 # to "Organization not verified" with nothing in any log to say why. That failure
 # is invisible until someone points a phone at a QR, on camera.
+C="$W/apps/wallet/src/constants.ts"
 if [ -f deploy/.env ]; then
   VDID="$(grep '^VERIFIER_DID=' deploy/.env | cut -d= -f2-)"
   PURL="$(grep '^PUBLIC_URL=' deploy/.env | cut -d= -f2-)"
-  C="$W/apps/wallet/src/constants.ts"
-  check "the wallet pins THIS deployment's verifier DID" 'test -n "$VDID" && grep -q "$VDID" "$C"'
-  check "the wallet pins THIS deployment's issuer origin" 'test -n "$PURL" && grep -q "$PURL" "$C"'
+  # The host the wallet was built for, taken from the logo URLs, which only this
+  # repository serves. A local .env legitimately describes a different deployment
+  # from the one the installed APK targets, and comparing the two then reports a
+  # failure that says nothing about the code - so compare only when they agree.
+  WHOST="$(grep -oE 'https://[^/]+/assets/logos/' "$C" | head -1 | sed -E 's|https://||; s|/assets/logos/||')"
+  EHOST="$(printf '%s' "$PURL" | sed -E 's|^https?://||; s|/.*$||')"
+  if [ -n "$WHOST" ] && [ "$WHOST" = "$EHOST" ]; then
+    check "the wallet pins THIS deployment's verifier DID" 'test -n "$VDID" && grep -q "$VDID" "$C"'
+    check "the wallet pins THIS deployment's issuer origin" 'grep -q "$PURL" "$C"'
+  else
+    skip "wallet trust pinning" "the wallet is built for ${WHOST:-an unknown host}; this deploy/.env describes ${EHOST:-nothing}"
+  fi
 else
   skip "wallet trust pinning" "no deploy/.env - run scripts/bootstrap.sh"
 fi
@@ -192,12 +204,15 @@ fi
 # hashes, so this is content equality and not a file listing.
 WFORK="${WALLET_FORK_PATH:-$ROOT/../paradym-wallet}"
 if [ -d "$WFORK/.git" ]; then
-  check "the vendored copy matches the fork, apart from the recorded adaptation" '
-    diff <(git -C "$WFORK" ls-tree -r cbe9407 | awk "{print \$3, \$4}" | sort) \
-         <(git ls-tree -r "HEAD:$W" | awk "{print \$3, \$4}" | sort) \
-      | grep -E "^[<>]" \
-      | grep -vE "(NOTICE|SUNBIRD-CHANGES\.md|apps/wallet/app\.config\.js|apps/wallet/base\.app\.config\.js|apps/wallet/eas\.json)$" \
-      | grep -q . && exit 1 || exit 0'
+  # No `exit` in a check body: check() evals in the current shell, so an exit here
+  # terminates verify.sh and every later check is silently skipped. Ask instead
+  # whether the filtered difference is empty.
+  ADAPTED="NOTICE|SUNBIRD-CHANGES\.md|apps/wallet/(app\.config\.js|base\.app\.config\.js|eas\.json)"
+  # ls-tree --format rather than awk: an awk program written inside a string that
+  # check() later evals loses its \$3 to the shell, and awk then fails with a
+  # syntax error the check reports as drift that does not exist.
+  check "the vendored copy matches the fork, apart from the recorded adaptation" \
+    '[ -z "$(diff <(git -C "$WFORK" ls-tree -r --format="%(objectname) %(path)" cbe9407 | sort) <(git ls-tree -r --format="%(objectname) %(path)" "HEAD:$W" | sort) | grep -E "^[<>]" | grep -vE "($ADAPTED)$")" ]'
 else
   skip "wallet drift vs the fork" "no checkout at $WFORK - set WALLET_FORK_PATH"
 fi
