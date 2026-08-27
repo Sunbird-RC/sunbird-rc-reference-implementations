@@ -106,17 +106,39 @@ with no passwords or tokens in it.
 
 ## Wallet: what the build needs
 
-The wallet is `pallakartheekreddy/paradym-wallet@v1.0.3`, which already carries the
-wallet half of Flow 1: an issuer directory, the browser sign-in step, and the
-preview-then-approve screen before anything is stored. Nothing in the wallet needs
-writing — only configuring.
+The wallet now lives in this repository, at
+[`vendor/paradym-wallet/`](../../vendor/paradym-wallet/) — Anand asked for it, so
+that a reviewer of this branch can see the wallet-side changes the showcase
+depends on instead of taking them on trust. It is `animo/paradym-wallet` at
+`2d68168` (Apache-2.0) plus seven showcase commits, all of them visible as this
+repository's history: `git log -p -- vendor/paradym-wallet`.
+
+**Correction to an earlier claim here.** This section used to say "nothing in the
+wallet needs writing — only configuring". That was true when it was written and is
+not true now. Four things needed writing, and two of them are upstream defects:
+
+| Written | Why |
+|---|---|
+| `packages/sdk/src/trust/handlers/did.ts` | The trust lookup compared the client id against a `decentralized_identifier:`-prefixed string, so a verifier sending the bare `did:web:` form of OpenID4VP before draft 26 could never match any configured entity — no configuration could have fixed it |
+| `packages/sdk/src/openid4vc/func/declineCredentialRequest.ts` | Declining was purely local, leaving the verifier unable to tell a refusal from a request the holder ignored |
+| `apps/wallet/app.config.js` | Build-time OAuth redirect targets, so the app scheme can be used against a host whose `assetlinks.json` cannot list a locally signed certificate |
+| `apps/wallet/src/constants.ts` | The showcase's trusted issuer and verifier — configuration, and the only one of the four that is |
+
+The wallet still supplies the rest of Flow 1 unchanged: the issuer directory, the
+browser sign-in step, and the preview-then-approve screen before anything is
+stored.
 
 ### The build, exactly as it was produced
 
-`pallakartheekreddy/paradym-wallet@v1.0.3` (local fork at
-`../paradym-wallet`), Expo 56 / React Native 0.85.3, built locally — no Expo
-account or cloud build involved, because the project id in `app.config.js`
-belongs to Animo.
+Expo 56 / React Native 0.85.3, built locally from `vendor/paradym-wallet` — no
+Expo account or cloud build involved. Animo's EAS project id was removed when the
+code was vendored, precisely so that nobody builds against their Expo project by
+accident.
+
+Use [`scripts/build-wallet.sh`](../../scripts/build-wallet.sh), which asserts each
+of the four load-bearing variables below rather than trusting you to remember
+them. It also finds a JDK 17 when `JAVA_HOME` points elsewhere, which on this
+machine it does — sdkman sets it to 11.
 
 ```bash
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17          # 17 EXACTLY — see below
@@ -124,7 +146,7 @@ export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 export APP_VARIANT=preview                             # release build, no dev server
 export CREDENTIAL_ISSUER_URLS=https://135.235.192.9.sslip.io
 export WALLET_REDIRECT_BASE_URLS=""                    # see below
-cd apps/wallet && npx expo prebuild --platform android --no-install
+cd vendor/paradym-wallet/apps/wallet && npx expo prebuild --platform android --no-install
 cd android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
 ```
 
@@ -288,7 +310,7 @@ decides the Keycloak arrangement.
 Install (USB debugging on, phone unlocked):
 
 ```bash
-adb install -r apps/wallet/android/app/build/outputs/apk/release/app-release.apk
+adb install -r vendor/paradym-wallet/apps/wallet/android/app/build/outputs/apk/release/app-release.apk
 ```
 
 **Flow 1 — the wallet fetches the credential.** Record from the home screen.

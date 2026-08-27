@@ -67,6 +67,7 @@ Treat approved Product, Design, and iteration acceptance criteria as controlled 
 - Do not remove, weaken, skip, or rewrite failing tests merely to obtain a green result.
 - Do not introduce a new framework, service, or dependency unless it provides clear iteration value.
 - Do not create unnecessary process documents; code, tests, configuration, and concise evidence are preferred.
+- Treat `vendor/` as third-party code. Keep upstream's licence and notices, land every local change as its own commit, and record it in that directory's `SUNBIRD-CHANGES.md`. Note that `vendor/paradym-wallet` carries upstream's own `CLAUDE.md` and `.claude/` — those are Animo's instructions for Animo's project and do not govern this repository.
 
 ## Escalation Boundary
 

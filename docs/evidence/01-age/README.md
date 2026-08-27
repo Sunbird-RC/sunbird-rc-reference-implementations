@@ -28,7 +28,8 @@ This is the handoff artefact. Anything not marked verified has not been run.
 | Mobile verifier app | `services/verifier-mobile/` | Installed Expo/React Native app (`id.sunbird.ageverifier`, "Age Check"). Starts a session, hands off to the wallet by deep link, polls for the outcome. Displays only; it never verifies |
 | Shared web assets | `services/web-assets/` | One stylesheet, one woff2, and the wallet trust logos, served at `/assets/` |
 | Trust allowlist | `config/trust/issuers.json` | Version-controlled demo trust model (DESIGN §6) |
-| Tests | `tests/unit`, `tests/e2e` | 39 unit + 50 end-to-end |
+| Mobile wallet | `vendor/paradym-wallet/` | The holder's wallet, vendored: `animo/paradym-wallet` @ `2d68168` (Apache-2.0) plus seven showcase commits — three of theming and the issuer directory, four of protocol work. See [SUNBIRD-CHANGES.md](../../../vendor/paradym-wallet/SUNBIRD-CHANGES.md) |
+| Tests | `tests/unit`, `tests/e2e` | 43 unit + 50 end-to-end |
 
 There is **no issuance QR and no issuer counter page**. Flow 1 is wallet-driven:
 the citizen picks the issuer inside the wallet and authenticates at Keycloak. An
@@ -83,7 +84,7 @@ appears in the repository.
 | `nginx` | `alpine` |
 | Services + tests | `node:22-alpine` (images), Node 25.6.1 (host) |
 | Scripted wallet | `jose` 6.1.0 |
-| Device wallet | Paradym Wallet fork `v1.0.3`, package `id.paradym.wallet.preview`, "Sunbird Wallet (Preview)", built arm64-v8a |
+| Device wallet | `vendor/paradym-wallet` — `animo/paradym-wallet` @ `2d68168` plus seven showcase commits; package `id.paradym.wallet.preview`, "Sunbird Wallet (Preview)", built arm64-v8a |
 | Mobile verifier | Expo 56.0.12, React Native 0.85.3, React 19.2.3, package `id.sunbird.ageverifier` |
 | Demo device | Samsung SM-A055F, Android 15 |
 | TLS | Let's Encrypt via sslip.io, issued by `scripts/enable-https.sh` |
@@ -92,19 +93,16 @@ Digests for the pinned images are in `deploy/docker-compose.yml`.
 
 ### Building the two mobile apps
 
-The full recipe is in
-[`IMPLEMENTATION.md`](../../../iterations/01-age/IMPLEMENTATION.md#the-build-exactly-as-it-was-produced).
-Every variable in it is load-bearing, and two are easy to skip:
+The wallet lives at `vendor/paradym-wallet` and builds through a script that
+asserts each load-bearing variable rather than trusting you to remember it:
 
 ```bash
-export JAVA_HOME=/opt/homebrew/opt/openjdk@17                 # a JDK 17 exactly
-export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
-export APP_VARIANT=preview                                    # or the package becomes id.paradym.wallet
-export CREDENTIAL_ISSUER_URLS=https://135.235.192.9.sslip.io   # empty hides the issuer directory entirely
-export WALLET_REDIRECT_BASE_URLS=""                            # falls back to the app scheme, which needs no App Link verification
-cd apps/wallet && npx expo prebuild --platform android --no-install
-cd android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+cd vendor/paradym-wallet && corepack pnpm install --frozen-lockfile
+cd ../.. && ./scripts/build-wallet.sh          # issuer URL from deploy/.env
 ```
+
+The mobile verifier is separate and unchanged (`services/verifier-mobile`). What
+the script asserts, and why each matters:
 
 `JAVA_HOME` must be a **JDK 17 exactly**, not merely 17-or-newer. On 21 or 23,
 Gradle tries to provision a 17 toolchain through the `foojay-resolver` 0.5.0 that

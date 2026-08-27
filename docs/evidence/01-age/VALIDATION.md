@@ -37,7 +37,7 @@ document that contradicted the implementation, and two genuinely unfinished item
 | 15 | Verifier trust identity | **Closed — confirmed on the device** | This was not a configuration gap. See [the finding below](#item-15-the-trust-warning-was-a-wallet-sdk-defect). Confirmed on the demo phone on 27 August 2026: the presentation screen reads **"Do you trust Age Check?"** with the 18+ mark rendered, in place of "Organization not verified" — which also proves the logo resolves from the deployment rather than falling back to a placeholder. The precondition is guarded from our side by *the verifier identifies itself with a bare did:web under the deployment host* and *the issuer identifies itself with the deployment origin, and its logo resolves*. |
 | 16 | Customer-ready end-to-end journey | **Closed** | `Age-Verification-Showcase-27Aug.mp4`, 4 min 45 s, six parts: getting the card, persistence, the web check, the installed app, the minor's denial, and a refusal. **No unknown-organisation warning appears anywhere** — every phone recording is from the build that fixes it, and the earlier footage was discarded rather than reused. Narration assumes no prior knowledge of credentials. |
 | 17 | Repeatable tests and evidence | **Closed** | Run instructions in the root [README](../../../README.md#running-the-age-verification-showcase); this evidence pack rewritten to match the implementation; captured runs under [`runs/`](runs/); charter mapped in [README.md](README.md#charter-acceptance-checklist). |
-| 18 | Iteration branch handoff | **Closed on this branch** | All work is on `iteration/age-01-verification`. Commit reference is at the end of this file. Nothing merged to `main`. |
+| 18 | Iteration branch handoff | **Closed on this branch** | All work is on `iteration/age-01-verification` — and now literally all of it: the wallet was vendored to `vendor/paradym-wallet` at Anand's request, so the wallet-side changes the showcase depends on are reviewable here rather than in a sibling checkout. Commit reference is at the end of this file. Nothing merged to `main`. |
 
 **Totals:** all 18 closed. The four that were open needed footage rather than
 code, and that footage now exists.
@@ -80,9 +80,11 @@ const matchedDid = baseDid ? trustedDidEntities.find((e) => baseDid.startsWith(e
 Prefix matching also delivers host-scoped trust, so re-provisioning the demo —
 which mints new DIDs — does not silently return the wallet to calling us unknown.
 
-**This is a change to the wallet fork, not to Sunbird RC**, and it is a genuine
-upstream defect worth reporting: any verifier using the pre-draft-26 client id is
-untrustable by that wallet. Recorded in
+**This is a change to the wallet, not to Sunbird RC**, and it is a genuine upstream
+defect worth reporting: any verifier using the pre-draft-26 client id is
+untrustable by that wallet. The code is now in this repository at
+[`vendor/paradym-wallet/packages/sdk/src/trust/handlers/did.ts`](../../../vendor/paradym-wallet/packages/sdk/src/trust/handlers/did.ts),
+so the fix can be read rather than described. Recorded in
 [`../../design/COMPATIBILITY.md`](../../design/COMPATIBILITY.md) with a removal
 path — if upstream fixes it, our patch is deleted, not maintained.
 

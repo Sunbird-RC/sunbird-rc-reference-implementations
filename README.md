@@ -36,10 +36,14 @@ cd deploy && cp env.example .env && docker compose up -d
 ../scripts/seed-age-citizens.sh  # deterministic synthetic citizens
 cd .. && npm install
 
-npm run test:unit                # 39 tests, no stack needed
+npm run test:unit                # 43 tests, no stack needed
 npm run test:e2e                 # 50 tests against the running stack
 ./scripts/demo.sh                # headless walkthrough: positive and negative cases
-./scripts/verify.sh              # 76 environment and regression checks
+./scripts/verify.sh              # environment and regression checks
+
+# the holder's wallet is vendored at vendor/paradym-wallet (pnpm, not npm)
+cd vendor/paradym-wallet && corepack pnpm install --frozen-lockfile
+cd ../.. && ./scripts/build-wallet.sh
 ```
 
 `bootstrap.sh` prints the generated demo password once and writes it to the
@@ -60,6 +64,7 @@ obtains a Let's Encrypt certificate for a host reachable on ports 80 and 443.
 | See what was built, versions, deviations and defects | [docs/evidence/01-age/README.md](docs/evidence/01-age/README.md) |
 | See captured test and verification runs | [docs/evidence/01-age/runs/](docs/evidence/01-age/runs/) |
 | Build the wallet or the mobile verifier app | [docs/evidence/01-age/README.md](docs/evidence/01-age/README.md#building-the-two-mobile-apps) |
+| See what we changed in the wallet, and what is upstream's | [vendor/paradym-wallet/SUNBIRD-CHANGES.md](vendor/paradym-wallet/SUNBIRD-CHANGES.md) |
 | Understand a protocol or wallet compatibility finding | [docs/design/COMPATIBILITY.md](docs/design/COMPATIBILITY.md) |
 
 ## Project Documents
