@@ -32,7 +32,7 @@ printf 'repo: %s\nfork: %s\n' "$ROOT" "$FORK"
 
 head_ '1. Branch and working tree'
 check "on iteration/age-01-verification" '[ "$(git branch --show-current)" = "iteration/age-01-verification" ]'
-check "working tree clean (ignoring node_modules)" '[ -z "$(git status --porcelain | grep -v "^?? node_modules")" ]'
+check "working tree clean (ignoring node_modules)" '[ -z "$(git status --porcelain | grep -vE "^\?\? ([^ ]*/)?node_modules")" ]'
 
 head_ '2. Revised baseline is the authoritative input'
 check "CLAUDE.md carries the scripted-client rule" 'grep -q "scripted protocol client" CLAUDE.md'
@@ -134,22 +134,75 @@ if [ -d "$FORK/.git" ]; then
   check "port branch is 4 commits off v2.1.0 (port, alg, narrowing, issuer display)" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "4" ]'
   check "ported image is built" 'docker images -q sunbird-rc-oid4vc-service:v2.1.0-authcode.4889fbdb | grep -q .'
   check "the ported build is pinned by source commit in its tag" 'grep -qE "sunbird-rc-oid4vc-service:v2.1.0-authcode\.[0-9a-f]{7,}" deploy/docker-compose.yml'
-  # Takes the ACTUAL generated secret and proves it appears in no tracked file.
-  # The first version of this check grepped for a pattern and matched its own
-  # pattern string in this file - a check that fails for the wrong reason is
-  # barely better than no check.
-  check "the generated demo password is absent from every tracked file" 'PW=$(grep "^DEMO_CITIZEN_PASSWORD=" deploy/.env 2>/dev/null | cut -d= -f2); test -z "$PW" || ! git ls-files -z | xargs -0 grep -l -- "$PW" 2>/dev/null | grep -q .'
-  gone "the realm import carries no credentials" 'grep -q "\"credentials\"" deploy/keycloak/realm-age.json'
-  # The check above tests the LOCAL .env value, so a password set on a different
-  # host slips through - and one did: `abcd@123` reached a tracked document
-  # because the local .env still held an older generated value. This is the
-  # backstop: the shapes of demo password we have actually used, denied outright.
-  gone "no demo password of any known shape is committed" 'git ls-files -z | xargs -0 grep -lE "abcd@123|demo-[0-9a-f]{10}|kcadmin-[0-9a-f]{12}" 2>/dev/null | grep -v "^scripts/verify.sh$" | grep -q .'
 else
   skip "fork checks" "no checkout at $FORK — set SUNBIRD_RC_CORE_PATH"
 fi
 
-head_ '10. Test suites'
+head_ '10. Committed secrets'
+# These used to live inside the fork section above, which meant a checkout
+# without the sibling fork skipped them silently. They have nothing to do with
+# the fork, and they cover ~500 more files now that the wallet is vendored.
+#
+# Takes the ACTUAL generated secret and proves it appears in no tracked file. The
+# first version grepped for a pattern and matched its own pattern string in this
+# file - a check that fails for the wrong reason is barely better than no check.
+check "the generated demo password is absent from every tracked file" 'PW=$(grep "^DEMO_CITIZEN_PASSWORD=" deploy/.env 2>/dev/null | cut -d= -f2); test -z "$PW" || ! git ls-files -z | xargs -0 grep -l -- "$PW" 2>/dev/null | grep -q .'
+gone "the realm import carries no credentials" 'grep -q "\"credentials\"" deploy/keycloak/realm-age.json'
+# The check above tests the LOCAL .env value, so a password set on a different
+# host slips through - and one did: `abcd@123` reached a tracked document because
+# the local .env still held an older generated value. This is the backstop: the
+# shapes of demo password we have actually used, denied outright.
+gone "no demo password of any known shape is committed" 'git ls-files -z | xargs -0 grep -lE "abcd@123|demo-[0-9a-f]{10}|kcadmin-[0-9a-f]{12}" 2>/dev/null | grep -v "^scripts/verify.sh$" | grep -q .'
+
+head_ '11. The vendored wallet'
+W=vendor/paradym-wallet
+check "the wallet is vendored, not a sibling checkout" '[ -f $W/apps/wallet/src/constants.ts ]'
+gone  "no wallet .git came along" '[ -e $W/.git ]'
+check "upstream's Apache-2.0 licence is retained" 'grep -q "Apache License" $W/LICENSE && grep -q "Apache License" $W/packages/sdk/LICENSE'
+check "NOTICE states that files were modified, and by whom" 'grep -q "were modified for the Sunbird RC" $W/NOTICE && grep -q "Animo Solutions" $W/NOTICE'
+check "the change index names the upstream commit we forked from" 'grep -q "2d68168" $W/SUNBIRD-CHANGES.md'
+# Vendoring must not smuggle in generated or signed material. git archive only
+# emits tracked blobs, so these assert the import stayed that way.
+gone "no Expo prebuild output is tracked" 'git ls-files $W | grep -qE "/(android|ios)/"'
+gone "no build output, APK or keystore is tracked" 'git ls-files $W | grep -qE "node_modules/|\.(apk|aab|keystore|jks|p12|jsbundle)$"'
+# Keeps the secret greps above scanning source rather than a 77 MB binary.
+check "the vendored tree stays source-only (under 20 MB tracked)" '[ "$(git ls-files -z $W | xargs -0 du -ck 2>/dev/null | tail -1 | cut -f1)" -lt 20480 ]'
+# Someone running `eas build` here would build against another organisation's
+# Expo project and App Store listing.
+gone "Animo's release identity is not carried" 'git ls-files -z $W | xargs -0 grep -lE "b5f457fa-bcab-4c6e-8092-8cdf1239027a|ascAppId|owner: .animo-id." 2>/dev/null | grep -q .'
+check "building the wallet is a script, not a runbook" '[ -x scripts/build-wallet.sh ]'
+check "the importer is re-runnable for the next upstream bump" '[ -x scripts/vendor-wallet.sh ]'
+
+# The wallet's trust entries are build-time constants compiled into an APK, so a
+# re-bootstrap mints a new verifier DID and the installed wallet silently reverts
+# to "Organization not verified" with nothing in any log to say why. That failure
+# is invisible until someone points a phone at a QR, on camera.
+if [ -f deploy/.env ]; then
+  VDID="$(grep '^VERIFIER_DID=' deploy/.env | cut -d= -f2-)"
+  PURL="$(grep '^PUBLIC_URL=' deploy/.env | cut -d= -f2-)"
+  C="$W/apps/wallet/src/constants.ts"
+  check "the wallet pins THIS deployment's verifier DID" 'test -n "$VDID" && grep -q "$VDID" "$C"'
+  check "the wallet pins THIS deployment's issuer origin" 'test -n "$PURL" && grep -q "$PURL" "$C"'
+else
+  skip "wallet trust pinning" "no deploy/.env - run scripts/bootstrap.sh"
+fi
+
+# Drift: when the fork is still around, every vendored blob must match it apart
+# from the files the adaptation commit deliberately changed. Compares object
+# hashes, so this is content equality and not a file listing.
+WFORK="${WALLET_FORK_PATH:-$ROOT/../paradym-wallet}"
+if [ -d "$WFORK/.git" ]; then
+  check "the vendored copy matches the fork, apart from the recorded adaptation" '
+    diff <(git -C "$WFORK" ls-tree -r cbe9407 | awk "{print \$3, \$4}" | sort) \
+         <(git ls-tree -r "HEAD:$W" | awk "{print \$3, \$4}" | sort) \
+      | grep -E "^[<>]" \
+      | grep -vE "(NOTICE|SUNBIRD-CHANGES\.md|apps/wallet/app\.config\.js|apps/wallet/base\.app\.config\.js|apps/wallet/eas\.json)$" \
+      | grep -q . && exit 1 || exit 0'
+else
+  skip "wallet drift vs the fork" "no checkout at $WFORK - set WALLET_FORK_PATH"
+fi
+
+head_ '12. Test suites'
 if [ "$RUN_TESTS" = "1" ]; then
   if npm run --silent test:unit >/tmp/verify-unit.log 2>&1; then
     ok "unit: $(grep -E '^. pass' /tmp/verify-unit.log | tail -1 | tr -s ' ')"

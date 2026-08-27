@@ -32,16 +32,28 @@ die() { printf '\n  %s\n\n' "$1" >&2; exit 1; }
 # makes Gradle try to provision one through the foojay-resolver 0.5.0 it pins,
 # which touches an API removed in Gradle 9. The build then dies with
 # "JvmVendorSpec ... IBM_SEMERU", which says nothing about JDK versions at all.
-if [ -z "${JAVA_HOME:-}" ] && [ -x /opt/homebrew/opt/openjdk@17/bin/java ]; then
-  JAVA_HOME=/opt/homebrew/opt/openjdk@17
+is_17() { [ -x "$1/bin/java" ] && "$1/bin/java" -version 2>&1 | head -1 | grep -q '"17'; }
+
+# A shell whose JAVA_HOME points elsewhere is the normal case here — sdkman sets
+# it to 11 — so look for a 17 rather than refusing outright, and say which one is
+# being used. Only give up when the machine genuinely has none.
+if [ -n "${JAVA_HOME:-}" ] && is_17 "$JAVA_HOME"; then
+  :
+else
+  FOUND=""
+  for cand in /opt/homebrew/opt/openjdk@17 "$(/usr/libexec/java_home -v 17 2>/dev/null || true)" \
+              "$HOME/.sdkman/candidates/java"/17.*; do
+    [ -n "$cand" ] && is_17 "$cand" && { FOUND="$cand"; break; }
+  done
+  [ -n "$FOUND" ] || die "no JDK 17 found. The React Native gradle plugin declares
+  jvmToolchain(17); on an older JDK Gradle refuses outright, and on 21 or 23 it
+  tries to provision a 17 through the foojay-resolver 0.5.0 it pins and dies with
+  'JvmVendorSpec ... IBM_SEMERU', which names neither Java nor a version.
+  Install one (brew install --cask temurin@17) or set JAVA_HOME."
+  [ -n "${JAVA_HOME:-}" ] && printf '  note: JAVA_HOME was not a JDK 17; using %s\n' "$FOUND"
+  JAVA_HOME="$FOUND"
 fi
-[ -n "${JAVA_HOME:-}" ] || die "set JAVA_HOME to a JDK 17 (see /usr/libexec/java_home -V)"
 JV="$("$JAVA_HOME/bin/java" -version 2>&1 | head -1)"
-case "$JV" in
-  *'"17'*) : ;;
-  *) die "JAVA_HOME must be a JDK 17, exactly. It is: $JV
-  Newer JDKs fail in Gradle configuration with 'JvmVendorSpec ... IBM_SEMERU'." ;;
-esac
 
 # expo prebuild does not write android/local.properties, so without this the
 # build stops at "SDK location not found".
