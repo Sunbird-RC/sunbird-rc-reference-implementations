@@ -70,17 +70,26 @@ function row(list, term, valueNode) {
   list.appendChild(dd);
 }
 
-function showResult({ decision, reason, checks, issuer, disclosed, failedCheck, diagnostic }) {
+function showResult({ decision, reason, checks, issuer, disclosed, failedCheck, diagnostic, nothingShared }) {
   stopPolling();
   el('panel-request').hidden = true;
   el('panel-result').hidden = false;
 
-  const verdict = decision || 'NOT VERIFIED';
-  const tone = verdict === 'APPROVED' ? 'approved' : verdict === 'DENIED' ? 'denied' : 'failed';
+  // Three outcomes, not two. A holder who declines, and a request nobody
+  // answered, are NOT verification failures — showing them in red beside
+  // "NOT VERIFIED" says the system broke when it did exactly what was asked.
+  const verdict = nothingShared ? 'NO DATA SHARED' : decision || 'NOT VERIFIED';
+  const tone = nothingShared
+    ? 'neutral'
+    : verdict === 'APPROVED'
+      ? 'approved'
+      : verdict === 'DENIED'
+        ? 'denied'
+        : 'failed';
   const node = el('decision');
   node.textContent = verdict;
   node.className = `decision ${tone}`;
-  el('result-eyebrow').textContent = decision ? 'Verified result' : 'Rejected';
+  el('result-eyebrow').textContent = nothingShared ? 'No result' : decision ? 'Verified result' : 'Rejected';
   el('reason').textContent = reason || '';
 
   const detail = el('detail');
@@ -97,12 +106,28 @@ function showResult({ decision, reason, checks, issuer, disclosed, failedCheck, 
 async function poll() {
   const { status, body } = await api(`/sessions/${state.sessionId}`);
   if (status === 404 || body.state === 'expired') {
-    return showResult({ reason: 'The request expired before a presentation arrived.' });
+    return showResult({
+      nothingShared: true,
+      reason: 'No presentation arrived before the request expired. Nothing was disclosed and no approval was produced.',
+    });
   }
   if (body.state === 'waiting') return;
+  if (body.state === 'declined') {
+    return showResult({
+      nothingShared: true,
+      reason: 'The holder declined the request. Nothing was disclosed and no approval was produced.',
+    });
+  }
   if (body.state === 'rejected') return showResult(body);
   if (body.state === 'decided') return showResult(body);
 }
+
+// Module pitch, not layout, decides whether a phone can decode this. Toggling
+// the class widens the symbol to the viewport and drops the surrounding chrome.
+el('enlarge').addEventListener('click', () => {
+  const large = document.body.classList.toggle('qr-large');
+  el('enlarge').textContent = large ? 'Back to normal size' : 'Enlarge for scanning';
+});
 
 async function start() {
   el('start').disabled = true;
@@ -124,6 +149,7 @@ async function start() {
   // openid4vp:// handler, with no camera involved.
   el('open-wallet').href = body.qrData;
   el('open-wallet').hidden = false;
+  el('enlarge').hidden = false;
   el('hint').hidden = false;
   el('start').hidden = true;
   el('request-eyebrow').textContent = 'Scan with your wallet';

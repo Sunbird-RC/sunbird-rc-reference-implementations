@@ -147,6 +147,116 @@ export function issueOfferFor(base, citizenId) {
  * credential is genuinely signed, which is exactly what makes the test
  * meaningful.
  */
+/** The negative fixture's name and schema id, shared by the suite and demo.sh. */
+export const NEGATIVE_FIXTURE = {
+  name: 'Age Verification Credential (unlisted issuer)',
+  schemaId: 'AgeVerificationCredentialUnlisted',
+  vctSlug: 'age-verification-credential',
+};
+
+/**
+ * Creates the "valid credential from an untrusted issuer" fixture if it is not
+ * already there, and returns its oid4vci config.
+ *
+ * Bootstrap deliberately does NOT create this. Issuer metadata is built from
+ * every published schema with no filter, so a fixture created at setup time
+ * appears in the wallet's issuer directory beside the real credential — which is
+ * exactly the thing a customer-facing stack must not show. Provisioning it here
+ * keeps the fixture inside the test that needs it.
+ *
+ * Four details are load-bearing and were each found the hard way:
+ *   - `status: 'PUBLISHED'` — a draft schema is invisible to oid4vci-configs.
+ *   - `oid4vciEnabled` / `oid4vciFormats` — a plausible `enabled`/`formats` is
+ *     silently ignored and the credential never becomes issuable.
+ *   - `vct` must be the bare slug; an absolute URL makes /vct/<slug> 404, and
+ *     Credo fetches that document to render the credential.
+ *   - every display entry needs a `locale`, or a wallet fetching the type
+ *     metadata fails with nothing more useful than "something went wrong".
+ *
+ * Deprecating rather than deleting means each run that finds none creates a new
+ * schema row (the registry assigns its own `did:schema:` id, so the authored
+ * `$id` is not a unique key). Deprecated rows are invisible to
+ * `oid4vci-configs` and to issuer metadata, which is the property that matters.
+ *
+ * The vct is deliberately IDENTICAL to the real credential's: that is what makes
+ * the trust test real. DCQL matches on vct, upstream verification finds a
+ * genuinely valid signature, and the only thing that rejects the presentation is
+ * the verifier's trust allowlist.
+ */
+export async function ensureNegativeFixture(issuerDid) {
+  if (!issuerDid) throw new Error('ensureNegativeFixture needs the untrusted issuer DID');
+  const listed = await ok('list oid4vci configs', json(`${opsBase()}/credential-schema/oid4vci-configs`));
+  const existing = (listed || []).find((c) => c.name === NEGATIVE_FIXTURE.name && c.author === issuerDid);
+  if (existing) return existing;
+
+  await ok(
+    'create negative fixture schema',
+    json(`${opsBase()}/credential-schema`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        schema: {
+          type: 'https://w3c-ccg.github.io/vc-json-schemas/',
+          version: '1.0.0',
+          id: NEGATIVE_FIXTURE.schemaId,
+          name: NEGATIVE_FIXTURE.name,
+          author: issuerDid,
+          authored: '2026-01-01T00:00:00.000Z',
+          schema: {
+            $id: NEGATIVE_FIXTURE.schemaId,
+            $schema: 'https://json-schema.org/draft/2019-09/schema',
+            description: 'Test fixture: a well-formed age credential from an issuer outside the trust allowlist.',
+            type: 'object',
+            properties: {
+              ageOver18: { type: 'boolean' },
+              ageOver21: { type: 'boolean' },
+              name: { type: 'string' },
+              dateOfBirth: { type: 'string', format: 'date' },
+            },
+            required: ['ageOver18'],
+            // Issuance always adds credentialSubject.id, which is not a schema
+            // claim; false here makes every issuance fail with an opaque 500.
+            additionalProperties: true,
+          },
+        },
+        tags: ['age', 'test-fixture'],
+        status: 'PUBLISHED',
+        oid4vciConfig: {
+          oid4vciEnabled: true,
+          oid4vciFormats: ['vc+sd-jwt'],
+          vct: NEGATIVE_FIXTURE.vctSlug,
+          display: [{ name: NEGATIVE_FIXTURE.name, locale: 'en-US' }],
+        },
+      }),
+    }),
+  );
+
+  const after = await ok('re-list oid4vci configs', json(`${opsBase()}/credential-schema/oid4vci-configs`));
+  const created = (after || []).find((c) => c.name === NEGATIVE_FIXTURE.name && c.author === issuerDid);
+  if (!created) throw new Error('created the negative fixture but it is not in oid4vci-configs');
+  return created;
+}
+
+/**
+ * Takes the fixture back out of the issuer's advertised credentials.
+ *
+ * Takes the registry's own id — `did:schema:<uuid>`, as returned in
+ * `oid4vci-configs[].schemaId` — NOT the authored `$id`. Passing the authored id
+ * answers 500 "Error fetching schema for update from db", which is how this was
+ * found.
+ *
+ * Best-effort on purpose: a suite that fails should not also fail its cleanup,
+ * but leaving it advertised would put it back in the wallet's issuer directory.
+ */
+export async function retireNegativeFixture(registrySchemaId) {
+  if (!registrySchemaId) return;
+  try {
+    await json(`${opsBase()}/credential-schema/deprecate/${registrySchemaId}/1.0.0`, { method: 'PUT' });
+  } catch {
+    // Nothing to do: ensureNegativeFixture creates a fresh one next run.
+  }
+}
+
 export async function issueAsIssuer({ base, issuerDid, credentialName, claims }) {
   const configs = await ok('list oid4vci configs', json(`${opsBase()}/credential-schema/oid4vci-configs`));
   const cfg = (configs || []).find((c) => c.name === credentialName && c.author === issuerDid);

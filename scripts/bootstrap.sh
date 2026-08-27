@@ -285,15 +285,18 @@ create_schema() {
 }
 
 create_schema 'Age Verification Credential' 'AgeVerificationCredential' "$AGE_ISSUER_DID"
-# Same name AND same vct, different author. That is the point: the DCQL query
-# matches on vct, upstream verification finds a perfectly valid signature, and
-# the ONLY thing that rejects it is the verifier's trust allowlist.
-# Distinct NAME, identical vct. The name is what a wallet shows in an issuer
-# list, so sharing it would put two identical-looking credentials in front of the
-# citizen and let them pick the untrusted one by accident. The vct is what DCQL
-# matches on, so keeping that identical is what makes the negative test real: the
-# presentation satisfies the query and is refused only by the trust allowlist.
-create_schema 'Age Verification Credential (unlisted issuer)' 'AgeVerificationCredentialUnlisted' "$UNTRUSTED_DID"
+
+# The negative fixture — a valid credential from an issuer outside the trust
+# allowlist — is NOT created here. It used to be, and it showed up in the
+# wallet's issuer directory beside the real credential, because issuer metadata
+# is built from every published schema with no filter. A customer-facing stack
+# should advertise one credential.
+#
+# The tests that need it now provision it themselves (ensureNegativeFixture in
+# tests/e2e/lib/stack.mjs) and deprecate it afterwards, which is where a test
+# fixture belongs. UNTRUSTED_ISSUER_DID is still minted above, because a DID on
+# its own is advertised nowhere and both the suite and demo.sh read it from
+# deploy/.env.
 
 # --- 5. demo citizen passwords ------------------------------------------------
 say "5. Demo citizen sign-in"

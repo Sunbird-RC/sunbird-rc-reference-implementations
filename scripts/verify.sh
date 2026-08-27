@@ -74,6 +74,11 @@ if curl -fsS -o /dev/null --max-time 5 "$BASE/gateway-health" 2>/dev/null; then
   check "Keycloak is serving the age realm" '[ "$(curl -s -o /dev/null -w %{http_code} --max-time 8 $BASE/auth/realms/age/.well-known/openid-configuration)" = "200" ]'
   check "issuer advertises Keycloak first, itself second" 'curl -s --max-time 8 $BASE/.well-known/openid-credential-issuer | python3 -c "import json,sys; a=json.load(sys.stdin)[\"authorization_servers\"]; raise SystemExit(0 if len(a)==2 and \"/realms/age\" in a[0] else 1)"'
   check "issuer names itself, so a wallet issuer list is readable" 'curl -s --max-time 8 $BASE/.well-known/openid-credential-issuer | python3 -c "import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if (d.get(\"display\") or [{}])[0].get(\"name\") else 1)"'
+  # Anand's showcase note: only the real credential may appear in a customer-facing
+  # issuer directory. The negative fixture is provisioned by the tests that need
+  # it and retired again, so a clean stack advertises exactly one.
+  check "exactly ONE credential is advertised to wallets" 'curl -s --max-time 8 $BASE/.well-known/openid-credential-issuer | python3 -c "import json,sys; raise SystemExit(0 if len(json.load(sys.stdin)[\"credential_configurations_supported\"])==1 else 1)"'
+  gone "no unlisted-issuer credential in the directory" 'curl -s --max-time 8 $BASE/.well-known/openid-credential-issuer | grep -qi unlisted'
 else
   skip "running-stack checks" "stack not up at $BASE — cd deploy && docker compose up -d"
 fi
@@ -100,6 +105,11 @@ check "bootstrap rotates Keycloak's default admin password" 'grep -q "rotated th
 check "schemas store the vct as a slug, so type metadata resolves" 'grep -q "VCT_SLUG" scripts/bootstrap.sh'
 check "a DID from another origin is never reused" 'grep -q "was minted under another host" scripts/bootstrap.sh'
 check "enabling https is a script, not a runbook" '[ -x scripts/enable-https.sh ]'
+check "a refusal is distinguished from a verification failure" 'grep -q "declined" services/verifier/src/server.mjs && grep -q "REFUSAL_SIGNATURES" services/verifier/src/core/checks.mjs'
+check "the page renders a refusal without a failure verdict" 'grep -q "NO DATA SHARED" services/verifier-web/app.js && grep -q "decision.neutral" services/web-assets/styles.css'
+check "the negative fixture is owned by the tests, not bootstrap" 'grep -q "ensureNegativeFixture" tests/e2e/lib/stack.mjs && ! grep -q "create_schema .Age Verification Credential (unlisted" scripts/bootstrap.sh'
+check "the installed mobile verifier exists and calls the shared service" '[ -f services/verifier-mobile/App.js ] && grep -q "api/verifier/sessions" services/verifier-mobile/App.js'
+gone "the mobile verifier does not verify anything itself" 'grep -qiE "jose|sd-jwt|verifyJwt|createHash" services/verifier-mobile/App.js'
 
 head_ '8. Data model matches the approved design'
 # A generated .env silently overrides both the compose default and env.example.
@@ -125,6 +135,11 @@ if [ -d "$FORK/.git" ]; then
   # barely better than no check.
   check "the generated demo password is absent from every tracked file" 'PW=$(grep "^DEMO_CITIZEN_PASSWORD=" deploy/.env 2>/dev/null | cut -d= -f2); test -z "$PW" || ! git ls-files -z | xargs -0 grep -l -- "$PW" 2>/dev/null | grep -q .'
   gone "the realm import carries no credentials" 'grep -q "\"credentials\"" deploy/keycloak/realm-age.json'
+  # The check above tests the LOCAL .env value, so a password set on a different
+  # host slips through - and one did: `abcd@123` reached a tracked document
+  # because the local .env still held an older generated value. This is the
+  # backstop: the shapes of demo password we have actually used, denied outright.
+  gone "no demo password of any known shape is committed" 'git ls-files -z | xargs -0 grep -lE "abcd@123|demo-[0-9a-f]{10}|kcadmin-[0-9a-f]{12}" 2>/dev/null | grep -v "^scripts/verify.sh$" | grep -q .'
 else
   skip "fork checks" "no checkout at $FORK — set SUNBIRD_RC_CORE_PATH"
 fi

@@ -19,8 +19,9 @@ cd "$ROOT"
 
 node --input-type=module <<'NODE'
 import {
-  deployEnv, requireStack, issueOfferFor, issueAsIssuer,
-  startVerification, readVerification, verifierPolicy, disclosedClaimNames,
+  deployEnv, requireStack, issueOfferFor, issueAsIssuer, ensureNegativeFixture,
+  retireNegativeFixture, startVerification, readVerification, verifierPolicy,
+  disclosedClaimNames,
 } from './tests/e2e/lib/stack.mjs';
 import {
   createHolder, collectCredential, presentSdJwt, disclosableClaims,
@@ -41,12 +42,19 @@ console.log(`\nAge verification demo - ${base}`);
 console.log(`  verifier requests: ${policy.requestedClaims.join(', ')}`);
 console.log(`  accepted issuers:  ${policy.trustedIssuers.join(', ')}`);
 
+let provisionedFixtureSchemaId = null;
+
 async function runCase({ label, citizenId, expect, mutate = {}, issuer }) {
   console.log(`\n${label}`);
   const holder = await createHolder();
 
   let offer;
   if (issuer === 'untrusted') {
+    // Not created by bootstrap any more — see ensureNegativeFixture's comment.
+    // Recorded so it can be retired again at the end: leaving it advertised puts
+    // a second credential in the wallet's issuer directory, which is precisely
+    // what the showcase review asked us to remove.
+    provisionedFixtureSchemaId = (await ensureNegativeFixture(untrustedIssuerDid))?.schemaId;
     offer = await issueAsIssuer({
       base,
       issuerDid: untrustedIssuerDid,
@@ -127,6 +135,10 @@ if (process.env.CITIZEN) {
     issuer: 'untrusted',
   }));
 }
+
+// Take the untrusted-issuer fixture back out of the advertised credentials. A
+// demo run must not leave a second credential in the wallet's issuer directory.
+await retireNegativeFixture(provisionedFixtureSchemaId);
 
 const failed = results.filter((r) => !r).length;
 console.log(

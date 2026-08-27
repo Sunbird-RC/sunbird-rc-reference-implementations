@@ -334,6 +334,12 @@ services:
       OID4VC_BASE_URL: http://oid4vc-service:3400
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost}
       TRUST_POLICY_FILE: /app/config/trust/issuers.json
+      # How long a presentation request stays answerable. 300s matches
+      # oid4vc-service's VP_TXN_TTL. Lower it on a demo host (90s or so) when you
+      # need the "nobody answered" outcome to land while an audience is watching:
+      # a declining wallet tells the verifier nothing, so expiry is the only
+      # signal that no presentation is coming.
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-300}
       # Expanded into the trust policy at load time, so the committed policy
       # file stays stable across deployments while the pinned DID does not.
       AGE_ISSUER_DID: ${AGE_ISSUER_DID:-}

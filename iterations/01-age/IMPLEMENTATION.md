@@ -361,6 +361,76 @@ boundary dates so the pair keeps straddling the birthday.
 Videos stay out of the repository — large, and re-creatable. They belong in the
 demo evidence pack beside the account-to-citizen mapping.
 
+## Showcase review round two (27 August 2026)
+
+Feedback recorded verbatim in
+[`../../docs/reviews/ITERATION-01-FEEDBACK-ROUND2.md`](../../docs/reviews/ITERATION-01-FEEDBACK-ROUND2.md).
+
+Anand accepted Flow 1 and the same-device half of Flow 2 from the recording, and
+asked for five more demonstrations plus one removal. What changed in response:
+
+| His item | State |
+|---|---|
+| Cross-device verification (laptop QR → wallet → APPROVED on the laptop) | the page gained an **Enlarge for scanning** mode, because module pitch is what a camera decodes and the payload cannot be shortened (see COMPATIBILITY finding 9). Pending a successful scan on the device |
+| Ineligible citizen → verified DENIED | no code needed; `citizen.arjun` (AGE-000002, born 2012) issues a credential with `ageOver18: false`, and the verifier reaches DENIED with every check still passing. Rehearsal item |
+| Cancellation → nothing shared, no approval | **done.** The verifier distinguishes a refusal from a failure and returns `declined`; the page and the mobile app render `declined` and `expired` as a neutral "NO DATA SHARED" |
+| Credential persistence | no code needed; lock, reopen, unlock. Rehearsal item |
+| Installed mobile verifier app | **done on the device** (Samsung SM-A055F, 27 August): `services/verifier-mobile` handed the request to the wallet over `openid4vp://` and displayed APPROVED with all seven checks. Expo, one screen, two HTTP calls to the shared verifier service |
+| Remove the negative-test credential from the directory | **done.** Bootstrap no longer creates it; the tests provision and retire it themselves |
+
+### The mobile verifier, and why it is thin
+
+The charter requires that the mobile UI "displays results; it does not
+independently trust claims or make cryptographic decisions", and that one
+reusable verification service serves both channels. So the app does three things
+and nothing else: asks the verifier service for a request, hands that request to
+the wallet over `openid4vp://`, then polls and renders the answer. There is no
+credential parsing, no signature check and no age comparison in it — and the
+gateway enforces that independently, since `/vp/*` is refused on the public
+listener. `verify.sh` asserts both halves: that the app calls the shared service,
+and that it contains no verification code.
+
+**How the wallet must be invoked.** Three states, and only one works:
+
+| Wallet state when the request is sent | Outcome |
+|---|---|
+| Backgrounded (warm) | delivered and shown — the sequence to demonstrate |
+| Foreground | Android re-surfaces its task without delivering the intent |
+| Force-stopped (cold) | the wallet loses the destination through its own PIN gate |
+
+The cold-start case is a bug in the wallet fork, not here: `+native-intent.tsx`
+returns the presentation route directly on `initial: true` instead of wrapping it
+in `/authenticate?redirectAfterUnlock=…`, so the unlock screen forgets where it
+was going. Left to the wallet to fix; the demo sequence avoids it.
+
+Two build details worth keeping: `babel-preset-expo` is not installed by `expo`
+itself and the first build died in Metro without it, and
+`Linking.canOpenURL('openid4vp://…')` returns false under Android 11+ package
+visibility unless the app declares the scheme in `<queries>` — done here with a
+config plugin, because `expo prebuild` regenerates the manifest and would drop a
+hand edit.
+
+Built the same way as the wallet — `expo prebuild` then
+`assembleRelease -PreactNativeArchitectures=arm64-v8a` — pinned to the versions
+already proven on this hardware (Expo 56.0.12, React Native 0.85.3, React
+19.2.3). Package `id.sunbird.ageverifier`, so it installs beside the wallet.
+
+### Demo accounts for the showcase
+
+The password is the one in `deploy/.env` on the demo host
+(`grep DEMO_CITIZEN_PASSWORD deploy/.env`) — never written down here, per
+answer 3. Boundary dates are relative to the seeding day, so
+re-run `./scripts/seed-age-citizens.sh` on the morning of any demo — it refreshes
+drifted dates in place and prints what it changed.
+
+| Account | Citizen | `ageOver18` | Journey |
+|---|---|---|---|
+| `citizen.meera` | Meera Nair, 1998-04-02 | true | APPROVED |
+| `citizen.arjun` | Arjun Das, 2012-08-30 | false | verified DENIED |
+| `citizen.nikhil` | Nikhil Rao, turns 18 today | true | boundary |
+| `citizen.sana` | Sana Iqbal, turns 18 tomorrow | false | boundary, DENIED |
+| `citizen.unmapped` | none | — | signs in, receives nothing |
+
 ## Step G — Evidence
 
 | Level | Proves | Artifacts |

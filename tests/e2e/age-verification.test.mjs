@@ -14,13 +14,15 @@
 // parallel produced a flaky failure here that never reproduced alone. Serial is
 // the honest configuration for integration tests against a shared deployment.
 
-import test, { before, describe } from 'node:test';
+import test, { after, before, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   deployEnv,
   requireStack,
   issueOfferFor,
   issueAsIssuer,
+  ensureNegativeFixture,
+  retireNegativeFixture,
   startVerification,
   readVerification,
   verifierPolicy,
@@ -38,6 +40,7 @@ import {
   submitPresentation,
   tryRedeemCode,
   forgeDisclosureValue,
+  declinePresentation,
 } from './lib/wallet.mjs';
 
 const { base, opsBase, ageIssuerDid, untrustedIssuerDid } = deployEnv();
@@ -46,9 +49,29 @@ const ADULT = 'AGE-000001';
 const MINOR = 'AGE-000002';
 
 let skip = null;
+/** The registry's own id for the fixture, needed to retire it afterwards. */
+let negativeFixtureSchemaId = null;
 before(async () => {
   skip = await requireStack(base);
   if (!skip && !ageIssuerDid) skip = 'deploy/.env has no AGE_ISSUER_DID — run scripts/bootstrap.sh';
+  // The untrusted-issuer fixture is created here rather than by bootstrap.sh:
+  // issuer metadata advertises every published schema, so a fixture that exists
+  // at setup time shows up in the wallet's issuer directory next to the real
+  // credential. It belongs to the test that needs it.
+  if (!skip && untrustedIssuerDid) {
+    try {
+      const fixture = await ensureNegativeFixture(untrustedIssuerDid);
+      negativeFixtureSchemaId = fixture?.schemaId;
+    } catch (err) {
+      skip = `could not provision the untrusted-issuer fixture: ${err.message}`;
+    }
+  }
+});
+
+// Takes it back out of the advertised credentials, so a test run never leaves a
+// customer-facing stack showing two credentials.
+after(async () => {
+  await retireNegativeFixture(negativeFixtureSchemaId);
 });
 const guard = () => {
   if (skip) throw new Error(skip);
@@ -465,5 +488,24 @@ describe('negative flows', () => {
     assert.equal(result.body.state, 'waiting');
     assert.equal(result.body.decision, undefined);
     assert.equal(result.body.disclosed, undefined);
+  });
+
+  test('a holder who declines is reported as declined, not as a failure', async () => {
+    guard();
+    // The distinction the review asked for: refusing must not look like a broken
+    // presentation. Nothing is disclosed, no decision is produced, and the state
+    // says why.
+    const session = await startVerification(base);
+    const request = await fetchRequestObject({ base, transactionId: session.sessionId });
+    const submission = await declinePresentation({ base, state: request.state });
+    assert.ok(submission.status < 500, `declining should not fault the service, got ${submission.status}`);
+
+    const result = await readVerification(base, session.sessionId);
+    assert.equal(result.body.state, 'declined');
+    assert.equal(result.body.decision, undefined);
+    assert.equal(result.body.disclosed, undefined);
+    assert.match(result.body.reason, /declined/i);
+    // And no claim values leak into the refusal path.
+    assert.equal(JSON.stringify(result.body).includes('ageOver18'), false);
   });
 });

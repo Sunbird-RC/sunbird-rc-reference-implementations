@@ -111,6 +111,14 @@ async function readSession(sessionId) {
     if (verification.reason === 'pending') {
       return { status: 200, body: { state: 'waiting' } };
     }
+    // A refusal is not a failure. It gets its own state so the page can say
+    // "nothing was shared" instead of showing a red verification error, and so
+    // no claim values or checks are reported for a presentation that never
+    // legitimately arrived.
+    if (verification.declined) {
+      console.log(`[verifier] session ${sessionId} declined by the holder`);
+      return { status: 200, body: { state: 'declined', reason: verification.reason } };
+    }
     console.log(`[verifier] session ${sessionId} rejected: ${verification.reason}`);
     return reject(verification.reason, {
       failedCheck: verification.failedCheck,

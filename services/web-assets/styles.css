@@ -388,6 +388,18 @@ button:focus-visible {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23540f3b' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E");
 }
 
+/* Neither approved, denied, nor broken: the holder said no, or nobody answered.
+   Deliberately grey and dash-marked — a red error icon here would tell the
+   citizen something went wrong when the system did what they asked. */
+.decision.neutral {
+  color: var(--muted);
+}
+
+.decision.neutral::before {
+  background-color: var(--hairline);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237a736a' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M6 12h12'/%3E%3C/svg%3E");
+}
+
 .decision.failed {
   color: var(--brick);
 }
@@ -565,3 +577,37 @@ footer strong {
   text-decoration: none;
 }
 .open-wallet:active { opacity: 0.85; }
+
+/* ---- scanning mode ------------------------------------------------------ */
+/* Cross-device scanning only. The QR grows to the viewport so each module is as
+   large as the screen allows, and everything competing with it gets out of the
+   way. A phone camera decodes module pitch, not page design. */
+body.qr-large .qr {
+  width: min(92vw, 92vh);
+  max-width: none;
+  padding: 1.25rem;
+}
+
+body.qr-large .lede,
+body.qr-large .chips,
+body.qr-large .open-wallet,
+body.qr-large .brand {
+  display: none;
+}
+
+body.qr-large h1 {
+  font-size: 1.4rem;
+}
+
+.ghost {
+  display: block;
+  margin: 0.75rem auto 0;
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-inner);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}

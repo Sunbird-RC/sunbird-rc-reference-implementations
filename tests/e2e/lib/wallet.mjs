@@ -249,6 +249,22 @@ export async function fetchRequestObject({ base, transactionId }) {
 }
 
 /** Submits a presentation via direct_post. Does not assert success. */
+/**
+ * A holder REFUSING, as a wallet expresses it on the wire: the response arrives
+ * for the right state but carries no `vp_token`.
+ *
+ * OpenID4VP also allows an OAuth `error=access_denied` form; the verifier treats
+ * both as a refusal, because the alternative is telling the citizen that
+ * verification failed when they simply said no.
+ */
+export async function declinePresentation({ base, state, error = 'access_denied' }) {
+  return http(`${base}/vp/response`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ state, error }),
+  });
+}
+
 export async function submitPresentation({ base, state, queryId, presentation }) {
   return http(`${base}/vp/response`, {
     method: 'POST',
