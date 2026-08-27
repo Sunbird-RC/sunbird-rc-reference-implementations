@@ -14,9 +14,10 @@ Read these before making changes, in this order:
 2. [`docs/design/DESIGN.md`](docs/design/DESIGN.md)
 3. The active iteration charter and its Product, Requirements, Design, and Demo
    files under [`iterations/`](iterations/)
-4. [`docs/project/WORKING-ENGAGEMENT-MODEL.md`](docs/project/WORKING-ENGAGEMENT-MODEL.md)
-5. [`docs/project/GIT-WORKING-MODEL.md`](docs/project/GIT-WORKING-MODEL.md)
-6. Existing repository code, tests, and local development instructions
+4. Any active review feedback under [`docs/reviews/`](docs/reviews/)
+5. [`docs/project/WORKING-ENGAGEMENT-MODEL.md`](docs/project/WORKING-ENGAGEMENT-MODEL.md)
+6. [`docs/project/GIT-WORKING-MODEL.md`](docs/project/GIT-WORKING-MODEL.md)
+7. Existing repository code, tests, and local development instructions
 
 Treat approved Product, Design, and iteration acceptance criteria as controlled baselines. Do not silently reinterpret or rewrite them during implementation.
 
@@ -73,9 +74,12 @@ replace Inji, change the journey, or introduce an adapter.
 - Do not commit secrets, tokens, private keys, raw credentials, presentations, or sensitive logs.
 - Do not bypass consent, selective disclosure, holder binding, trust, or replay checks to make a demo pass.
 - Do not replace verification with hardcoded decisions, mocked success responses, or UI-only simulations.
+- Do not substitute a scripted protocol client for a required real-wallet acceptance journey; scripted clients are supporting automated evidence only.
+- Do not substitute a QR or issuer web page when the active charter requires wallet-driven direct issuance or a same-device deep-link flow.
 - Do not remove, weaken, skip, or rewrite failing tests merely to obtain a green result.
 - Do not introduce a new framework, service, or dependency unless it provides clear iteration value.
 - Do not create unnecessary process documents; code, tests, configuration, and concise evidence are preferred.
+- Treat `vendor/` as third-party code. Keep upstream's licence and notices, land every local change as its own commit, and record it in that directory's `SUNBIRD-CHANGES.md`. Note that `vendor/paradym-wallet` carries upstream's own `CLAUDE.md` and `.claude/` — those are Animo's instructions for Animo's project and do not govern this repository.
 
 ## Escalation Boundary
 
@@ -124,6 +128,7 @@ An iteration is ready for demo only when:
 - Exact dependency, component, and wallet versions are recorded.
 - Known issues and deviations are explicit.
 - No secrets or sensitive test artifacts are committed.
+- Every user-facing channel mandated by the active charter is demonstrated on the actual wallet/verifier applications, with sanitised evidence; passing APIs alone is not completion.
 
 ## Handoff to Anand
 

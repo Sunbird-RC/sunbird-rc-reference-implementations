@@ -1,0 +1,31 @@
+{
+	"version": "0.0.0",
+	"name": "@package/app",
+	"main": "src/index.ts",
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"@package/scanner": "workspace:*",
+		"@package/ui": "workspace:*",
+		"@package/utils": "workspace:*",
+		"@package/translations": "workspace:*",
+		"@paradym/wallet-sdk": "workspace:*",
+		"@tamagui/animations-react-native": "catalog:",
+		"@tamagui/colors": "catalog:",
+		"@tamagui/font-inter": "catalog:",
+		"@tamagui/shorthands": "catalog:",
+		"@tamagui/themes": "catalog:",
+		"@tanstack/react-query": "catalog:",
+		"expo-constants": "catalog:",
+		"expo-network": "catalog:",
+		"expo-haptics": "catalog:",
+		"expo-linking": "catalog:",
+		"expo-router": "catalog:",
+		"react": "catalog:",
+		"react-native-reanimated": "catalog:",
+		"react-native-safe-area-context": "catalog:"
+	},
+	"peerDependencies": {
+		"expo": "catalog:"
+	}
+}
