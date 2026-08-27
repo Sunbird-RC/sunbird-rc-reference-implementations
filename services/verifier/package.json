@@ -1,0 +1,17 @@
+{
+  "name": "@sunbird-rc-age/verifier",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Reusable verifier service: OID4VP request/response handling, issuer trust allowlist, disclosure policy, and domain decisions",
+  "main": "src/server.mjs",
+  "scripts": {
+    "start": "node src/server.mjs"
+  },
+  "dependencies": {
+    "qrcode-svg": "1.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

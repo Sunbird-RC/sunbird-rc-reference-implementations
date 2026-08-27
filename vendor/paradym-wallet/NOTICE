@@ -1,0 +1,46 @@
+Paradym Wallet
+Copyright 2023-present Animo Solutions
+https://github.com/animo/paradym-wallet
+
+Licensed under the Apache License, Version 2.0. The full licence text is in
+LICENSE at the root of this directory, and again in packages/sdk/LICENSE, both
+retained verbatim from upstream. This NOTICE file is an addition by the Sunbird RC
+showcase; upstream carries no NOTICE file.
+
+------------------------------------------------------------------------------
+Modifications
+------------------------------------------------------------------------------
+
+This directory is a vendored copy of the upstream project at commit
+
+    2d68168863dd8e78f883b752f420dc46aa2d7108
+
+taken from the fork pallakartheekreddy/paradym-wallet, branch v1.0.3.
+
+Files in this directory were modified for the Sunbird RC Age Verification
+showcase between 3 and 27 August 2026 — 72 files, 1956 insertions, 427
+deletions, in seven commits by two authors. The modified files are enumerated in
+SUNBIRD-CHANGES.md.
+
+The changes themselves are visible as this repository's own history rather than
+as a patch set:
+
+    git log -p -- vendor/paradym-wallet
+
+The first commit under that path carries the unmodified upstream tree and is
+attributed to no one but Animo Solutions; every commit after it is a
+modification, with its original author and date preserved.
+
+All modifications are licensed under the Apache License, Version 2.0, on the same
+terms as the original work. No part of this directory has been relicensed.
+
+------------------------------------------------------------------------------
+Attribution of the modifications
+------------------------------------------------------------------------------
+
+Sachchida Nand Tiwari  — Sunbird RC theming, the issuer directory screen, and
+                          the onboarding changes (3-4 August 2026)
+Kartheek Palla         — the four protocol-level changes: build-time OAuth
+                          redirect configuration, the DID trust-matching fix,
+                          the showcase trust entities, and holder-decline
+                          signalling (26-27 August 2026)

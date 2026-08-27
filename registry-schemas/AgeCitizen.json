@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "AgeCitizen": {
+      "$ref": "#/definitions/AgeCitizen"
+    }
+  },
+  "required": ["AgeCitizen"],
+  "title": "AgeCitizen",
+  "definitions": {
+    "AgeCitizen": {
+      "$id": "#/properties/AgeCitizen",
+      "type": "object",
+      "title": "AgeCitizen",
+      "description": "Authoritative source record held by the National Identity Authority, and the ONLY source of an AgeVerificationCredential's claims. Age assertions are derived from dateOfBirth here, at issuance, by services/age-issuer — never supplied by a wallet or a caller. Synthetic data only: see scripts/seed-age-citizens.sh. This entity belongs to the Age use case alone; DESIGN forbids a shared cross-domain person table, so Agriculture and Education must not read or extend it.",
+      "required": ["citizenId", "name", "dateOfBirth"],
+      "properties": {
+        "citizenId": {
+          "type": "string",
+          "title": "Citizen ID",
+          "description": "Unique synthetic identifier, e.g. AGE-000001. The issuer counter resolves a record by this value."
+        },
+        "name": {
+          "type": "string",
+          "title": "Full name",
+          "description": "Issued as a disclosable claim, but never requested by the age verifier — its presence is what makes selective disclosure demonstrable rather than assumed."
+        },
+        "dateOfBirth": {
+          "type": "string",
+          "format": "date",
+          "title": "Date of birth",
+          "description": "ISO 8601 date. The authoritative input for ageOver18 / ageOver21."
+        },
+        "gender": {
+          "type": "string",
+          "title": "Gender",
+          "enum": ["Female", "Male", "Other"]
+        },
+        "district": {
+          "type": "string",
+          "title": "District"
+        },
+        "state": {
+          "type": "string",
+          "title": "State"
+        }
+      }
+    }
+  },
+  "_osConfig": {
+    "uniqueIndexFields": ["citizenId"],
+    "indexFields": ["district", "state"],
+    "ownershipAttributes": [],
+    "roles": [],
+    "inviteRoles": ["anonymous"],
+    "enableLogin": false,
+    "credentialTemplate": {}
+  }
+}

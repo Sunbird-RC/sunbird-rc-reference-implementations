@@ -1,0 +1,19 @@
+{
+  "name": "age-verifier-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "android": "expo run:android",
+    "prebuild": "expo prebuild --platform android --no-install",
+    "start": "expo start"
+  },
+  "dependencies": {
+    "babel-preset-expo": "~56.0.0",
+    "expo": "56.0.12",
+    "expo-constants": "~56.0.0",
+    "expo-status-bar": "~56.0.0",
+    "react": "19.2.3",
+    "react-native": "0.85.3"
+  }
+}

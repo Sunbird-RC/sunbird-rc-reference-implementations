@@ -1,0 +1,28 @@
+{
+	"name": "wallets",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "pnpm -r build",
+		"upgrade:tamagui": "pnpm up '*tamagui*'@latest '@tamagui/*'@latest",
+		"upgrade:tamagui:canary": "pnpm up '*tamagui*'@canary '@tamagui/*'@canary",
+		"deps:fix": "pnpm deps:check --fix",
+		"types:check": "tsc --noEmit",
+		"style:check": "biome check --unsafe",
+		"style:fix": "biome check --write --unsafe",
+		"release:sdk": "pnpm build && pnpm changeset publish --no-git-tag",
+		"changeset-version:sdk": "pnpm changeset version && pnpm style:fix",
+		"translations:ai:prepare": "node packages/translations/scripts/translate-prepare.js",
+		"translations:ai:finalize": "node packages/translations/scripts/translate-finalize.js"
+	},
+	"engines": {
+		"node": ">=22.21.1"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.1",
+		"@changesets/cli": "^2.31.0",
+		"check-dependency-version-consistency": "^6.0.0",
+		"typescript": "catalog:"
+	},
+	"packageManager": "pnpm@11.7.0"
+}

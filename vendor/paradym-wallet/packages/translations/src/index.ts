@@ -1,0 +1,14 @@
+// Polyfills needed for lingui (translations)
+import '@formatjs/intl-locale/polyfill-force.js'
+import '@formatjs/intl-pluralrules/polyfill-force.js'
+
+export { commonMessages, supportedLanguageNames } from './commonMessages'
+export {
+  activateLocale,
+  i18n,
+  registerLocales,
+  type SupportedLocale,
+  supportedLocales,
+} from './i18n'
+export { TranslationProvider } from './TranslationProvider'
+export { useLocale } from './useLocale'

@@ -1,0 +1,617 @@
+/* Sunbird Spark theme — shared by the issuer counter and the verifier page.
+ *
+ * Served from /assets/ so both pages use one stylesheet and one font file
+ * rather than drifting copies.
+ *
+ * Palette and type read directly from the Sunbird Spark Figma file
+ * (figma.com/design/gdTmBeuK9os2NxeLZIi5rq, "Color palette and font" frame,
+ * node 13-89) — hex values verbatim from its Primary/Secondary Palette, and
+ * "HEADINGS & LARGER TEXT: Rubik / PARAGRAPH & BODY TEXT: Rubik".
+ *
+ * Composition follows the file's own screens rather than being invented: white
+ * cards with a hairline border on a light page, SUNFLOWER pill chips with dark
+ * text, dot-separated meta lines, BRICK for primary actions and links, and a
+ * near-black footer band. Card titles are Rubik Medium 20 there, which is the
+ * scale used here.
+ *
+ * Rubik is self-hosted from the same woff2 the Spark portal ships. No CDN — the
+ * stack has to work on a laptop with no network.
+ */
+
+@font-face {
+  font-family: 'Rubik';
+  font-style: normal;
+  /* Variable font: one file covers 300-700. */
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('/assets/fonts/rubik-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  /* ---- Spark primary palette (Figma, verbatim) ---- */
+  --ginger: #cc8545;
+  --brick: #a85236;
+  --sunflower: #ffdb73;
+  --ivory: #fffef4;
+  --ink: #376673;
+  --wave: #70adbf;
+
+  /* ---- Spark secondary palette (Figma, verbatim) ---- */
+  --leaf: #a1a603;
+  --forest: #82a668;
+  --moss: #66a682;
+  --jamun: #540f3b;
+  --lavender: #99708a;
+
+  /* ---- neutrals, from the file's frames ---- */
+  --page: #f4f4f4;          /* frame fill on the app screens */
+  --surface: #ffffff;       /* cards */
+  --obsidian: #161616;      /* footer band */
+  --heading: #1a1a1a;
+  --body: #333333;
+  --muted: #6b7075;
+  --hairline: #e6e6e6;
+
+  /* Derived tones. Only lightness moves — the hues stay exactly as published. */
+  --brick-deep: #8c4227;
+  --brick-wash: #faf0ec;
+  --forest-deep: #4a6f38;
+  --moss-wash: #eef6f1;
+  --jamun-wash: #f8eef4;
+  --sunflower-wash: #fff6dc;
+
+  --radius-card: 14px;
+  --radius-inner: 10px;
+  --radius-btn: 8px;
+  --shadow-card: 0 1px 2px rgba(22, 22, 22, 0.04), 0 8px 24px -12px rgba(22, 22, 22, 0.18);
+  --shadow-lift: 0 2px 4px rgba(22, 22, 22, 0.06), 0 16px 32px -16px rgba(22, 22, 22, 0.24);
+}
+
+/* `display` on a class beats the user-agent's [hidden] rule, so state meant to
+   be hidden shows on first paint without this. */
+[hidden] {
+  display: none !important;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: var(--page);
+  /* One warm wash at the top, echoing the cream band on Spark's home page.
+     Restrained on purpose: the file keeps its surfaces light and lets GINGER
+     and SUNFLOWER do the warming. */
+  background-image: linear-gradient(180deg, var(--sunflower-wash) 0%, rgba(255, 246, 220, 0) 26rem);
+  background-repeat: no-repeat;
+  color: var(--body);
+  font-family: 'Rubik', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  font-weight: 300;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.shell {
+  width: min(40rem, 100%);
+  flex: 1;
+  padding: 3rem 1.25rem 2.5rem;
+  display: grid;
+  gap: 1.5rem;
+  align-content: start;
+}
+
+/* ---- masthead ---------------------------------------------------------- */
+header {
+  display: grid;
+  gap: 0.55rem;
+  justify-items: start;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--heading);
+  letter-spacing: -0.01em;
+}
+
+/* The wordmark's dotted 'i' is Sunbird's signature; a ginger dot on a brick
+   square is the closest honest nod without shipping their logo file. */
+.brand .mark {
+  width: 1.7rem;
+  height: 1.7rem;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--brick);
+  color: var(--sunflower);
+  font-size: 0.95rem;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.brand .divider {
+  width: 1px;
+  height: 1.1rem;
+  background: var(--hairline);
+}
+
+.brand .service {
+  font-weight: 300;
+  color: var(--muted);
+}
+
+h1 {
+  margin: 0.35rem 0 0;
+  font-size: clamp(1.8rem, 4.4vw, 2.45rem);
+  font-weight: 500;
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+  color: var(--heading);
+}
+
+.lede {
+  margin: 0;
+  max-width: 36rem;
+  font-size: 1.02rem;
+  color: var(--muted);
+}
+
+.lede strong {
+  font-weight: 500;
+  color: var(--brick);
+}
+
+/* ---- cards ------------------------------------------------------------- */
+.panel {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  padding: 2rem 1.75rem;
+  display: grid;
+  gap: 1.15rem;
+  justify-items: center;
+  text-align: center;
+  box-shadow: var(--shadow-card);
+}
+
+.panel.result {
+  box-shadow: var(--shadow-lift);
+}
+
+/* ---- section labels ---------------------------------------------------- */
+.eyebrow {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--brick);
+}
+
+.eyebrow::after {
+  content: '→';
+  font-size: 0.85rem;
+  letter-spacing: 0;
+}
+
+/* ---- buttons ----------------------------------------------------------- */
+button {
+  font: inherit;
+  font-weight: 500;
+  border-radius: var(--radius-btn);
+  padding: 0.78rem 1.9rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.primary {
+  background: var(--brick);
+  color: #fff;
+  box-shadow: 0 10px 20px -12px rgba(168, 82, 54, 0.85);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--brick-deep);
+  transform: translateY(-1px);
+}
+
+.secondary {
+  background: var(--surface);
+  color: var(--body);
+  border-color: var(--hairline);
+}
+
+.secondary:hover {
+  border-color: var(--brick);
+  color: var(--brick);
+}
+
+button:focus-visible {
+  outline: 3px solid rgba(112, 173, 191, 0.6); /* WAVE */
+  outline-offset: 2px;
+}
+
+/* ---- QR ---------------------------------------------------------------- */
+.qr {
+  /* Sized for a phone camera, not for the layout. The symbol is dense (~200
+     characters), and at 18.5rem on the ivory panel a phone could not lock onto
+     it. Pure white, not --ivory: the quiet zone is part of the code, and
+     contrast against it is what the decoder actually measures. */
+  /* Big BY DEFAULT, not behind a button: module pitch is the only lever that
+     works against a phone camera on a backlit LCD, and asking someone to
+     remember a toggle mid-demo is how a take gets lost. Scales on the viewport's
+     short edge so it stays square-ish on a laptop and cannot overflow a phone. */
+  width: min(90vw, 78vh);
+  max-width: 100%;
+  padding: 1rem;
+  border-radius: var(--radius-inner);
+  background: #fff;
+  border: 1px solid var(--hairline);
+}
+
+.qr svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* ---- text helpers ------------------------------------------------------ */
+.muted {
+  margin: 0;
+  color: var(--muted);
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+#hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.pulse {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--wave);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1.1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse { animation: none; }
+  button { transition: none; }
+}
+
+/* ---- chips: Spark's category pill ------------------------------------- */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: center;
+  align-items: center;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.chip {
+  padding: 0.22rem 0.7rem;
+  border-radius: 999px;
+  background: var(--sunflower-wash);
+  border: 1px solid rgba(204, 133, 69, 0.35);
+  color: var(--heading);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+/* The one claim actually shared — full SUNFLOWER, as the file uses for a
+   category pill on a card. */
+.chip.ask {
+  background: var(--sunflower);
+  border-color: rgba(168, 82, 54, 0.28);
+}
+
+.chip.withheld {
+  background: var(--surface);
+  border-color: var(--hairline);
+  color: var(--muted);
+  font-weight: 300;
+  text-decoration: line-through;
+  text-decoration-color: rgba(107, 112, 117, 0.55);
+}
+
+/* ---- decision --------------------------------------------------------- */
+.decision {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 2.15rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.decision::before {
+  content: '';
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  display: inline-block;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 1.35rem;
+}
+
+.decision.approved {
+  color: var(--forest-deep);
+}
+
+.decision.approved::before {
+  background-color: var(--moss-wash);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234a6f38' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+}
+
+/* JAMUN, not BRICK: BRICK is the primary action colour on this page, so a
+   refusal has to be unmistakably different while staying in the palette. */
+.decision.denied {
+  color: var(--jamun);
+}
+
+.decision.denied::before {
+  background-color: var(--jamun-wash);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23540f3b' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E");
+}
+
+/* Neither approved, denied, nor broken: the holder said no, or nobody answered.
+   Deliberately grey and dash-marked — a red error icon here would tell the
+   citizen something went wrong when the system did what they asked. */
+.decision.neutral {
+  color: var(--muted);
+}
+
+.decision.neutral::before {
+  background-color: var(--hairline);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237a736a' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M6 12h12'/%3E%3C/svg%3E");
+}
+
+.decision.failed {
+  color: var(--brick);
+}
+
+.decision.failed::before {
+  background-color: var(--brick-wash);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a85236' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8v5M12 17h.01'/%3E%3C/svg%3E");
+}
+
+/* ---- detail table ----------------------------------------------------- */
+.detail {
+  width: 100%;
+  margin: 0;
+  padding-top: 1.1rem;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.7rem 1.4rem;
+  text-align: left;
+  font-size: 0.9rem;
+  border-top: 1px solid var(--hairline);
+}
+
+.detail dt {
+  color: var(--muted);
+  font-weight: 300;
+}
+
+.detail dd {
+  margin: 0;
+  color: var(--body);
+  font-weight: 500;
+  word-break: break-word;
+}
+
+/* Verification checks, in the file's dot-separated meta idiom rather than as a
+   wall of pills. */
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.55rem;
+  font-size: 0.8rem;
+  font-weight: 300;
+  color: var(--muted);
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  color: var(--forest-deep);
+  font-weight: 400;
+}
+
+.check + .check::before {
+  content: '·';
+  margin-right: 0.25rem;
+  color: rgba(107, 112, 117, 0.7);
+}
+
+.check::after {
+  content: '✓';
+  font-size: 0.72rem;
+}
+
+.check.bad {
+  color: var(--jamun);
+}
+
+.check.bad::after {
+  content: '✕';
+}
+
+/* ---- footer band ------------------------------------------------------ */
+footer {
+  width: 100%;
+  margin-top: auto;
+  padding: 1.6rem 1.25rem;
+  background: var(--obsidian);
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.82rem;
+  font-weight: 300;
+  text-align: center;
+}
+
+footer .inner {
+  width: min(40rem, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 0.3rem;
+}
+
+footer .wordmark {
+  color: var(--ginger);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+footer strong {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 400;
+}
+
+/* ---- record list (issuer counter) -------------------------------------- */
+.rows {
+  width: 100%;
+  display: grid;
+  gap: 0.5rem;
+}
+
+/* A row is a button: the whole thing is the target, which is what you want on a
+   touchscreen at a counter. */
+.record {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.85rem 1rem;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-inner);
+  font-weight: 300;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.record:hover {
+  border-color: var(--brick);
+  background: var(--sunflower-wash);
+}
+
+.record-name {
+  font-weight: 500;
+  color: var(--heading);
+}
+
+.record-id {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.record-go {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--brick);
+  white-space: nowrap;
+}
+
+/* Demo aid on the verifier page: the command that answers this session when no
+   phone is in the loop. Monospace and quiet — it is scaffolding, not chrome. */
+.session {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+  background: var(--page);
+  border: 1px dashed var(--hairline);
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+  user-select: all;
+}
+
+/* ---- same-device hand-off ---------------------------------------------- */
+.open-wallet {
+  display: block;
+  margin: 1rem auto 0;
+  max-width: 24rem;
+  padding: 0.9rem 1.25rem;
+  border-radius: var(--radius-inner);
+  background: var(--espresso, #43301f);
+  color: #fff;
+  text-align: center;
+  font-weight: 600;
+  text-decoration: none;
+}
+.open-wallet:active { opacity: 0.85; }
+
+/* ---- scanning mode ------------------------------------------------------ */
+/* Cross-device scanning only. The QR grows to the viewport so each module is as
+   large as the screen allows, and everything competing with it gets out of the
+   way. A phone camera decodes module pitch, not page design. */
+body.qr-large .qr {
+  width: min(92vw, 92vh);
+  max-width: none;
+  padding: 1.25rem;
+}
+
+body.qr-large .lede,
+body.qr-large .chips,
+body.qr-large .open-wallet,
+body.qr-large .brand {
+  display: none;
+}
+
+body.qr-large h1 {
+  font-size: 1.4rem;
+}
+
+.ghost {
+  display: block;
+  margin: 0.75rem auto 0;
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-inner);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}

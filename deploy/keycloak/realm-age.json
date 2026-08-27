@@ -1,0 +1,210 @@
+{
+  "realm": "age",
+  "enabled": true,
+  "displayName": "National Identity Authority",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 20,
+  "waitIncrementSeconds": 30,
+  "maxFailureWaitSeconds": 900,
+  "maxDeltaTimeSeconds": 3600,
+  "quickLoginCheckMilliSeconds": 1000,
+  "minimumQuickLoginWaitSeconds": 60,
+  "clientScopes": [
+    {
+      "name": "citizen-record",
+      "description": "Carries the citizenId claim the issuer resolves to a Sunbird RC AgeCitizen record",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "citizenId",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "protocol": "openid-connect",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "citizenId",
+            "claim.name": "citizenId",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "age-verification-credential",
+      "description": "OID4VCI scope for the Age Verification Credential, as advertised in issuer metadata",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": []
+    },
+    {
+      "name": "age-verification-credential-unlisted-issuer",
+      "description": "OID4VCI scope for the negative-fixture credential from the unlisted issuer",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": []
+    }
+  ],
+  "defaultDefaultClientScopes": [
+    "citizen-record"
+  ],
+  "clients": [
+    {
+      "clientId": "id.animo.paradym",
+      "name": "Sunbird Wallet",
+      "description": "The mobile wallet. clientId is the app scheme and the redirect URIs are what the wallet actually sends \u2014 see apps/wallet/app.config.js in the wallet repo.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "implicitFlowEnabled": false,
+      "redirectUris": [
+        "https://98.70.36.106.sslip.io/wallet/redirect",
+        "https://paradym.id/invitation/redirect",
+        "https://paradymwallet.app/oauth2/redirect",
+        "id.animo.paradym:///wallet/redirect",
+        "http://135.235.192.9/wallet/redirect",
+        "https://135.235.192.9.sslip.io/wallet/redirect",
+        "http://localhost/wallet/redirect",
+        "http://localhost:3000/wallet/redirect"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      },
+      "defaultClientScopes": [
+        "citizen-record",
+        "profile",
+        "openid"
+      ],
+      "optionalClientScopes": [
+        "age-verification-credential",
+        "age-verification-credential-unlisted-issuer"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "citizen.meera",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Meera",
+      "lastName": "Nair",
+      "attributes": {
+        "citizenId": [
+          "AGE-000001"
+        ]
+      },
+      "email": "citizen-meera@citizens.invalid",
+      "realmRoles": [
+        "default-roles-age"
+      ]
+    },
+    {
+      "username": "citizen.arjun",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Arjun",
+      "lastName": "Das",
+      "attributes": {
+        "citizenId": [
+          "AGE-000002"
+        ]
+      },
+      "email": "citizen-arjun@citizens.invalid",
+      "realmRoles": [
+        "default-roles-age"
+      ]
+    },
+    {
+      "username": "citizen.nikhil",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Nikhil",
+      "lastName": "Rao",
+      "attributes": {
+        "citizenId": [
+          "AGE-000003"
+        ]
+      },
+      "email": "citizen-nikhil@citizens.invalid",
+      "realmRoles": [
+        "default-roles-age"
+      ]
+    },
+    {
+      "username": "citizen.sana",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Sana",
+      "lastName": "Iqbal",
+      "attributes": {
+        "citizenId": [
+          "AGE-000004"
+        ]
+      },
+      "email": "citizen-sana@citizens.invalid",
+      "realmRoles": [
+        "default-roles-age"
+      ]
+    },
+    {
+      "username": "citizen.unmapped",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Unmapped",
+      "lastName": "Account",
+      "attributes": {},
+      "email": "citizen-unmapped@citizens.invalid",
+      "realmRoles": [
+        "default-roles-age"
+      ]
+    }
+  ],
+  "requiredActions": [
+    {
+      "alias": "VERIFY_PROFILE",
+      "name": "Verify Profile",
+      "providerId": "VERIFY_PROFILE",
+      "enabled": false,
+      "defaultAction": false,
+      "priority": 90,
+      "config": {}
+    },
+    {
+      "alias": "UPDATE_PASSWORD",
+      "name": "Update Password",
+      "providerId": "UPDATE_PASSWORD",
+      "enabled": false,
+      "defaultAction": false,
+      "priority": 30,
+      "config": {}
+    }
+  ]
+}

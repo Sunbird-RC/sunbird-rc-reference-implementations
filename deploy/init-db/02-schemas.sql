@@ -1,0 +1,14 @@
+-- Non-domain namespace only.
+--
+-- Use-case separation is by TABLE, not by schema or database: Age owns
+-- AgeCitizen, Agriculture will own Farmer and Land, Education its own — all in
+-- the registry's database, with no shared cross-domain person table (Anand's
+-- answer 10, PRODUCT and DESIGN §7).
+--
+-- An earlier iteration tried `?currentSchema=age` here. Worth remembering as a
+-- dead end: the registry leaves table placement to Sqlg, which writes
+-- unqualified vertex labels to `public` whatever the connection says.
+--
+-- `platform` is kept for non-domain state and stays empty in Iteration 01 —
+-- protocol transaction state lives in Redis.
+CREATE SCHEMA IF NOT EXISTS platform;
