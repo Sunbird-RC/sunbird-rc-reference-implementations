@@ -20,8 +20,10 @@ const config = createBaseConfig({
   version,
   bundleId: 'id.paradym.wallet',
   additionalInvitationSchemes: ['didcomm'],
-  associatedDomains: ['paradym.id', 'dev.paradym.id', 'paradymwallet.app', '98.70.36.106.sslip.io'],
-  projectId: 'b5f457fa-bcab-4c6e-8092-8cdf1239027a',
+  associatedDomains: ['paradym.id', 'dev.paradym.id', 'paradymwallet.app'],
+  // Animo's EAS project id is deliberately not carried into this repository: it
+  // would point builds and OTA updates at their Expo project. The showcase builds
+  // locally, never through EAS.
   assets: ['./assets/paradym/icon.png'],
   extraConfig: {
     mediatorDid: mediatorDids[process.env.APP_VARIANT || 'production'],
@@ -37,7 +39,7 @@ const config = createBaseConfig({
     // locally signed certificate.
     allowedRedirectBaseUrls: (
       process.env.WALLET_REDIRECT_BASE_URLS ??
-      'https://98.70.36.106.sslip.io/wallet/redirect,https://paradym.id/invitation/redirect,https://paradymwallet.app/oauth2/redirect'
+      'https://paradym.id/invitation/redirect,https://paradymwallet.app/oauth2/redirect'
     )
       .split(',')
       .map((url) => url.trim())
