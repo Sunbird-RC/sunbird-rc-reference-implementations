@@ -73,6 +73,7 @@ obtains a Let's Encrypt certificate for a host reachable on ports 80 and 443.
 - [Iteration 01 — Age Verification](iterations/01-age/CHARTER.md)
 - [Iteration 01 review feedback](docs/reviews/ITERATION-01-FEEDBACK.md)
 - [Iteration 01 review feedback, round 2](docs/reviews/ITERATION-01-FEEDBACK-ROUND2.md)
+- [Iteration 01 formal sign-off](docs/reviews/ITERATION-01-SIGNOFF.md)
 - [Iteration 01 evidence](docs/evidence/01-age/README.md)
 
 These documents are the authoritative project baseline. Architecture and implementation must remain aligned with them.
