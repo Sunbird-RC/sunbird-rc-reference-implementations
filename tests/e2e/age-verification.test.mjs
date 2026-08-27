@@ -25,6 +25,8 @@ import {
   retireNegativeFixture,
   startVerification,
   readVerification,
+  cancelVerification,
+  issuerMetadata,
   verifierPolicy,
   disclosedClaimNames,
   json,
@@ -41,9 +43,10 @@ import {
   tryRedeemCode,
   forgeDisclosureValue,
   declinePresentation,
+  parseSdJwt as parseCredential,
 } from './lib/wallet.mjs';
 
-const { base, opsBase, ageIssuerDid, untrustedIssuerDid } = deployEnv();
+const { base, opsBase, ageIssuerDid, verifierDid, untrustedIssuerDid } = deployEnv();
 const QUERY_ID = 'age_cred';
 const ADULT = 'AGE-000001';
 const MINOR = 'AGE-000002';
@@ -249,7 +252,7 @@ describe('privacy and minimum disclosure', () => {
     assert.equal(/dateOfBirth|1998-04-02/.test(serialised), false, 'no date of birth anywhere in the response');
   });
 
-  test('a presentation that over-discloses is rejected by the disclosure policy', async () => {
+  test('over-disclosure by the wallet never reaches the decision or the page', async () => {
     guard();
     // A wallet that ignores the request and sends everything. Upstream DCQL is
     // satisfied (the requested claim IS there), so this is the verifier's own
@@ -507,5 +510,189 @@ describe('negative flows', () => {
     assert.match(result.body.reason, /declined/i);
     // And no claim values leak into the refusal path.
     assert.equal(JSON.stringify(result.body).includes('ageOver18'), false);
+  });
+});
+
+describe('the credential artefact', () => {
+  test('what the issuer returns is an SD-JWT VC, holder-bound and selectively disclosable', async () => {
+    guard();
+    // Elsewhere this suite treats the credential as an opaque string that happens
+    // to split on '~'. This test states what the artefact actually is, because
+    // "we issue SD-JWT VCs with holder binding" is a technical claim in the
+    // handoff and should be asserted rather than implied.
+    const { holder, credential } = await walletWithCredential(ADULT);
+    const { header, payload, disclosures } = parseCredential(credential);
+
+    // The media type is what makes this an SD-JWT VC rather than a plain JWT.
+    assert.equal(header.typ, 'vc+sd-jwt');
+    assert.equal(header.alg, 'ES256', 'the approved signing algorithm');
+
+    // Selective disclosure: the payload carries salted digests, and the claim
+    // values live outside the signature in the disclosures.
+    assert.equal(payload._sd_alg, 'sha-256');
+    assert.ok(Array.isArray(payload._sd) && payload._sd.length === disclosures.length,
+      `expected one digest per disclosure, got ${payload._sd?.length} digests for ${disclosures.length} disclosures`);
+    for (const name of ['ageOver18', 'dateOfBirth', 'name']) {
+      assert.equal(Object.hasOwn(payload, name), false, `${name} must be a disclosure, not a plain claim`);
+    }
+
+    // Type and issuer, so a wallet knows what it received and from whom. The
+    // credential's `vct` must be the one the issuer advertised, because that is
+    // the URL a wallet resolves for type metadata when it renders the card.
+    const metadata = await issuerMetadata(base);
+    const advertised = Object.values(metadata.credential_configurations_supported)
+      .map((c) => c.vct)
+      .filter(Boolean);
+    assert.ok(advertised.includes(payload.vct),
+      `the credential's vct '${payload.vct}' is not advertised: ${advertised.join(', ')}`);
+    assert.match(payload.vct, /^https:\/\//, 'the type must be resolvable');
+    assert.equal(payload.iss, ageIssuerDid);
+
+    // Holder binding: the credential names the wallet's own public key, which is
+    // what the Key Binding JWT later proves possession of.
+    assert.ok(payload.cnf?.jwk, 'the credential must carry a holder key');
+    const bound = payload.cnf.jwk;
+    const held = holder.publicJwk;
+    assert.equal(bound.kty, held.kty);
+    assert.equal(bound.crv, held.crv);
+    assert.equal(bound.x, held.x, 'the bound key must be the key this wallet holds');
+    assert.equal(bound.y, held.y);
+    assert.equal(bound.d, undefined, 'a private key must never appear in a credential');
+  });
+});
+
+describe('the customer-facing issuer directory', () => {
+  test('the issuer advertises exactly one credential', async () => {
+    guard();
+    // What a wallet shows after the citizen picks the National Identity
+    // Authority. The negative-test fixture is provisioned by this file and
+    // retired again in after(), so a stack a customer sees offers one credential
+    // and not a menu — the review asked for this explicitly. Asserting it here
+    // rather than only in verify.sh means a regression fails the suite.
+    const metadata = await issuerMetadata(base);
+    const configurations = Object.entries(metadata.credential_configurations_supported || {});
+    const offered = configurations.filter(([, c]) => !/unlisted/i.test(c.display?.[0]?.name || ''));
+
+    assert.equal(offered.length, 1,
+      `expected one advertised credential, got ${offered.length}: ${offered.map(([id]) => id).join(', ')}`);
+    const [, configuration] = offered[0];
+    assert.equal(configuration.format, 'vc+sd-jwt');
+    assert.match(configuration.display?.[0]?.name || '', /age/i);
+  });
+});
+
+describe('session lifecycle', () => {
+  test('a cancelled check stays cancelled, even if a valid presentation arrives afterwards', async () => {
+    guard();
+    // Cancellation has to be enforced by the verifier, not merely drawn by the
+    // page: if abandoning a session were a client-side label, a presentation
+    // that landed a moment later would still produce an approval on a check the
+    // operator had already given up on.
+    const { holder, credential } = await walletWithCredential(ADULT);
+    const session = await startVerification(base);
+    const request = await fetchRequestObject({ base, transactionId: session.sessionId });
+
+    const cancelled = await cancelVerification(base, session.sessionId);
+    assert.equal(cancelled.status, 200);
+    assert.equal(cancelled.body.state, 'cancelled');
+
+    const afterCancel = await readVerification(base, session.sessionId);
+    assert.equal(afterCancel.body.state, 'cancelled');
+    assert.equal(afterCancel.body.decision, undefined);
+
+    // Now the holder answers anyway, with a genuinely valid presentation.
+    const presentation = await presentSdJwt({
+      credential,
+      disclose: ['ageOver18'],
+      nonce: request.nonce,
+      audience: request.client_id,
+      holder,
+    });
+    const submission = await submitPresentation({
+      base,
+      state: request.state,
+      queryId: QUERY_ID,
+      presentation,
+    });
+    assert.ok(submission.status < 500, `a late presentation must not fault the service, got ${submission.status}`);
+
+    const afterPresentation = await readVerification(base, session.sessionId);
+    assert.equal(afterPresentation.body.state, 'cancelled', 'a cancelled session must never report a decision');
+    assert.equal(afterPresentation.body.decision, undefined);
+    assert.equal(afterPresentation.body.disclosed, undefined);
+    assert.equal(JSON.stringify(afterPresentation.body).includes('ageOver18'), false);
+  });
+
+  test('cancelling a session the verifier does not hold is reported expired, not cancelled', async () => {
+    guard();
+    const attempt = await cancelVerification(base, 'session-that-never-existed');
+    assert.equal(attempt.status, 404);
+    assert.equal(attempt.body.state, 'expired');
+  });
+
+  test('a session the verifier no longer holds is expired, and never decided', async () => {
+    guard();
+    // Sessions are held in memory with a TTL and swept on access, so a session
+    // that has aged out is indistinguishable from one that never existed: the
+    // read finds nothing and reports 'expired'. That shared path is what this
+    // asserts, rather than sleeping out the deployment's TTL — which is minutes
+    // long, and a test that sleeps for minutes is a test that gets skipped.
+    const unknown = await readVerification(base, 'session-that-never-existed');
+    assert.equal(unknown.status, 404);
+    assert.equal(unknown.body.state, 'expired');
+    assert.equal(unknown.body.decision, undefined);
+    assert.equal(unknown.body.disclosed, undefined);
+
+    // And a live session does carry a finite lifetime, so expiry is reachable.
+    const session = await startVerification(base);
+    assert.ok(session.expiresInSeconds > 0, 'a session must expire');
+    assert.ok(session.expiresInSeconds <= 600,
+      `a demo session should be short-lived, got ${session.expiresInSeconds}s`);
+  });
+});
+
+describe('what a real wallet needs in order to name us', () => {
+  test('the verifier identifies itself with a bare did:web under the deployment host', async () => {
+    guard();
+    // A wallet decides whether to show "Do you trust <name>?" or "Organization
+    // not verified" by matching this client id against its configured trust
+    // entities. Ours is a bare `did:web:` — the pre-draft-26 form — and the
+    // wallet fork's trust entry is scoped to the host so it survives a
+    // re-bootstrap minting a new uuid. Both halves of that arrangement are
+    // asserted here, because if the verifier ever emitted a different form or a
+    // DID under a different host, the wallet would silently go back to calling
+    // us unknown and only a human looking at a phone would notice.
+    const session = await startVerification(base);
+    const clientId = new URL(session.qrData).searchParams.get('client_id');
+
+    assert.ok(clientId, 'the request must carry a client_id');
+    assert.match(clientId, /^did:web:/, 'the wallet resolves this DID to learn who is asking');
+    assert.equal(clientId.startsWith('decentralized_identifier:'), false,
+      'we send the bare form; a prefixed client id would need OpenID4VP draft 26 on both sides');
+
+    const host = new URL(base).host;
+    assert.ok(clientId.startsWith(`did:web:${host}`),
+      `the verifier DID must live under the deployment host so host-scoped trust matches: ${clientId}`);
+    if (verifierDid) {
+      assert.equal(clientId, verifierDid, 'and it must be the verifier identity this deployment minted');
+    }
+  });
+
+  test('the issuer identifies itself with the deployment origin, and its logo resolves', async () => {
+    guard();
+    // The issuance screen is matched on an issuer prefix rather than a DID, so
+    // what has to hold is that the advertised `credential_issuer` is the origin
+    // the wallet was configured with. The logo is part of the same screen: a
+    // trusted entity with an unreachable logo shows a placeholder, which looks
+    // like a half-configured issuer to anyone watching a demo.
+    const metadata = await issuerMetadata(base);
+    assert.equal(metadata.credential_issuer, base);
+    assert.equal(metadata.display?.[0]?.name, 'National Identity Authority');
+
+    for (const logo of ['national-identity-authority', 'age-check']) {
+      const res = await fetch(`${base}/assets/logos/${logo}.png`);
+      assert.equal(res.status, 200, `${logo}.png must be served for the wallet's trust screen`);
+      assert.match(res.headers.get('content-type') || '', /image\/png/);
+    }
   });
 });

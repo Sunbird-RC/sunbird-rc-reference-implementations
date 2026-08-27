@@ -286,6 +286,22 @@ export function readVerification(base, sessionId) {
   return json(`${base}/api/verifier/sessions/${sessionId}`);
 }
 
+/**
+ * Abandons a session the way the verifier UI does when the operator gives up.
+ *
+ * The point of the endpoint is that the refusal is enforced server side: once a
+ * session is abandoned the verifier must not report a decision for it even if a
+ * valid presentation turns up afterwards.
+ */
+export function cancelVerification(base, sessionId) {
+  return json(`${base}/api/verifier/sessions/${sessionId}/cancel`, { method: 'POST' });
+}
+
+/** Everything the issuer advertises to a wallet, straight from the metadata. */
+export async function issuerMetadata(base) {
+  return ok('issuer metadata', json(`${base}/.well-known/openid-credential-issuer`));
+}
+
 /** The claim names the verifier asks for, straight from the running service. */
 export function verifierPolicy(base) {
   return ok('verifier policy', json(`${base}/api/verifier/policy`));

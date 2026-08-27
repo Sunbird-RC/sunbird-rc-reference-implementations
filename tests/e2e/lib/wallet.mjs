@@ -161,6 +161,7 @@ export function parseSdJwt(sdJwt) {
       const [salt, name, value] = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
       return { raw, salt, name, value };
     }),
+    header: jose.decodeProtectedHeader(jws),
     payload: jose.decodeJwt(jws),
   };
 }
