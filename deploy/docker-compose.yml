@@ -454,7 +454,16 @@ services:
       SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-300}
       # Expanded into the trust policy at load time, so the committed policy
       # file stays stable across deployments while the pinned DID does not.
+      # All three are required once the policy names them: the loader treats an
+      # unset variable as a hard failure rather than a wildcard, so the verifier
+      # refuses to start rather than trusting an issuer whose DID is the empty
+      # string. scripts/bootstrap.sh writes all of them.
       AGE_ISSUER_DID: ${AGE_ISSUER_DID:-}
+      FARMER_ISSUER_DID: ${FARMER_ISSUER_DID:-}
+      LAND_ISSUER_DID: ${LAND_ISSUER_DID:-}
+      # The credential types the bank's request pins, one per issuer instance.
+      FARMER_VCT: ${PUBLIC_URL:-http://localhost}/farmer/vct/farmer-identity-credential
+      LAND_VCT: ${PUBLIC_URL:-http://localhost}/land/vct/land-ownership-credential
     healthcheck:
       test: ['CMD-SHELL', 'wget -q -O- http://127.0.0.1:4300/healthz >/dev/null || exit 1']
       interval: 10s

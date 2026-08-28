@@ -176,10 +176,17 @@ mint_did() {
 AGE_ISSUER_DID="$(mint_did AGE_ISSUER_DID       'National Identity Authority')"
 VERIFIER_DID="$(mint_did   VERIFIER_DID         'Age-restricted service (verifier)')"
 UNTRUSTED_DID="$(mint_did  UNTRUSTED_ISSUER_DID 'Unlisted issuer (negative fixture)')"
+# Iteration 02. Separate DIDs and therefore separate signing keys: the two
+# registries must be independent issuers, and a shared key would make "two
+# issuers" a label rather than a fact.
+FARMER_ISSUER_DID="$(mint_did FARMER_ISSUER_DID  'Farmer Registry')"
+LAND_ISSUER_DID="$(mint_did   LAND_ISSUER_DID    'Land Registry')"
 
 set_env AGE_ISSUER_DID      "$AGE_ISSUER_DID"
 set_env VERIFIER_DID        "$VERIFIER_DID"
 set_env UNTRUSTED_ISSUER_DID "$UNTRUSTED_DID"
+set_env FARMER_ISSUER_DID   "$FARMER_ISSUER_DID"
+set_env LAND_ISSUER_DID     "$LAND_ISSUER_DID"
 green "DIDs recorded in deploy/.env"
 
 # --- 4. credential schemas ---------------------------------------------------
@@ -204,34 +211,30 @@ SCHEMA_PY="$(mktemp -t agevcschema.XXXXXX)"
 FIND_PY="$(mktemp -t agevcfind.XXXXXX)"
 trap 'rm -f "$SCHEMA_PY" "$FIND_PY"' EXIT
 
-cat > "$SCHEMA_PY" <<'PY'
+cat > "$SCHEMA_PY" <<'SPEC'
 import json, sys
-name, sid, author, vct = sys.argv[1:5]
+
+# One generator for every credential this showcase issues. The caller passes a
+# JSON spec rather than positional claim arguments: the three credentials differ
+# in their claims, and a positional list would be unreadable at the call site and
+# unextendable at the next iteration.
+spec = json.loads(sys.argv[1])
+
 print(json.dumps({
     "schema": {
         "type": "https://w3c-ccg.github.io/vc-json-schemas/",
         "version": "1.0.0",
-        "id": sid,
-        "name": name,
-        "author": author,
+        "id": spec["id"],
+        "name": spec["name"],
+        "author": spec["author"],
         "authored": "2026-01-01T00:00:00.000Z",
         "schema": {
-            "$id": sid,
+            "$id": spec["id"],
             "$schema": "https://json-schema.org/draft/2019-09/schema",
-            "description": (
-                "Issuer-derived age assertions. ageOver18/ageOver21 are computed by the "
-                "issuer from the authoritative AgeCitizen date of birth; name and "
-                "dateOfBirth travel as selectively-disclosable claims the holder is "
-                "expected NOT to reveal to an age-restricted service."
-            ),
+            "description": spec["description"],
             "type": "object",
-            "properties": {
-                "ageOver18": {"type": "boolean", "description": "Derived at issuance from dateOfBirth."},
-                "ageOver21": {"type": "boolean", "description": "Derived at issuance from dateOfBirth."},
-                "name": {"type": "string"},
-                "dateOfBirth": {"type": "string", "format": "date"},
-            },
-            "required": ["ageOver18"],
+            "properties": spec["properties"],
+            "required": spec["required"],
             # MUST be true. Issuance always adds credentialSubject.id (the holder
             # DID), which is not one of the schema's own claims; with this false,
             # credentials-service rejects every issuance and the wallet sees only
@@ -239,7 +242,7 @@ print(json.dumps({
             "additionalProperties": True,
         },
     },
-    "tags": ["age"],
+    "tags": spec["tags"],
     # PUBLISHED is required: getOid4vciConfigs only looks at published schemas,
     # so a DRAFT one exists but is invisible as an issuable credential.
     "status": "PUBLISHED",
@@ -249,14 +252,14 @@ print(json.dumps({
     "oid4vciConfig": {
         "oid4vciEnabled": True,
         "oid4vciFormats": ["vc+sd-jwt"],
-        "vct": vct,
+        "vct": spec["vct"],
         # `locale` is REQUIRED on a display entry. Without it a wallet fetching
         # the SD-JWT VC Type Metadata fails to parse it and shows only
         # "something went wrong", with no clue that the cause is here.
-        "display": [{"name": name, "locale": "en-US"}],
+        "display": [{"name": spec["name"], "locale": "en-US"}],
     },
 }))
-PY
+SPEC
 
 cat > "$FIND_PY" <<'PY'
 import json, sys
@@ -267,14 +270,18 @@ for c in json.load(sys.stdin):
         break
 PY
 
+# create_schema <spec-json>. The spec carries name, id, author, vct, tags,
+# description, properties and required - see SCHEMA_PY above.
 create_schema() {
-  local name="$1" sid="$2" author="$3" existing body resp
+  local spec="$1" name author existing body resp
+  name="$(printf '%s' "$spec" | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')"
+  author="$(printf '%s' "$spec" | python3 -c 'import json,sys; print(json.load(sys.stdin)["author"])')"
   existing="$(curl -fsS "$BASE/credential-schema/oid4vci-configs" | python3 "$FIND_PY" "$name" "$author")"
   if [ -n "$existing" ]; then
     green "$name (author ${author##*:}) already present"
     return 0
   fi
-  body="$(python3 "$SCHEMA_PY" "$name" "$sid" "$author" "$VCT_SLUG")"
+  body="$(python3 "$SCHEMA_PY" "$spec")"
   # POST to /credential-schema — the controller is mounted at that prefix and
   # serves POST at its root.
   resp="$(curl -fsS -X POST "$BASE/credential-schema" -H 'content-type: application/json' -d "$body")" \
@@ -284,7 +291,15 @@ create_schema() {
   green "$name (author ${author##*:}) created"
 }
 
-create_schema 'Age Verification Credential' 'AgeVerificationCredential' "$AGE_ISSUER_DID"
+SPECS="$ROOT/scripts/credential-specs.py"
+create_schema "$(python3 "$SPECS" age "$AGE_ISSUER_DID" "$VCT_SLUG")"
+
+# Iteration 02. Two credentials, two authors: the schema `author` DID is what
+# becomes the credential's `iss`, so it is what makes these two INDEPENDENT
+# issuers rather than one issuer publishing two credential types. Each vct slug
+# is served by its own oid4vc-service instance under its own path prefix.
+create_schema "$(python3 "$SPECS" farmer "$FARMER_ISSUER_DID" 'farmer-identity-credential')"
+create_schema "$(python3 "$SPECS" land   "$LAND_ISSUER_DID"   'land-ownership-credential')"
 
 # The negative fixture — a valid credential from an issuer outside the trust
 # allowlist — is NOT created here. It used to be, and it showed up in the
