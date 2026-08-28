@@ -229,7 +229,7 @@ services:
   # The OpenID4VCI / OpenID4VP protocol façade. Native to v2.1.0 — this is why
   # the architecture needs no standards adapter.
   oid4vc-service:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.4889fbdb}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -256,6 +256,11 @@ services:
       # Fallback only: each schema is signed with its own `author` DID, which is
       # what makes the National Identity Authority the credential's `iss`.
       ISSUER_DID: ${AGE_ISSUER_DID:-}
+      # Advertise only the credentials THIS issuer authored. credential-schema's
+      # /oid4vci-configs is deployment-wide, so without this every issuer lists
+      # every published credential — the Age issuer would offer the Agriculture
+      # ones and both registries would offer each other's.
+      ADVERTISE_OWN_CREDENTIALS_ONLY: 'true'
       # Paradym requires a signed request object; signing requires a
       # wallet-resolvable DID. Both are written by scripts/bootstrap.sh.
       OID4VP_SIGN_REQUEST: ${OID4VP_SIGN_REQUEST:-true}
@@ -308,7 +313,7 @@ services:
   # read a land record (DESIGN §4).
 
   oid4vc-farmer:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.4889fbdb}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -334,6 +339,11 @@ services:
       REDIS_URL: redis://redis:6379
       SESSION_STORE: redis
       ISSUER_DID: ${FARMER_ISSUER_DID:-}
+      # Advertise only the credentials THIS issuer authored. credential-schema's
+      # /oid4vci-configs is deployment-wide, so without this every issuer lists
+      # every published credential — the Age issuer would offer the Agriculture
+      # ones and both registries would offer each other's.
+      ADVERTISE_OWN_CREDENTIALS_ONLY: 'true'
       DRAFT13_COMPAT_MODE: 'false'
       ENABLE_AUTH: 'false'
       CORS_ALLOWED_ORIGINS: ${PUBLIC_URL:-http://localhost}
@@ -354,7 +364,7 @@ services:
       retries: 30
 
   oid4vc-land:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.4889fbdb}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -378,6 +388,11 @@ services:
       REDIS_URL: redis://redis:6379
       SESSION_STORE: redis
       ISSUER_DID: ${LAND_ISSUER_DID:-}
+      # Advertise only the credentials THIS issuer authored. credential-schema's
+      # /oid4vci-configs is deployment-wide, so without this every issuer lists
+      # every published credential — the Age issuer would offer the Agriculture
+      # ones and both registries would offer each other's.
+      ADVERTISE_OWN_CREDENTIALS_ONLY: 'true'
       DRAFT13_COMPAT_MODE: 'false'
       ENABLE_AUTH: 'false'
       CORS_ALLOWED_ORIGINS: ${PUBLIC_URL:-http://localhost}

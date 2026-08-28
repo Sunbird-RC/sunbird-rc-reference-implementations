@@ -31,7 +31,15 @@ printf 'Iteration 01 verification — %s\n' "$(date -u '+%Y-%m-%d %H:%M UTC')"
 printf 'repo: %s\nfork: %s\n' "$ROOT" "$FORK"
 
 head_ '1. Branch and working tree'
-check "on iteration/age-01-verification" '[ "$(git branch --show-current)" = "iteration/age-01-verification" ]'
+# Any iteration branch, not one named branch: Iteration 01 is merged and accepted,
+# and Iteration 02 continues on its own branch. What must stay true is that this is
+# never run as a substitute for review ON main, which the working model forbids.
+# No `exit` and no `case` in the body: check() evals in the current shell, so an
+# exit here terminates the whole script and every later check is silently skipped.
+# That trap has now bitten twice, so the rule is a prefix test on a precomputed
+# variable.
+BRANCH="$(git branch --show-current)"
+check "on an iteration branch, not main ($BRANCH)" '[ -n "$BRANCH" ] && [ "${BRANCH#iteration/}" != "$BRANCH" ]'
 check "working tree clean (ignoring node_modules)" '[ -z "$(git status --porcelain | grep -vE "^\?\? ([^ ]*/)?node_modules")" ]'
 
 head_ '2. Revised baseline is the authoritative input'
@@ -78,6 +86,19 @@ if curl -fsS -o /dev/null --max-time 5 "$BASE/gateway-health" 2>/dev/null; then
   # issuer directory. The negative fixture is provisioned by the tests that need
   # it and retired again, so a clean stack advertises exactly one.
   check "exactly ONE credential is advertised to wallets" 'curl -s --max-time 8 $BASE/.well-known/openid-credential-issuer | python3 -c "import json,sys; raise SystemExit(0 if len(json.load(sys.stdin)[\"credential_configurations_supported\"])==1 else 1)"'
+  # Each Agriculture issuer must advertise ONLY its own credential. This is the
+  # check that keeps the demo requirement honest: an Age credential appearing in
+  # the Agriculture issuer directory is exactly what DEMO.md's quality gate
+  # forbids, and it is what happened before ADVERTISE_OWN_CREDENTIALS_ONLY.
+  for who in farmer land; do
+    check "the $who issuer advertises only its own credential" 'curl -s --max-time 8 "$BASE/'"$who"'/.well-known/openid-credential-issuer" | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+configs = d[\"credential_configurations_supported\"]
+names = [c[\"display\"][0][\"name\"] for c in configs.values()]
+want = {\"farmer\": \"Farmer Identity Credential\", \"land\": \"Land Ownership Credential\"}[\"'"$who"'\"]
+raise SystemExit(0 if names == [want] else 1)"'
+  done
 
   # The wallet's trust screen renders these. A trusted entity whose logo 404s
   # shows a placeholder, which reads as a half-configured issuer on a demo.
@@ -131,8 +152,17 @@ if [ -d "$FORK/.git" ]; then
   # Exact count on purpose: the port is meant to stay narrow, so an unexplained
   # extra commit should show up here rather than in review. Raise it deliberately
   # when the port legitimately grows.
-  check "port branch is 4 commits off v2.1.0 (port, alg, narrowing, issuer display)" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "4" ]'
-  check "ported image is built" 'docker images -q sunbird-rc-oid4vc-service:v2.1.0-authcode.4889fbdb | grep -q .'
+  # Raised from 4 to 5 deliberately, per the note above. The fifth commit lets an
+  # issuer advertise only the credentials it authored: credential-schema's
+  # /oid4vci-configs is deployment-wide and takes no filter, so with two Agriculture
+  # registries sharing one schema service every issuer advertised all three
+  # published credentials. No configuration could scope it. Recorded as a
+  # compatibility finding with a removal path.
+  check "port branch is 5 commits off v2.1.0 (port, alg, narrowing, issuer display, own credentials)" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "5" ]'
+  # The tag compose asks for, whatever it currently is: reading it from compose
+  # rather than repeating it here is what stops this check drifting into
+  # asserting a build nothing uses.
+  check "the image compose pins is actually built" 'docker images -q "$(python3 -c "import re,sys; print(re.search(r\"sunbird-rc-oid4vc-service:v2\\.1\\.0-authcode\\.[0-9a-f]+\", open(\"deploy/docker-compose.yml\").read()).group(0))")" | grep -q .'
   check "the ported build is pinned by source commit in its tag" 'grep -qE "sunbird-rc-oid4vc-service:v2.1.0-authcode\.[0-9a-f]{7,}" deploy/docker-compose.yml'
 else
   skip "fork checks" "no checkout at $FORK — set SUNBIRD_RC_CORE_PATH"

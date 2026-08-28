@@ -19,7 +19,7 @@ against, and three recorded Inji risks would all have had to be resolved first.
 What this iteration therefore does not prove is that Inji interoperates with this
 stack.
 
-## Two issuers, and why the fork needs no change
+## Two issuers, and what that cost
 
 The requirement that shaped the architecture is that the wallet must show **two
 independent issuers** with different DIDs, each reading only its own authorised
@@ -36,15 +36,23 @@ registry is its own `oid4vc-service` instance:
 | `oid4vc-farmer` | `FarmerIdentityCredential` | `FarmerRecord` | `nationalId` | `${FARMER_ISSUER_DID}` |
 | `oid4vc-land` | `LandOwnershipCredential` | `LandRecord` | `nationalId` | `${LAND_ISSUER_DID}` |
 
-**No change to the forked `oid4vc-service` was required**, which was the open
-question when this iteration started. The port made claim resolution
-configuration rather than code — `REGISTRY_SUBJECT_ENTITY`,
-`REGISTRY_SUBJECT_KEY`, `KEYCLOAK_SUBJECT_CLAIM`, `CLAIM_SOURCE_MAP` — and its
-own interface says so: *"Sources come back in precedence order for whatever
-entities this deployment declares. Which entities those are is configuration —
-this code names none."* The fork therefore stays at four commits off `v2.1.0`,
-which `scripts/verify.sh` asserts exactly so that an unexplained fifth shows up
-in review.
+**Claim resolution needed no fork change**, which was the open question when this
+iteration started. The port had already made it configuration rather than code —
+`REGISTRY_SUBJECT_ENTITY`, `REGISTRY_SUBJECT_KEY`, `KEYCLOAK_SUBJECT_CLAIM`,
+`CLAIM_SOURCE_MAP` — and its own interface says so: *"Sources come back in
+precedence order for whatever entities this deployment declares. Which entities
+those are is configuration — this code names none."*
+
+**Correction: one fork change was needed after all, and it was not this one.**
+Running two issuers revealed that `issuerMetadata()` advertises every published
+credential in the deployment, because `credential-schema`'s `/oid4vci-configs` is
+deployment-wide and takes no filter. Each of the three issuers therefore
+advertised all three credentials — which would have put an Age credential in the
+Agriculture issuer directory, and broke Age's own one-credential invariant. No
+configuration scopes it, so the fork gained `ADVERTISE_OWN_CREDENTIALS_ONLY`
+(off by default, filtering on the `author` DID a schema already carries). Recorded
+as finding 14 in COMPATIBILITY with a removal path; the port is now five commits
+off `v2.1.0`, and `verify.sh`'s exact count was raised deliberately.
 
 Three consequences worth stating:
 
@@ -117,14 +125,53 @@ Correlation is checked **before** any business rule, so a farmer who is both
 unregistered and mismatched is rejected rather than reported ineligible. There is
 a test for that ordering specifically.
 
+## The Agriculture issuer directory must not show the Age credential
+
+`DEMO.md`'s quality gate forbids an Age or unrelated issuer in the Agriculture
+wallet configuration, and Kartheek confirmed it on 28 August 2026. It has **two
+halves**, and only one of them is server-side.
+
+**Server side — done, and it needed the fork fix.** Each issuer now advertises
+only the credential it authored, so the Farmer Registry's directory entry offers
+`FarmerIdentityCredential` and nothing else. Before
+`ADVERTISE_OWN_CREDENTIALS_ONLY` all three issuers advertised all three
+credentials, which is precisely the failure the gate names. `verify.sh` asserts it
+per issuer:
+
+```
+the farmer issuer advertises only its own credential
+the land issuer advertises only its own credential
+exactly ONE credential is advertised to wallets      (the Age issuer)
+```
+
+**Wallet side — a build-time decision.** The wallet's issuer directory is built
+from `CREDENTIAL_ISSUER_URLS`, baked in at build time. So the Agriculture demo
+build must list **only** the two Agriculture issuers:
+
+```bash
+export CREDENTIAL_ISSUER_URLS=https://<host>/farmer,https://<host>/land
+./scripts/build-wallet.sh
+```
+
+Include the Age issuer's URL and the directory shows "National Identity Authority"
+beside the two registries, gate failed — no server-side change can prevent it,
+because the wallet is asking for that issuer's metadata directly.
+
+The consequence to plan around: one APK cannot satisfy both demos, and both builds
+share the package name `id.paradym.wallet.preview`, so installing one replaces the
+other. The demo device therefore carries the build for the iteration being
+demonstrated. Age's automated regression does not need the wallet — 43 unit and 50
+end-to-end tests run headless — so this costs on-device Age re-demonstration only,
+which Anand has already accepted and signed off.
+
 ## Known limitations, carried forward deliberately
 
 1. **Inji is unproven against this stack.** Deferred to Iteration 03, where
    PRODUCT's "Inji completes at least one full use case" would land.
-2. **One wallet build serves both iterations.** `REQUIREMENTS.md` §3 asks that
-   only the Farmer and Land registries appear in the Agriculture issuer directory;
-   the Age issuer remains configured in the same wallet, so that reads per use
-   case rather than per app.
+2. **The Agriculture wallet build must not list the Age issuer.** Kartheek's
+   instruction, 28 August 2026, and it matches `DEMO.md`'s quality gate — "No Age
+   or unrelated issuer in the Agriculture wallet configuration". See below; this is
+   a requirement, not a limitation.
 3. **The algorithm allowlist.** `REQUIREMENTS.md` §8 requires resolving Age's
    recorded limitation explicitly rather than inheriting it. Open; it will be
    decided against what the presentation output actually exposes, and recorded
