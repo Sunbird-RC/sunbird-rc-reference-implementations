@@ -329,11 +329,17 @@ services:
         condition: service_healthy
     volumes:
       - ../config/trust:/app/config/trust:ro
+      # The Agriculture lending policy. Mounted read-only and version-controlled
+      # for the same reason as the trust allowlist: the per-acre rate is what
+      # turns verified acreage into a rupee figure a customer reads off a screen,
+      # so it must not be editable between demos.
+      - ../config/policy:/app/config/policy:ro
     environment:
       PORT: '4300'
       OID4VC_BASE_URL: http://oid4vc-service:3400
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost}
       TRUST_POLICY_FILE: /app/config/trust/issuers.json
+      CROP_POLICY_FILE: /app/config/policy/crop-rates.json
       # How long a presentation request stays answerable. 300s matches
       # oid4vc-service's VP_TXN_TTL. Lower it on a demo host (90s or so) when you
       # need the "nobody answered" outcome to land while an audience is watching:

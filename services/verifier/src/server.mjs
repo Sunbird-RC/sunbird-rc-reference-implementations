@@ -19,12 +19,23 @@ import { loadTrustPolicy } from './core/trust.mjs';
 import { assertExactClaims } from './core/claim-policy.mjs';
 import { sessionStore } from './core/sessions.mjs';
 import { ageCredentialRequest, decideAge, AGE_CLAIM } from './domains/age/index.mjs';
+import {
+  agricultureCredentialRequests,
+  decideFarmCredit,
+  loadCropPolicy,
+  FARMER_CLAIMS,
+  LAND_CLAIMS,
+} from './domains/agriculture/index.mjs';
+import { formatIndianRupees } from './domains/agriculture/money.mjs';
 import QRCode from 'qrcode-svg';
 
 const PORT = Number(process.env.PORT || 4300);
 const PUBLIC_URL = (process.env.PUBLIC_URL || 'http://localhost').replace(/\/+$/, '');
 const AGE_VCT = process.env.AGE_VCT || `${PUBLIC_URL}/vct/age-verification-credential`;
+const FARMER_VCT = process.env.FARMER_VCT || `${PUBLIC_URL}/vct/farmer-identity-credential`;
+const LAND_VCT = process.env.LAND_VCT || `${PUBLIC_URL}/vct/land-ownership-credential`;
 const TRUST_POLICY_FILE = process.env.TRUST_POLICY_FILE || '/app/config/trust/issuers.json';
+const CROP_POLICY_FILE = process.env.CROP_POLICY_FILE || '/app/config/policy/crop-rates.json';
 // Mirrors oid4vc-service's VP_TXN_TTL default. A verifier session outliving the
 // protocol transaction would show a QR that can no longer be answered.
 const SESSION_TTL_SECONDS = Number(process.env.SESSION_TTL_SECONDS || 300);
@@ -35,6 +46,10 @@ const sessions = sessionStore({ ttlSeconds: SESSION_TTL_SECONDS });
 // Loaded once, at boot, and deliberately allowed to throw: a verifier that
 // cannot tell which issuers it trusts must not start and accept presentations.
 const trust = loadTrustPolicy({ file: TRUST_POLICY_FILE });
+
+// Same rule as the trust allowlist: a verifier that cannot read the lending
+// policy must not start and then quote a rupee figure it made up.
+const cropPolicy = loadCropPolicy({ file: CROP_POLICY_FILE });
 
 /**
  * Strips anything that looks like a token, credential or disclosure out of an
@@ -52,24 +67,56 @@ function sanitiseDiagnostic(message) {
     .slice(0, 200);
 }
 
-async function createSession() {
-  const request = ageCredentialRequest({ vct: AGE_VCT });
-  const query = buildDcqlQuery([request]);
+/**
+ * The use cases this verifier serves.
+ *
+ * A use case declares which credentials it asks for and what the verified
+ * claims mean. Everything between the request and the decision — verification,
+ * disclosure policy, issuer trust — is shared, which is the entire reason this
+ * service is reusable rather than copied.
+ */
+const USE_CASES = {
+  age: {
+    requests: () => [ageCredentialRequest({ vct: AGE_VCT })],
+    describe: () => `requesting ${AGE_CLAIM} only`,
+  },
+  agriculture: {
+    requests: () => agricultureCredentialRequests({ farmerVct: FARMER_VCT, landVct: LAND_VCT }),
+    describe: () => 'requesting the farmer and land credentials',
+  },
+};
+
+async function createSession(useCaseName = 'age') {
+  const useCase = USE_CASES[useCaseName];
+  if (!useCase) throw new Error(`unknown use case ${useCaseName}`);
+
+  const requests = useCase.requests();
+  const query = buildDcqlQuery(requests);
   const vp = await oid4vc.createRequest(query);
 
   const session = sessions.create({
     id: vp.transaction_id,
-    requestId: request.id,
-    expectedClaims: expectedClaimNames(request),
+    useCase: useCaseName,
+    // One entry per credential the request asks for. Age has exactly one, which
+    // is why its behaviour is unchanged by this becoming a list.
+    requests: requests.map((request) => ({
+      id: request.id,
+      role: request.role,
+      expectedClaims: expectedClaimNames(request),
+    })),
     qrData: vp.qr_data,
   });
 
-  console.log(`[verifier] session ${session.id} created; requesting ${AGE_CLAIM} only`);
+  console.log(`[verifier] session ${session.id} created (${useCaseName}); ${useCase.describe()}`);
+
+  const requestedClaims =
+    useCaseName === 'age' ? [AGE_CLAIM] : { farmer: FARMER_CLAIMS, land: LAND_CLAIMS };
 
   return {
     status: 201,
     body: {
       sessionId: session.id,
+      useCase: useCaseName,
       // The deep link, and a rendering of it. The wallet gets everything it
       // needs from the QR; nothing about the holder is in it.
       qrData: vp.qr_data,
@@ -81,7 +128,7 @@ async function createSession() {
       // drops a version — fewer, larger modules — which matters far more here
       // than resilience to a smudged print.
       qrSvg: new QRCode({ content: vp.qr_data, padding: 4, width: 480, height: 480, ecl: 'L' }).svg(),
-      requestedClaims: [AGE_CLAIM],
+      requestedClaims,
       expiresInSeconds: SESSION_TTL_SECONDS,
     },
   };
@@ -148,36 +195,105 @@ async function readSession(sessionId) {
     });
   }
 
-  const claims = status.claims?.[session.requestId];
-  if (!claims || typeof claims !== 'object') {
-    return reject('presentation matched no credential for this request');
-  }
+  // Steps 2-4, once per credential the request asked for. Age passes through
+  // this with a single entry; Agriculture with two. The loop is what makes a
+  // multi-credential presentation safe: every credential is disclosure-checked
+  // and trust-checked on its own, and one trusted issuer cannot stand in for
+  // another's role.
+  const verified = {};
+  const issuerNames = [];
+  for (const request of session.requests) {
+    const claims = status.claims?.[request.id];
+    if (!claims || typeof claims !== 'object') {
+      return reject(
+        session.requests.length > 1
+          ? `presentation matched no ${request.role || request.id} credential for this request`
+          : 'presentation matched no credential for this request',
+      );
+    }
 
-  // 2. Disclosure policy: exactly what was asked for, nothing more.
-  const policy = assertExactClaims(session.expectedClaims, claims);
-  if (!policy.ok) {
-    console.log(`[verifier] session ${sessionId} rejected: ${policy.reason}`);
-    return reject(policy.reason);
-  }
+    // 2. Disclosure policy: exactly what was asked for, nothing more.
+    const policy = assertExactClaims(request.expectedClaims, claims);
+    if (!policy.ok) {
+      console.log(`[verifier] session ${sessionId} rejected: ${policy.reason}`);
+      return reject(policy.reason);
+    }
 
-  // 3. Issuer trust. Sunbird RC proved the signature is valid; this is what
-  //    proves it belongs to an issuer this verifier accepts.
-  const trusted = trust.check(claims[ISSUER_CLAIM]);
-  if (!trusted.ok) {
-    console.log(`[verifier] session ${sessionId} rejected: ${trusted.reason}`);
-    return reject(trusted.reason);
+    // 3. Issuer trust, pinned to this credential's role. Sunbird RC proved the
+    //    signature is valid; this proves it belongs to an issuer this verifier
+    //    accepts FOR THIS SLOT.
+    const trusted = trust.check(claims[ISSUER_CLAIM], { role: request.role });
+    if (!trusted.ok) {
+      console.log(`[verifier] session ${sessionId} rejected: ${trusted.reason}`);
+      return reject(trusted.reason);
+    }
+
+    verified[request.role || request.id] = claims;
+    issuerNames.push(trusted.issuer.name);
   }
 
   // 4. Business rule, on verified claims only.
+  //
+  //    Holder binding across the whole presentation is proven upstream and
+  //    asserted in step 1: oid4vc-service checks the Key Binding JWT for the
+  //    presentation, so two credentials arriving in one VP token are held by one
+  //    wallet key. That is what lets the Agriculture module treat matching
+  //    farmerId as correlation rather than coincidence.
   let outcome;
   try {
-    outcome = decideAge(claims);
+    outcome = session.useCase === 'agriculture'
+      ? decideFarmCredit({ farmer: verified.farmer, land: verified.land }, cropPolicy)
+      : decideAge(verified[session.requests[0].id]);
   } catch (err) {
+    // A malformed claim or broken correlation is a verification problem, not a
+    // business answer. PRODUCT is explicit that it must not be presented as
+    // ordinary ineligibility.
     console.log(`[verifier] session ${sessionId} rejected: ${err.message}`);
     return reject(err.message);
   }
 
-  console.log(`[verifier] session ${sessionId} ${outcome.decision} (issuer ${trusted.issuer.name})`);
+  const issuer = issuerNames.length === 1 ? issuerNames[0] : issuerNames;
+
+  if (session.useCase === 'agriculture') {
+    console.log(`[verifier] session ${sessionId} ${outcome.outcome} (issuers ${issuerNames.join(', ')})`);
+    return {
+      status: 200,
+      body: {
+        state: 'decided',
+        decision: outcome.outcome,
+        reason: outcome.reason,
+        checks: status.checks,
+        issuer,
+        // The verified inputs the policy used, so the bank can show its working.
+        // Nothing here identifies the farmer beyond the correlation id they
+        // consented to share.
+        disclosed:
+          outcome.outcome === 'ELIGIBLE'
+            ? {
+                farmerId: outcome.farmerId,
+                cropType: outcome.cropType,
+                cultivatedAreaAcres: outcome.cultivatedAreaAcres,
+              }
+            : {
+                farmerId: verified.farmer.farmerId,
+                ownershipStatus: verified.land.ownershipStatus,
+                cropType: verified.land.cropType,
+                cultivatedAreaAcres: verified.land.cultivatedAreaAcres,
+              },
+        loan:
+          outcome.outcome === 'ELIGIBLE'
+            ? {
+                ratePerAcre: outcome.ratePerAcre,
+                maximumLoan: outcome.maximumLoan,
+                maximumLoanFormatted: formatIndianRupees(outcome.maximumLoan),
+                currency: cropPolicy.currency,
+              }
+            : undefined,
+      },
+    };
+  }
+
+  console.log(`[verifier] session ${sessionId} ${outcome.decision} (issuer ${issuer})`);
 
   return {
     status: 200,
@@ -186,10 +302,10 @@ async function readSession(sessionId) {
       decision: outcome.decision,
       reason: outcome.reason,
       checks: status.checks,
-      issuer: trusted.issuer.name,
+      issuer,
       // The claim the holder chose to disclose, and nothing else. holderDid is
       // available upstream and deliberately not surfaced or logged.
-      disclosed: { [AGE_CLAIM]: claims[AGE_CLAIM] },
+      disclosed: { [AGE_CLAIM]: verified[session.requests[0].id][AGE_CLAIM] },
     },
   };
 }
@@ -226,8 +342,26 @@ const server = createServer(async (req, res) => {
         trustedIssuers: trust.issuers.map((i) => i.name),
       });
     }
+    if (req.method === 'GET' && path === '/agriculture/policy') {
+      // The bank's request and the lending policy behind the figure it will
+      // show, published so the demo can prove both are minimal and fixed rather
+      // than asserted by the page.
+      return send(200, {
+        credentialTypes: { farmer: FARMER_VCT, land: LAND_VCT },
+        requestedClaims: { farmer: FARMER_CLAIMS, land: LAND_CLAIMS },
+        protocolClaims: [ISSUER_CLAIM],
+        cropRates: Object.fromEntries(cropPolicy.crops.map((crop) => [crop, cropPolicy.rate(crop)])),
+        maxRatePerAcre: cropPolicy.maxRatePerAcre,
+        currency: cropPolicy.currency,
+        trustedIssuers: trust.issuers.map((i) => ({ name: i.name, roles: i.roles })),
+      });
+    }
     if (req.method === 'POST' && path === '/sessions') {
-      const result = await createSession();
+      const result = await createSession('age');
+      return send(result.status, result.body);
+    }
+    if (req.method === 'POST' && path === '/agriculture/sessions') {
+      const result = await createSession('agriculture');
       return send(result.status, result.body);
     }
     const cancelMatch = /^\/sessions\/([A-Za-z0-9_-]+)\/cancel$/.exec(path);
@@ -252,6 +386,8 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(
-    `[verifier] listening on ${PORT}; vct=${AGE_VCT}; trusting ${trust.issuers.length} issuer(s)`,
+    `[verifier] listening on ${PORT}; trusting ${trust.issuers.length} issuer(s); ` +
+      `age vct=${AGE_VCT}; agriculture vcts=${FARMER_VCT}, ${LAND_VCT}; ` +
+      `crops=${cropPolicy.crops.join(',')}`,
   );
 });
