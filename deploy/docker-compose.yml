@@ -286,6 +286,112 @@ services:
       timeout: 5s
       retries: 30
 
+  # --- Iteration 02: the two Agriculture issuers -------------------------------
+  #
+  # Each registry is its OWN oid4vc-service instance, not a second credential on
+  # the Age one. A wallet's issuer directory lists credential issuers, one per
+  # credential_issuer URL, so two credentials served from one URL would appear as
+  # a single issuer offering two — which is not what REQUIREMENTS §3 asks the demo
+  # to show.
+  #
+  # The same image as the Age instance, unchanged: the fork made claim resolution
+  # configuration rather than code, so declaring a different subject entity is all
+  # that separating the two registries takes. That is also what makes the
+  # separation structural — the Farmer instance is told about FarmerRecord and
+  # declares no related entities, so no configuration exists by which it could
+  # read a land record (DESIGN §4).
+
+  oid4vc-farmer:
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.4889fbdb}
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      credential:
+        condition: service_healthy
+      identity:
+        condition: service_healthy
+      credential-schema:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    environment:
+      PORT: '3400'
+      # The path is what makes this a distinct issuer to a wallet: its metadata
+      # says credential_issuer = <host>/farmer, and nginx routes that prefix here.
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/farmer
+      INTERNAL_URL: http://oid4vc-farmer:3400
+      CREDENTIAL_SERVICE_BASE_URL: http://credential:3000
+      IDENTITY_BASE_URL: http://identity:3332
+      SCHEMA_BASE_URL: http://credential-schema:3333
+      REDIS_URL: redis://redis:6379
+      SESSION_STORE: redis
+      ISSUER_DID: ${FARMER_ISSUER_DID:-}
+      DRAFT13_COMPAT_MODE: 'false'
+      ENABLE_AUTH: 'false'
+      CORS_ALLOWED_ORIGINS: ${PUBLIC_URL:-http://localhost}
+      KEYCLOAK_PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/auth
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/auth
+      # Its own realm: the subject claim differs from Age's, and that claim is
+      # per-instance configuration, so one realm cannot carry both.
+      KEYCLOAK_REALM: agriculture
+      KEYCLOAK_SUBJECT_CLAIM: nationalId
+      REGISTRY_BASE_URL: http://registry:8081
+      REGISTRY_SUBJECT_ENTITY: FarmerRecord
+      REGISTRY_SUBJECT_KEY: nationalId
+      ISSUER_DISPLAY_NAME: Farmer Registry
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:3400/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  oid4vc-land:
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.4889fbdb}
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      credential:
+        condition: service_healthy
+      identity:
+        condition: service_healthy
+      credential-schema:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    environment:
+      PORT: '3400'
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/land
+      INTERNAL_URL: http://oid4vc-land:3400
+      CREDENTIAL_SERVICE_BASE_URL: http://credential:3000
+      IDENTITY_BASE_URL: http://identity:3332
+      SCHEMA_BASE_URL: http://credential-schema:3333
+      REDIS_URL: redis://redis:6379
+      SESSION_STORE: redis
+      ISSUER_DID: ${LAND_ISSUER_DID:-}
+      DRAFT13_COMPAT_MODE: 'false'
+      ENABLE_AUTH: 'false'
+      CORS_ALLOWED_ORIGINS: ${PUBLIC_URL:-http://localhost}
+      KEYCLOAK_PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/auth
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/auth
+      KEYCLOAK_REALM: agriculture
+      KEYCLOAK_SUBJECT_CLAIM: nationalId
+      REGISTRY_BASE_URL: http://registry:8081
+      # LandRecord carries its own nationalId so this issuer resolves the
+      # authenticated farmer itself, rather than being handed a farmerId by
+      # anyone. DESIGN §7: one issuer must not rely on another's unsigned state.
+      REGISTRY_SUBJECT_ENTITY: LandRecord
+      REGISTRY_SUBJECT_KEY: nationalId
+      ISSUER_DISPLAY_NAME: Land Registry
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:3400/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
   # --- what this iteration adds -----------------------------------------------
 
   # Issuer-side backend for the National Identity Authority. Reads AgeCitizen
