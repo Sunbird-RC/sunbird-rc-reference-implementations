@@ -1,0 +1,28 @@
+{
+  "_comment": [
+    "Demo lending policy (PRODUCT 'Loan Policy', DESIGN §9): the per-acre rate for",
+    "each supported crop, loaded by the verifier's Agriculture decision module.",
+    "",
+    "Version-controlled on purpose. The rate is what turns verified acreage into a",
+    "rupee figure shown to a customer, so it must be reviewable in Git rather than",
+    "living in code or a database someone can edit between demos.",
+    "",
+    "maxRatePerAcre is the ceiling PRODUCT sets for the demo policy. It is checked",
+    "when this file loads: a rate above it is a startup failure, not a silently",
+    "accepted higher limit. A crop absent from `rates` is NOT a failure — it is a",
+    "verified business answer, NOT ELIGIBLE, because the registry's controlled",
+    "vocabulary deliberately contains crops this policy does not lend against.",
+    "",
+    "Rates are whole rupees per acre. Not a real lending policy."
+  ],
+  "currency": "INR",
+  "maxRatePerAcre": 50000,
+  "acreagePrecision": 2,
+  "rates": {
+    "PADDY": 30000,
+    "WHEAT": 40000,
+    "MAIZE": 25000,
+    "COTTON": 45000,
+    "SUGARCANE": 50000
+  }
+}
