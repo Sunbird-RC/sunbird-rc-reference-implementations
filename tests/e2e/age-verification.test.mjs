@@ -545,7 +545,11 @@ describe('the credential artefact', () => {
       .filter(Boolean);
     assert.ok(advertised.includes(payload.vct),
       `the credential's vct '${payload.vct}' is not advertised: ${advertised.join(', ')}`);
-    assert.match(payload.vct, /^https:\/\//, 'the type must be resolvable');
+    // Absolute, so a wallet can fetch the Type Metadata. Deliberately not
+    // asserting https: a real device needs it (did:web mandates it, and the
+    // deployment has a certificate), but a local stack runs on plain http and
+    // this test's subject is the credential, not the deployment's scheme.
+    assert.match(payload.vct, /^https?:\/\//, 'the type must be an absolute, resolvable URL');
     assert.equal(payload.iss, ageIssuerDid);
 
     // Holder binding: the credential names the wallet's own public key, which is

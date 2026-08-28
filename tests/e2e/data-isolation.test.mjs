@@ -105,33 +105,92 @@ test('there is no shared cross-domain person table', async () => {
 
 test('use-case tables do not overlap', async () => {
   guard();
-  // Age owns AgeCitizen. Agriculture and Education own theirs. No table may be
-  // claimed by two use cases, and Age must not reach into another domain's.
-  const AGRICULTURE = ['farmer', 'landparcel', 'crop', 'seeddistribution'];
+  // Age owns AgeCitizen. Agriculture owns FarmerRecord and LandRecord. Education
+  // owns nothing yet. No table may be claimed by two use cases.
+  //
+  // This test's earlier form asserted that no Agriculture table existed at all,
+  // which was right for one iteration and is now exactly wrong. What replaces it
+  // is the check its own comment promised: that Agriculture's tables are its own.
+  const AGE = ['agecitizen'];
+  const AGRICULTURE = ['farmerrecord', 'landrecord'];
   const EDUCATION = ['qualification', 'schoolcertificate', 'collegediploma', 'universitydegree'];
 
-  const ageTables = (await psql(tablesLike('%agecitizen%'))).split('\n').filter(Boolean);
-  for (const other of [...AGRICULTURE, ...EDUCATION]) {
-    for (const ageTable of ageTables) {
-      assert.equal(
-        ageTable.toLowerCase().includes(other),
-        false,
-        `${ageTable} looks like it serves both Age and another use case`,
-      );
-    }
+  const present = async (terms) =>
+    (
+      await psql(
+        "select table_schema || '.' || table_name from information_schema.tables where lower(table_name) similar to " +
+          `'%(${terms.join('|')})%' order by 1`,
+      )
+    )
+      .split('\n')
+      .filter(Boolean);
+
+  const ageTables = await present(AGE);
+  const agriTables = await present(AGRICULTURE);
+  assert.ok(ageTables.length > 0, 'the Age entity table is missing');
+  assert.ok(
+    agriTables.length >= 2,
+    `both Agriculture entity tables should exist, found:\n${agriTables.join('\n')}`,
+  );
+
+  // No table name may belong to two use cases.
+  for (const table of [...ageTables, ...agriTables]) {
+    const matches = [AGE, AGRICULTURE, EDUCATION].filter((terms) =>
+      terms.some((t) => table.toLowerCase().includes(t)),
+    );
+    assert.equal(matches.length, 1, `${table} looks like it serves more than one use case`);
   }
 
-  // Iteration 01 has one domain, so nothing else should be present yet. When
-  // Agriculture lands this becomes the check that its tables are its own.
-  const otherDomains = await psql(
-    "select table_schema || '.' || table_name from information_schema.tables where lower(table_name) similar to " +
-      `'%(${[...AGRICULTURE, ...EDUCATION].join('|')})%' order by 1`,
-  );
-  assert.equal(
-    otherDomains,
-    '',
-    `Iteration 01 should hold no Agriculture or Education tables yet; found:\n${otherDomains}`,
-  );
+  // Education has not landed, so its tables must not exist.
+  const education = await present(EDUCATION);
+  assert.deepEqual(education, [], `no Education table should exist yet, found:\n${education.join('\n')}`);
+
+  // The rule in the form that actually bites: neither domain's table carries the
+  // other's identifiers. A FarmerRecord with a citizenId column, or an AgeCitizen
+  // with a farmerId, would be a shared person table wearing a domain name.
+  const columnsOf = async (table) =>
+    (
+      await psql(
+        "select lower(column_name) from information_schema.columns where lower(table_name) = lower('" +
+          table.split('.').pop() +
+          "') order by 1",
+      )
+    )
+      .split('\n')
+      .filter(Boolean);
+
+  for (const table of ageTables) {
+    const cols = await columnsOf(table);
+    for (const foreign of ['farmerid', 'landid', 'croptype', 'cultivatedareaacres']) {
+      assert.equal(cols.includes(foreign), false, `${table} carries the Agriculture column ${foreign}`);
+    }
+  }
+  for (const table of agriTables) {
+    const cols = await columnsOf(table);
+    for (const foreign of ['citizenid', 'dateofbirth', 'ageover18', 'ageover21']) {
+      assert.equal(cols.includes(foreign), false, `${table} carries the Age column ${foreign}`);
+    }
+  }
+});
+
+test('each Agriculture registry keeps its own national-id mapping', async () => {
+  guard();
+  // DESIGN §7: one issuer must not depend on another issuer's unsigned client
+  // state. That is why BOTH Agriculture tables carry nationalId — the Land
+  // Registry resolves the authenticated farmer itself rather than being handed a
+  // farmerId. If that column disappeared from LandRecord, the Land issuer could
+  // only work by trusting something it was told.
+  for (const table of ['farmerrecord', 'landrecord']) {
+    const cols = await psql(
+      "select lower(column_name) from information_schema.columns where lower(table_name) like '%" +
+        table +
+        "%' order by 1",
+    );
+    assert.ok(
+      cols.split('\n').includes('nationalid'),
+      `${table} must carry its own nationalId, found columns:\n${cols}`,
+    );
+  }
 });
 
 test('the protocol services keep their own stores, separate from domain data', async () => {

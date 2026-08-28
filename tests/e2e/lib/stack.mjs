@@ -277,6 +277,48 @@ export async function issueAsIssuer({ base, issuerDid, credentialName, claims })
   return { ...offer, credentialOfferUri: offer.credential_offer_uri, vct: cfg.vct };
 }
 
+/**
+ * Creates a pre-authorised offer on ONE of the Agriculture issuers.
+ *
+ * Each registry is its own oid4vc-service instance published under its own path
+ * prefix, so the offer is created on that instance and the wallet then collects
+ * from that instance's token and credential endpoints. Using the Age instance
+ * would sign with the right schema author but would exercise the wrong issuer,
+ * and "two independent issuers" is the thing under test.
+ *
+ * Pre-authorised, not wallet-driven: this is the scripted protocol evidence. The
+ * customer journey is authenticated wallet-driven issuance, which the charter says
+ * a scripted client may never stand in for.
+ *
+ * @param {{base: string, which: 'farmer'|'land', issuerDid: string, claims: object}} args
+ */
+export async function issueAgricultureCredential({ base, which, issuerDid, claims }) {
+  const name = which === 'farmer' ? 'Farmer Identity Credential' : 'Land Ownership Credential';
+  const configs = await ok('list oid4vci configs', json(`${opsBase()}/credential-schema/oid4vci-configs`));
+  const cfg = (configs || []).find((c) => c.name === name && c.author === issuerDid);
+  if (!cfg) throw new Error(`no ${name} schema authored by ${issuerDid} — run scripts/bootstrap.sh`);
+  const configurationId = (cfg.formats || []).length > 1 ? `${cfg.schemaId}_vc+sd-jwt` : cfg.schemaId;
+  const offer = await ok(
+    `create ${which} offer`,
+    json(`${opsBase()}/${which}/oid4vc/offer`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ credential_configuration_id: configurationId, format: 'vc+sd-jwt', claims }),
+    }),
+  );
+  return { ...offer, credentialOfferUri: offer.credential_offer_uri, vct: cfg.vct, issuerBase: `${base}/${which}` };
+}
+
+/** Starts the bank's farm-credit session: the QR the farmer's wallet scans. */
+export function startFarmCreditVerification(base) {
+  return ok('start farm credit check', json(`${base}/api/verifier/agriculture/sessions`, { method: 'POST' }));
+}
+
+/** What the bank asks for and lends at, straight from the service. */
+export function farmCreditPolicy(base) {
+  return ok('farm credit policy', json(`${base}/api/verifier/agriculture/policy`));
+}
+
 /** Starts a verifier session: the QR the wallet would scan. */
 export function startVerification(base) {
   return ok('start verification', json(`${base}/api/verifier/sessions`, { method: 'POST' }));

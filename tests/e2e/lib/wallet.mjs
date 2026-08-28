@@ -273,3 +273,25 @@ export async function submitPresentation({ base, state, queryId, presentation })
     body: JSON.stringify({ state, vp_token: JSON.stringify({ [queryId]: [presentation] }) }),
   });
 }
+
+/**
+ * Answers a multi-credential request: one VP token carrying several
+ * presentations, keyed by the DCQL query id each satisfies.
+ *
+ * The holder key is what ties them together. A wallet presenting two credentials
+ * signs a Key Binding JWT for each with the SAME key, and that is what lets a
+ * verifier treat two matching identifiers as correlation rather than two
+ * credentials that happen to agree — so a test that wants to prove correlation
+ * must be able to present a pair from DIFFERENT holders too, which is why this
+ * takes already-built presentations rather than building them itself.
+ *
+ * @param {{base: string, state: string, presentations: Record<string, string>}} args
+ */
+export async function submitMultiPresentation({ base, state, presentations }) {
+  const vpToken = Object.fromEntries(Object.entries(presentations).map(([id, p]) => [id, [p]]));
+  return http(`${base}/vp/response`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ state, vp_token: JSON.stringify(vpToken) }),
+  });
+}
