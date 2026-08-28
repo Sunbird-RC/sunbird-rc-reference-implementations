@@ -195,6 +195,22 @@
       }
     },
     {
+      "username": "farmer.unregistered",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Kavya",
+      "lastName": "Reddy",
+      "email": "farmer-unregistered@farmers.invalid",
+      "realmRoles": [
+        "default-roles-agriculture"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-90066021"
+        ]
+      }
+    },
+    {
       "username": "farmer.noland",
       "enabled": true,
       "emailVerified": true,
