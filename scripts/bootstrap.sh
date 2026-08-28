@@ -101,6 +101,11 @@ wait_for "identity-service"  "$BASE/identity-health"
 wait_for "credential-schema" "$BASE/schema-health"
 wait_for "credentials"       "$BASE/credential-health"
 wait_for "keycloak"          "$BASE/auth/realms/age/.well-known/openid-configuration" 90
+# Both realms are imported from the same mount, so the second is ready at
+# roughly the same moment — but waiting for it explicitly is what turns "the
+# agriculture realm did not import" into a named failure here instead of a
+# confusing 404 during the first wallet sign-in.
+wait_for "keycloak (agriculture)" "$BASE/auth/realms/agriculture/.well-known/openid-configuration" 60
 wait_for "oid4vc-service"    "$BASE/health"
 # The Java registry takes minutes under amd64 emulation. That is not a hang.
 wait_for "registry"          "$BASE/registry-health" 90
@@ -378,12 +383,24 @@ for u in citizen.meera citizen.arjun citizen.nikhil citizen.sana citizen.unmappe
   fi
 done
 
+# Iteration 02's farmers, in their own realm. The same generated password: it is
+# a demo secret that lives only in deploy/.env, and a second one would be a
+# second thing to keep out of Git for no gain.
+for u in farmer.ravi farmer.lakshmi farmer.suresh farmer.geeta farmer.noland farmer.norecord farmer.unmapped; do
+  if kcadm set-password -r agriculture --username "$u" --new-password "$CITIZEN_PASSWORD" >/dev/null 2>&1; then
+    green "$u ready"
+  else
+    warn "could not set the password for $u"
+  fi
+done
+
 # --- 6. apply the new configuration -----------------------------------------
 say "6. Applying configuration"
 # oid4vc-service reads VERIFIER_DID/ISSUER_DID and the verifier reads
 # AGE_ISSUER_DID at boot, so both need recreating now that .env has them.
-"${COMPOSE[@]}" up -d --force-recreate --no-deps oid4vc-service verifier age-issuer >/dev/null 2>&1 \
-  || die "could not recreate oid4vc-service/verifier/age-issuer"
+"${COMPOSE[@]}" up -d --force-recreate --no-deps \
+  oid4vc-service oid4vc-farmer oid4vc-land verifier age-issuer >/dev/null 2>&1 \
+  || die "could not recreate the issuer and verifier services"
 wait_for "oid4vc-service (restarted)" "$BASE/health"
 wait_for "verifier"                   "$BASE/verifier-health"
 wait_for "age-issuer"                 "$BASE/issuer-health"

@@ -205,6 +205,12 @@ services:
       - KC_HEALTH_ENABLED=true
     volumes:
       - ./keycloak/realm-age.json:/opt/keycloak/data/import/realm-age.json:ro
+      # A second realm for Iteration 02 rather than more accounts in `age`. The
+      # subject claim differs — nationalId here, citizenId there — and that claim
+      # is per-issuer-instance configuration, so one realm would mean accounts
+      # carrying two identity claims for two unrelated purposes. It also leaves
+      # the accepted Age accounts untouched, which Age regression depends on.
+      - ./keycloak/realm-agriculture.json:/opt/keycloak/data/import/realm-agriculture.json:ro
     healthcheck:
       # A TCP connect, not an HTTP probe. The image ships no curl or wget, and
       # hand-rolling an HTTP request through bash's /dev/tcp means embedding CRLF
