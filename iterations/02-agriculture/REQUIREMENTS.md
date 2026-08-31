@@ -3,6 +3,12 @@
 **Status:** Updated after Iteration 01; ready for final requirements review
 **Iteration:** 02
 
+> **Final wallet decision:** The delivered customized Paradym-based wallet is
+> approved. Inji is out of scope for all demos. Any older Inji-specific wording
+> below is superseded by
+> [`DECISION-03-wallet-scope.md`](../../docs/reviews/DECISION-03-wallet-scope.md)
+> and is not an acceptance requirement.
+
 ## 1. Required Demonstration Workflows
 
 ### R1 — Farmer credential issuance

@@ -1,5 +1,10 @@
 # Sunbird RC Demo — Compatibility Baseline
 
+> **Scope note:** Inji-related material in this file is retained as historical
+> compatibility research only. Anand removed Inji from the current demo
+> programme on 31 August 2026; it creates no implementation, handshake, or
+> acceptance requirement for any iteration.
+
 **Status:** Reference input for engineering
 **Validated:** 20 August 2026
 **Revised:** 25 August 2026 — after the Iteration 01 review and Anand's answers

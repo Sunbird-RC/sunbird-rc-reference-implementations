@@ -114,7 +114,7 @@ LRA 5.5, final 1.4 s true silence, closing line peaking at −3.2 dB.
 
 **[`ACCEPTANCE.md`](ACCEPTANCE.md)** maps every requirement in
 `REQUIREMENTS.md`, in its own order, to the recording, test, configuration or
-other reproducible evidence that closes it — and states the seven known
+other reproducible evidence that closes it — and states the six known
 deviations rather than leaving them to be inferred.
 
 ## Captured runs
@@ -152,7 +152,8 @@ undisclosed claim value appears in any of them — scanned, not assumed; see
 | Approved algorithms | **ES256 only**, enforced — `config/policy/algorithms.json` |
 | Device | Samsung SM-A055F, Android 15 |
 | Deployment | `https://135.235.192.9.sslip.io`, real Let's Encrypt certificate |
-| Branch / commit | `iteration/agriculture-02-rural-credit` @ `a0b3abe7718623c011401e6f4be1c39fb48d0f65` |
+| Tested implementation | `a0b3abe7718623c011401e6f4be1c39fb48d0f65` |
+| Final handoff reviewed | `deefe25` |
 
 Session TTL, signing and store settings are as recorded in
 [`docs/evidence/01-age/README.md`](../01-age/README.md#configuration-that-matters);

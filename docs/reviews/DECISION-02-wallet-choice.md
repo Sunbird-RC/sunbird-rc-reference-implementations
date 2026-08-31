@@ -6,6 +6,11 @@ wallet already forked into this repository. Kartheek confirmed the decision with
 him before implementation began.
 **Affects:** `PRODUCT.md` (Product acceptance), `REQUIREMENTS.md` §11, `DESIGN.md` §3, §10, §13.5
 
+> **Superseded for future scope:** On 31 August 2026, Anand removed Inji from
+> the complete demo programme. The historical analysis below explains the
+> Iteration 02 choice but creates no deferred requirement for Iteration 03. See
+> [`DECISION-03-wallet-scope.md`](DECISION-03-wallet-scope.md).
+
 ## Decision required
 
 Iteration 02 uses the **wallet already vendored in this repository**
@@ -25,9 +30,8 @@ detail:
 - `DESIGN.md` §3: "The customized Age wallet is not the Agriculture wallet
   baseline."
 
-It also touches a standing Product commitment beyond this iteration: Inji is
-required to complete **at least one** full use case. That commitment is deferred,
-not cancelled, and Education (Iteration 03) is where it would land.
+At the time, this touched a standing Product commitment beyond this iteration.
+That commitment has since been removed by the superseding wallet-scope decision.
 
 ## Evidence and constraint
 
@@ -93,9 +97,8 @@ against a build that does not exist.
 
 ## Consequences to carry forward
 
-1. Inji still owes at least one full use case (`PRODUCT.md`, Iteration 03).
-2. The three recorded Inji risks remain open and are **not** closed by this
-   iteration. They stay in `COMPATIBILITY.md` for whoever runs the Inji spike.
+1. No Inji demonstration or compatibility handshake is owed by a later iteration.
+2. The recorded Inji findings remain historical research, not open demo risks.
 3. One wallet build now serves two iterations, so "only the Farmer Registry and
    Land Registry appear in the Agriculture issuer directory"
    (`REQUIREMENTS.md` §3) has to be read per use case rather than per app — the

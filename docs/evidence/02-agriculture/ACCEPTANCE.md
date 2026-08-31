@@ -3,7 +3,10 @@
 Every requirement in [`REQUIREMENTS.md`](../../../iterations/02-agriculture/REQUIREMENTS.md),
 in its own order, against the evidence that closes it.
 
-**Branch** `iteration/agriculture-02-rural-credit` · **commit** `a0b3abe7718623c011401e6f4be1c39fb48d0f65`
+**Branch:** `iteration/agriculture-02-rural-credit`
+
+- **Tested implementation:** `a0b3abe7718623c011401e6f4be1c39fb48d0f65`
+- **Final handoff reviewed for sign-off:** `deefe25`
 
 | Source | Where |
 |---|---|
@@ -184,45 +187,40 @@ PRODUCT or REQUIREMENTS.
 | Anand has reviewed the customer demonstration | MET — demo accepted |
 | Nothing merges to `main` without Anand's sign-off | Held. The branch is not merged |
 
-## 11. Mandatory Inji handshake
+## 11. Wallet scope
 
 **N/A by approved decision.** Anand approved using the already-vendored wallet
 instead of Inji on 28 August 2026 —
 [`docs/reviews/DECISION-02-wallet-choice.md`](../../reviews/DECISION-02-wallet-choice.md).
-There is no pinned Inji build to run the handshake against, so it was not
-performed, and **this iteration does not evidence that Inji interoperates with
-this stack**. The seven handshake items were all demonstrated on the substitute
-wallet: items 1–4 in **V** parts 1–3, items 5–7 in **V** parts 4 and 8.
-
-Inji remains deferred to Iteration 03, where PRODUCT's "Inji completes at least
-one full use case" would land.
+The required wallet outcomes were demonstrated using the established customized
+Paradym-based wallet: items 1–4 in **V** parts 1–3 and items 5–7 in **V** parts
+4 and 8. Anand subsequently removed Inji interoperability from the scope of all
+current demos; it is not deferred to Iteration 03.
 
 ---
 
 ## Known deviations
 
-1. **The wallet is not Inji.** Approved 28 August 2026. Consequence: no evidence
-   of Inji interoperability. Three recorded Inji risks stay open.
-2. **The wallet reports no request purpose.** R3.4 asks for the purpose to be
+1. **The wallet reports no request purpose.** R3.4 asks for the purpose to be
    displayed; the wallet's review screen instead says no purpose was provided,
    because the issuer build sends no `client_metadata`. Visible in **V** part 4
    and named in the narration rather than cut. Everything else R3.4 asks for —
    bank identity, credentials, requested attributes, consent — is shown.
-3. **Credential expiry is not validated**, because the issuer sets no `exp`.
+2. **Credential expiry is not validated**, because the issuer sets no `exp`.
    Transaction-state expiry is enforced and tested.
-4. **`revocation: OK` is a default, not a check** (`STATUS_LIST_ENABLED=false`).
+3. **`revocation: OK` is a default, not a check** (`STATUS_LIST_ENABLED=false`).
    Revocation infrastructure is out of scope per PRODUCT and must not be
    presented as verified revocation.
-5. **The cross-field acreage rule is enforced at seed time**, not by the registry,
+4. **The cross-field acreage rule is enforced at seed time**, not by the registry,
    which cannot express it. `scripts/seed-agriculture.sh` refuses to seed a
    violating record.
-6. **Only one of the four rejection causes is demonstrated on a device.** The
+5. **Only one of the four rejection causes is demonstrated on a device.** The
    mismatched combination is in **V** part 7. Tampering, an untrusted issuer and
    a wrong-holder presentation are covered by the automated suites only — an
    honest wallet cannot produce them, and the Agriculture build's issuer directory
    is baked to the two registries, so a farmer cannot reach an untrusted issuer
    through the app at all.
-7. **The mobile verifier is not required** (REQUIREMENTS §1 makes web QR the
+6. **The mobile verifier is not required** (REQUIREMENTS §1 makes web QR the
    customer-facing channel). One was built anyway, as a build-time channel of the
    existing app rather than a second application, and must not be offered in
    place of the web channel.

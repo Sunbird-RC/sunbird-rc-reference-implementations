@@ -5,6 +5,12 @@
 **Product:** [`PRODUCT.md`](PRODUCT.md)  
 **Requirements:** [`REQUIREMENTS.md`](REQUIREMENTS.md)
 
+> **Final wallet decision:** The delivered customized Paradym-based wallet is
+> the approved design baseline. Inji is out of scope for all demos. The earlier
+> Inji design and handshake sections below are retained only as iteration
+> history and are superseded by
+> [`DECISION-03-wallet-scope.md`](../../docs/reviews/DECISION-03-wallet-scope.md).
+
 ## 1. Design Objective
 
 Extend the accepted Age foundation to demonstrate independent issuers, multi-credential presentation, Agriculture-specific correlation, and a crop-based bank decision without duplicating identity, wallet, protocol, verifier, trust, or deployment capabilities.

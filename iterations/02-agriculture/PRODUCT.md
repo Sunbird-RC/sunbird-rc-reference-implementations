@@ -2,7 +2,13 @@
 
 **Status:** Updated after Iteration 01; ready for final Product review
 **Iteration:** 02  
-**Depends on:** Accepted Age iteration identity, credential, verifier, security, deployment, testing, and evidence foundation. Agriculture uses Inji Wallet and must prove its compatibility independently.
+**Depends on:** Accepted Age iteration identity, credential, verifier, security, deployment, testing, and evidence foundation.
+
+> **Final wallet decision:** The delivered customized Paradym-based wallet is
+> the approved wallet for this iteration. Inji is removed from the complete demo
+> programme by [`DECISION-03-wallet-scope.md`](../../docs/reviews/DECISION-03-wallet-scope.md).
+> Any older Inji-specific wording below is superseded and creates no acceptance
+> requirement.
 
 ## Purpose
 

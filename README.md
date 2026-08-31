@@ -14,7 +14,7 @@ The planned use cases progressively showcase:
 2. **Agriculture / rural credit** — multiple issuers, multiple credentials, correlation, and business rules.
 3. **Education / employment** — credential discovery and filtering, domain reuse, and extensibility.
 
-Across these use cases, the showcase includes Inji Wallet interoperability, suitable open-source VC wallets, logically separated issuer data, and both web and mobile verification experiences.
+Across these use cases, the showcase uses the established customized open-source wallet, logically separated issuer data, and both web and mobile verification experiences. Inji interoperability is not part of the demo programme.
 
 ## Project Status
 
@@ -137,6 +137,8 @@ installing one replaces the other. See
 - [Iteration 01 review feedback, round 2](docs/reviews/ITERATION-01-FEEDBACK-ROUND2.md)
 - [Iteration 01 formal sign-off](docs/reviews/ITERATION-01-SIGNOFF.md)
 - [Iteration 01 evidence](docs/evidence/01-age/README.md)
+- [Programme wallet-scope decision](docs/reviews/DECISION-03-wallet-scope.md)
+- [Iteration 02 formal sign-off](docs/reviews/ITERATION-02-SIGNOFF.md)
 - [Iteration 02 — Agriculture Product](iterations/02-agriculture/PRODUCT.md)
 - [Iteration 02 — Agriculture Requirements](iterations/02-agriculture/REQUIREMENTS.md)
 - [Iteration 02 — Agriculture Design](iterations/02-agriculture/DESIGN.md)

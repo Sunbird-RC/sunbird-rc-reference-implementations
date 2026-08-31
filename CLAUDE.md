@@ -44,9 +44,9 @@ For Iteration 02, read these branch-specific inputs before any implementation:
 3. [`iterations/02-agriculture/DESIGN.md`](iterations/02-agriculture/DESIGN.md)
 4. [`iterations/02-agriculture/DEMO.md`](iterations/02-agriculture/DEMO.md)
 
-Run the mandatory Inji handshake before building the complete Agriculture
-journey. A failed handshake is evidence for an escalation, not permission to
-replace Inji, change the journey, or introduce an adapter.
+Use the established customized Paradym-based wallet. Inji interoperability is
+outside the scope of the current demo programme and must not be introduced as an
+Iteration 03 requirement.
 
 ## Engineering Rules
 

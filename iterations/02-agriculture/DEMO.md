@@ -2,7 +2,11 @@
 
 **Audience:** Potential customers and Anand's iteration acceptance review  
 **Presenter:** Kartheek  
-**Channel:** Real Inji Wallet on a phone and the mock bank website on a separate screen
+**Channel:** Real customized Paradym-based wallet on a phone and the mock bank website on a separate screen
+
+> Inji references later in this historical demo brief are superseded by the
+> approved programme-wide wallet decision. The delivered wallet demonstration
+> is the accepted channel.
 
 The final demonstration must tell one continuous customer story. Kartheek should
 show the working applications and outcomes; coding-agent activity belongs in the

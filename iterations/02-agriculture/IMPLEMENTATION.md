@@ -495,13 +495,12 @@ produced on a laptop for the web channel:
 
 ## Known limitations, carried forward deliberately
 
-1. **Inji is unproven against this stack.** Deferred to Iteration 03, where
-   PRODUCT's "Inji completes at least one full use case" would land.
-2. **The Agriculture wallet build must not list the Age issuer.** Kartheek's
+1. **The Agriculture wallet build must not list the Age issuer.** Kartheek's
    instruction, 28 August 2026, and it matches `DEMO.md`'s quality gate — "No Age
    or unrelated issuer in the Agriculture wallet configuration". See below; this is
    a requirement, not a limitation.
-3. **The algorithm allowlist.** `REQUIREMENTS.md` §8 requires resolving Age's
-   recorded limitation explicitly rather than inheriting it. Open; it will be
-   decided against what the presentation output actually exposes, and recorded
-   either way rather than claimed.
+2. **Algorithm allowlisting is closed.** Option A is enforced using the
+   version-controlled ES256-only policy. Missing, malformed, mixed, or
+   unapproved algorithms are rejected before any domain decision; unit,
+   end-to-end, and verification evidence is captured under
+   `docs/evidence/02-agriculture/runs/`.
