@@ -297,6 +297,60 @@ services:
       timeout: 5s
       retries: 30
 
+  # --- Iteration 02: the bank's own verifier identity --------------------------
+  #
+  # A fourth oid4vc-service instance whose ONLY job is to sign the bank's
+  # OID4VP request objects, with the bank's own DID.
+  #
+  # Why it exists at all: the request object's signature is what a wallet uses to
+  # name the requesting party on its consent screen. With one instance signing for
+  # both use cases, the farmer's screen read "Do you trust Age Check?" while
+  # applying for crop credit — the wallet was telling the truth about the key it
+  # was shown, and the deployment was conflating two unrelated parties. That is
+  # the same mistake DESIGN and bootstrap.sh already refuse between the issuer and
+  # the verifier ("a separate identity because it is a separate party"); this
+  # applies it to the second verifier.
+  #
+  # It issues nothing. No Keycloak, no registry, no ISSUER_DID: an instance that
+  # could also issue would be a fifth issuer nobody asked for, and it would appear
+  # in wallet issuer directories.
+  oid4vc-bank:
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
+    restart: unless-stopped
+    depends_on:
+      identity:
+        condition: service_healthy
+      credential:
+        condition: service_healthy
+      credential-schema:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: '3400'
+      # Published under its own path, so the request_uri the QR carries resolves
+      # back to THIS instance. nginx strips the prefix (routes-citizen.conf).
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/bank-vp
+      INTERNAL_URL: http://oid4vc-bank:3400
+      CREDENTIAL_SERVICE_BASE_URL: http://credential:3000
+      IDENTITY_BASE_URL: http://identity:3332
+      SCHEMA_BASE_URL: http://credential-schema:3333
+      REDIS_URL: redis://redis:6379
+      SESSION_STORE: redis
+      OID4VP_SIGN_REQUEST: ${OID4VP_SIGN_REQUEST:-true}
+      VERIFIER_DID: ${BANK_VERIFIER_DID:-}
+      # Advertise nothing. This instance authored no schema, so with the filter on
+      # its issuer metadata is empty — which is the intent: it is not an issuer.
+      ADVERTISE_OWN_CREDENTIALS_ONLY: 'true'
+      DRAFT13_COMPAT_MODE: 'false'
+      ENABLE_AUTH: 'false'
+      CORS_ALLOWED_ORIGINS: ${PUBLIC_URL:-http://localhost}
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:3400/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
   # --- Iteration 02: the two Agriculture issuers -------------------------------
   #
   # Each registry is its OWN oid4vc-service instance, not a second credential on
@@ -482,6 +536,11 @@ services:
       AGE_ISSUER_DID: ${AGE_ISSUER_DID:-}
       FARMER_ISSUER_DID: ${FARMER_ISSUER_DID:-}
       LAND_ISSUER_DID: ${LAND_ISSUER_DID:-}
+      # Which signer the BANK's presentation requests come from. Age keeps the
+      # instance it always used (OID4VC_BASE_URL below); agriculture requests are
+      # signed by the bank's own identity, so the wallet's consent screen names
+      # the bank rather than the age-restricted service.
+      OID4VC_BANK_BASE_URL: http://oid4vc-bank:3400
       # The credential types the bank's request pins, one per issuer instance.
       FARMER_VCT: ${PUBLIC_URL:-http://localhost}/farmer/vct/farmer-identity-credential
       LAND_VCT: ${PUBLIC_URL:-http://localhost}/land/vct/land-ownership-credential

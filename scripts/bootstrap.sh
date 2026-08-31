@@ -186,12 +186,19 @@ UNTRUSTED_DID="$(mint_did  UNTRUSTED_ISSUER_DID 'Unlisted issuer (negative fixtu
 # issuers" a label rather than a fact.
 FARMER_ISSUER_DID="$(mint_did FARMER_ISSUER_DID  'Farmer Registry')"
 LAND_ISSUER_DID="$(mint_did   LAND_ISSUER_DID    'Land Registry')"
+# The BANK's verifier identity. A wallet names the requesting party from the key
+# that signed the request object, so sharing the age verifier's DID made the
+# farmer's consent screen read "Do you trust Age Check?" while applying for crop
+# credit. Separate parties, separate keys — the same reason the issuer and the
+# verifier above do not share one.
+BANK_VERIFIER_DID="$(mint_did BANK_VERIFIER_DID  'Gramin Bank (farm credit verifier)')"
 
 set_env AGE_ISSUER_DID      "$AGE_ISSUER_DID"
 set_env VERIFIER_DID        "$VERIFIER_DID"
 set_env UNTRUSTED_ISSUER_DID "$UNTRUSTED_DID"
 set_env FARMER_ISSUER_DID   "$FARMER_ISSUER_DID"
 set_env LAND_ISSUER_DID     "$LAND_ISSUER_DID"
+set_env BANK_VERIFIER_DID   "$BANK_VERIFIER_DID"
 green "DIDs recorded in deploy/.env"
 
 # --- 4. credential schemas ---------------------------------------------------
@@ -399,7 +406,7 @@ say "6. Applying configuration"
 # oid4vc-service reads VERIFIER_DID/ISSUER_DID and the verifier reads
 # AGE_ISSUER_DID at boot, so both need recreating now that .env has them.
 "${COMPOSE[@]}" up -d --force-recreate --no-deps \
-  oid4vc-service oid4vc-farmer oid4vc-land verifier age-issuer >/dev/null 2>&1 \
+  oid4vc-service oid4vc-farmer oid4vc-land oid4vc-bank verifier age-issuer >/dev/null 2>&1 \
   || die "could not recreate the issuer and verifier services"
 wait_for "oid4vc-service (restarted)" "$BASE/health"
 wait_for "verifier"                   "$BASE/verifier-health"
@@ -409,6 +416,7 @@ say "Ready"
 cat <<SUMMARY
   Issuer   National Identity Authority   $AGE_ISSUER_DID
   Verifier Age-restricted service        $VERIFIER_DID
+  Verifier Gramin Bank (farm credit)     $BANK_VERIFIER_DID
   Unlisted negative-fixture issuer       $UNTRUSTED_DID
   Credential type                        $VCT
 

@@ -93,7 +93,8 @@ function showCalculation({ disclosed, loan }) {
   const lines = [
     ['Crop', disclosed.cropType],
     ['Cultivated area', `${disclosed.cultivatedAreaAcres} acres`],
-    ['Applicable rate', `₹${loan.ratePerAcre.toLocaleString('en-IN')} per acre`],
+    // Formatted by the service, like the total: one implementation of money.
+    ['Applicable rate', `${loan.ratePerAcreFormatted} per acre`],
   ];
   for (const [label, value] of lines) {
     const line = document.createElement('div');

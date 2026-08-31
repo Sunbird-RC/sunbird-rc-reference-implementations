@@ -40,7 +40,30 @@ const CROP_POLICY_FILE = process.env.CROP_POLICY_FILE || '/app/config/policy/cro
 // protocol transaction would show a QR that can no longer be answered.
 const SESSION_TTL_SECONDS = Number(process.env.SESSION_TTL_SECONDS || 300);
 
-const oid4vc = oid4vcClient({ baseUrl: process.env.OID4VC_BASE_URL || 'http://oid4vc-service:3400' });
+/**
+ * The OID4VP signers, one per requesting PARTY.
+ *
+ * A wallet names the requesting party from the key that signed the request
+ * object, so two verifiers sharing one signer are one party as far as any wallet
+ * can tell — the farmer's consent screen read "Do you trust Age Check?" while
+ * applying for crop credit. Separate identities for separate parties is the rule
+ * bootstrap.sh already applies between the issuer and the verifier; this is the
+ * same rule between the two verifiers.
+ *
+ * Falls back to the age signer when no bank instance is configured, so a
+ * deployment that has not been re-bootstrapped still works — it just names the
+ * wrong party, which is a demo defect and not an outage.
+ */
+const signers = {
+  age: oid4vcClient({ baseUrl: process.env.OID4VC_BASE_URL || 'http://oid4vc-service:3400' }),
+  bank: oid4vcClient({
+    baseUrl:
+      process.env.OID4VC_BANK_BASE_URL || process.env.OID4VC_BASE_URL || 'http://oid4vc-service:3400',
+  }),
+};
+// Health and readiness stay the age instance's: it is the one every deployment
+// has, and the readiness probe must not start failing on an optional service.
+const oid4vc = signers.age;
 const sessions = sessionStore({ ttlSeconds: SESSION_TTL_SECONDS });
 
 // Loaded once, at boot, and deliberately allowed to throw: a verifier that
@@ -77,14 +100,33 @@ function sanitiseDiagnostic(message) {
  */
 const USE_CASES = {
   age: {
+    signer: 'age',
     requests: () => [ageCredentialRequest({ vct: AGE_VCT })],
     describe: () => `requesting ${AGE_CLAIM} only`,
   },
   agriculture: {
+    // The bank is a different party from the age-restricted service, so it signs
+    // with its own DID and the wallet names it correctly.
+    signer: 'bank',
     requests: () => agricultureCredentialRequests({ farmerVct: FARMER_VCT, landVct: LAND_VCT }),
     describe: () => 'requesting the farmer and land credentials',
   },
 };
+
+/**
+ * The optional use-case prefix a front end may address its own namespace by.
+ *
+ * Reading and cancelling are use-case agnostic — the session itself records
+ * which use case it belongs to — but a page that POSTs to
+ * /api/verifier/agriculture/sessions reasonably expects to GET the result back
+ * from the same place. Without this, the bank page's poll landed on no route at
+ * all, the 404 was rendered as "the request expired", and the application it
+ * described as unanswered had in fact been decided ELIGIBLE. Built from the map
+ * so a third use case cannot be added and silently left un-pollable.
+ */
+const USE_CASE_PREFIX = `(?:/(?:${Object.keys(USE_CASES).join('|')}))?`;
+const CANCEL_PATH = new RegExp(`^${USE_CASE_PREFIX}/sessions/([A-Za-z0-9_-]+)/cancel$`);
+const READ_PATH = new RegExp(`^${USE_CASE_PREFIX}/sessions/([A-Za-z0-9_-]+)$`);
 
 async function createSession(useCaseName = 'age') {
   const useCase = USE_CASES[useCaseName];
@@ -92,11 +134,15 @@ async function createSession(useCaseName = 'age') {
 
   const requests = useCase.requests();
   const query = buildDcqlQuery(requests);
-  const vp = await oid4vc.createRequest(query);
+  const vp = await signers[useCase.signer].createRequest(query);
 
   const session = sessions.create({
     id: vp.transaction_id,
     useCase: useCaseName,
+    // Recorded, not re-derived: the status of a transaction lives in the
+    // instance that created it, so reading it from the other one is a 404 the
+    // page would render as "expired".
+    signer: useCase.signer,
     // One entry per credential the request asks for. Age has exactly one, which
     // is why its behaviour is unchanged by this becoming a list.
     requests: requests.map((request) => ({
@@ -162,7 +208,7 @@ async function readSession(sessionId) {
 
   let status;
   try {
-    status = await oid4vc.getStatus(sessionId);
+    status = await signers[session.signer || 'age'].getStatus(sessionId);
   } catch (err) {
     if (err.status === 404) return { status: 404, body: { state: 'expired' } };
     throw err;
@@ -178,7 +224,13 @@ async function readSession(sessionId) {
   const verification = evaluateChecks(status);
   if (!verification.ok) {
     if (verification.reason === 'pending') {
-      return { status: 200, body: { state: 'waiting' } };
+      // qrData travels with the waiting state so a client that has only a
+      // session id can still find the request — a page reloaded mid-session, or
+      // the hand-driven wallet in scripts/. It is the transaction the page is
+      // already displaying, it names the signer that holds it, and it contains
+      // nothing about the holder. Rebuilding that URL from PUBLIC_URL instead
+      // would guess a path prefix and reach the wrong signer.
+      return { status: 200, body: { state: 'waiting', qrData: session.qrData } };
     }
     // A refusal is not a failure. It gets its own state so the page can say
     // "nothing was shared" instead of showing a red verification error, and so
@@ -264,26 +316,39 @@ async function readSession(sessionId) {
         reason: outcome.reason,
         checks: status.checks,
         issuer,
-        // The verified inputs the policy used, so the bank can show its working.
-        // Nothing here identifies the farmer beyond the correlation id they
-        // consented to share.
-        disclosed:
-          outcome.outcome === 'ELIGIBLE'
+        // EVERYTHING the farmer disclosed, not merely the inputs the policy
+        // happened to use. The page prints this under "Shared with us" next to
+        // the list of claims that were withheld, so a short list here does not
+        // read as brevity — it reads as a stronger privacy guarantee than the
+        // request actually made. It listed three claims of the five distinct
+        // ones that arrived until this was fixed.
+        //
+        // farmerId is taken from the FARMER credential specifically, and the
+        // land credential's copy is not spread over it: when the two disagree
+        // the decision is CORRELATION_FAILED, and a merge would quietly display
+        // one farmer id for a presentation that carried two.
+        disclosed: {
+          farmerId: verified.farmer.farmerId,
+          registeredFarmer: verified.farmer.registeredFarmer,
+          ...(verified.land
             ? {
-                farmerId: outcome.farmerId,
-                cropType: outcome.cropType,
-                cultivatedAreaAcres: outcome.cultivatedAreaAcres,
-              }
-            : {
-                farmerId: verified.farmer.farmerId,
                 ownershipStatus: verified.land.ownershipStatus,
                 cropType: verified.land.cropType,
                 cultivatedAreaAcres: verified.land.cultivatedAreaAcres,
-              },
+              }
+            : {}),
+        },
         loan:
           outcome.outcome === 'ELIGIBLE'
             ? {
                 ratePerAcre: outcome.ratePerAcre,
+                // Formatted here as well as the total, because the mobile
+                // verifier runs on Hermes, where Intl is not guaranteed and
+                // Number.toLocaleString('en-IN') silently falls back to plain
+                // grouping — so the phone would print a different figure from the
+                // web page for the same decision. Money is formatted in one
+                // place, by the service that owns the policy.
+                ratePerAcreFormatted: formatIndianRupees(outcome.ratePerAcre),
                 maximumLoan: outcome.maximumLoan,
                 maximumLoanFormatted: formatIndianRupees(outcome.maximumLoan),
                 currency: cropPolicy.currency,
@@ -364,7 +429,7 @@ const server = createServer(async (req, res) => {
       const result = await createSession('agriculture');
       return send(result.status, result.body);
     }
-    const cancelMatch = /^\/sessions\/([A-Za-z0-9_-]+)\/cancel$/.exec(path);
+    const cancelMatch = CANCEL_PATH.exec(path);
     if (req.method === 'POST' && cancelMatch) {
       const id = cancelMatch[1];
       if (!sessions.get(id)) return send(404, { state: 'expired' });
@@ -372,7 +437,7 @@ const server = createServer(async (req, res) => {
       console.log(`[verifier] session ${id} cancelled by the verifier; no decision will be reported`);
       return send(200, { state: 'cancelled' });
     }
-    const match = /^\/sessions\/([A-Za-z0-9_-]+)$/.exec(path);
+    const match = READ_PATH.exec(path);
     if (req.method === 'GET' && match) {
       const result = await readSession(match[1]);
       return send(result.status, result.body);
