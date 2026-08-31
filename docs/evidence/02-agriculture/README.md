@@ -3,7 +3,7 @@
 ## The demonstration video
 
 **[`Agriculture-Rural-Credit-Showcase-31Aug.mp4`](Agriculture-Rural-Credit-Showcase-31Aug.mp4)**
-— 5 min 15 s, 720×1600, H.264 + AAC 48 kHz stereo, −16.1 LUFS, 15.2 MB.
+— 5 min 22 s, 720×1600, H.264 + AAC 48 kHz stereo, −16.0 LUFS, 15.2 MB.
 Eight parts, covering **all four outcomes**.
 
 Filmed on the deployment at `https://135.235.192.9.sslip.io` on 31 August 2026,
@@ -11,7 +11,7 @@ on a Samsung SM-A055F (Android 15). Recorded on the real applications: the
 vendored wallet, the mock bank page, and the installed Farm Credit app. Nothing
 in it is scripted or simulated.
 
-`sha256 aa95aa5ef339249c2c6b0baa506265d02e4f01ca105406038a48d0f330a0b9a3`
+`sha256 39664246b8456ef82a5ced004137f8541f2895011b890b04d898f7d2d44905a5`
 
 | Part | What it demonstrates | `DEMO.md` |
 |---|---|---|
@@ -21,7 +21,7 @@ in it is scripted or simulated.
 | 4 | The bank's page and published policy on a laptop, the phone's camera on its code, **"Do you trust Gramin Bank?"**, six values consented, then the laptop showing **ELIGIBLE** with the calculation | §4, §5 |
 | 5 | The installed Farm Credit app asking the wallet directly — same bank, now *Last interaction: Today* | — |
 | 6 | `farmer.suresh`: land **INACTIVE** → **NOT ELIGIBLE**, every cryptographic check still green | §6 |
-| 7 | Ravi's farmer card beside **Lakshmi's** land card: `REJECTED / UNABLE TO VERIFY`, "the two credentials name different farmers", every check still green | §6 |
+| 7 | Ravi's farmer card beside **Lakshmi's** land card. Each farmer id is magnified from the recording, then the two are shown together — `FRM-KA-0041 ≠ FRM-PB-0117` — before `REJECTED / UNABLE TO VERIFY`, "the two credentials name different farmers", every check still green | §6 |
 | 8 | The farmer stops; the bank reports **NO DATA SHARED — the holder declined the request** | §6 |
 
 Parts 7 and 8 were added after Anand's review, which asked for a mismatched,
@@ -74,6 +74,14 @@ That is the point worth narrating: nothing was forged, and the bank still refuse
 — because it refused the **combination**, not either card. It is also visibly
 distinct from `NOT ELIGIBLE`, which means the claims were trusted and the answer
 was no.
+
+**How the part is cut, and why.** The first cut of it did not read, even though
+both ids were on screen: each is one small grey row among six technical fields,
+they are ten seconds apart, and between them sits six seconds of on-screen
+keyboard. A viewer cannot hold the first id in memory across that. The part now
+magnifies each id from the recording and then shows the two together, captioned
+with which card each came from, so the mismatch is demonstrated rather than
+asserted by the verdict text.
 
 `tests/e2e/flow2-agriculture-issuance.test.mjs` pins the same journey through the
 real issuance protocol, and `tests/e2e/agriculture.test.mjs` additionally covers
