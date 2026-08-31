@@ -17,6 +17,23 @@ All four were captured at commit `a0b3abe7718623c011401e6f4be1c39fb48d0f65` on
 `verify.txt` also runs the `sunbird-rc-core` fork's own jest suite: **136 passed,
 136 total**.
 
+## A known flake in the fork's own suite
+
+`src/auth/auth.guard.spec.ts` in `sunbird-rc-core` occasionally fails to start the
+local JWKS server its `beforeAll` needs, and then `afterAll` throws
+`Cannot read properties of undefined (reading 'close')`. Jest also reports "a
+worker process has failed to exit gracefully" on those runs, which points at a
+port or teardown race rather than at anything under test.
+
+Seen once on 31 August 2026 while re-running `verify.sh`, immediately after a run
+where the same suite passed, and not reproduced in two consecutive re-runs
+(136 passed, 136 total both times). It is an upstream test, unrelated to anything
+this iteration changes — no `sunbird-rc-core` source is modified by Iteration 02
+beyond the five pinned port commits.
+
+Recorded rather than left as an unexplained intermittent. It is not a regression,
+and `verify.txt` above captures a passing run.
+
 ## Why verify.txt is captured from outside the repository
 
 `verify.sh` asserts the working tree is clean. Writing its own output into the
