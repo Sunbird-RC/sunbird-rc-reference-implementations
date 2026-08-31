@@ -31,6 +31,10 @@ import {
   cancelFarmCreditVerification,
   requestUriFromQr,
   cancelVerification,
+  ensureNegativeFixture,
+  retireNegativeFixture,
+  NEGATIVE_FARMER_FIXTURE,
+  NEGATIVE_LAND_FIXTURE,
   json,
 } from './lib/stack.mjs';
 import {
@@ -619,4 +623,97 @@ describe('the endpoints the bank page itself uses', () => {
     const res = await json(`${base}/api/verifier/education/sessions/${session.sessionId}`);
     assert.equal(res.status, 404);
   });
+});
+
+// REQUIREMENTS §7's last two required fixtures: a cryptographically VALID
+// credential from an issuer outside the allowlist, for each role.
+//
+// The point is the same one the Age suite makes and worth restating: Sunbird RC's
+// OID4VP verifier answers "is this signature valid?" and never "is this issuer one
+// we accept?". Any party able to mint the same `vct` would otherwise be believed,
+// so the allowlist in config/trust/issuers.json is the only thing standing between
+// a well-formed forgery and a loan.
+//
+// These fixtures are provisioned by the test and retired afterwards, never by
+// bootstrap. Issuer metadata is built from every published schema with no filter,
+// so a fixture created at setup time would appear in the wallet's issuer directory
+// beside the real credentials — exactly what DEMO.md's quality gate forbids.
+describe('trust: a valid credential from an issuer outside the allowlist', () => {
+  for (const [role, fixture, otherRole] of [
+    ['farmer', NEGATIVE_FARMER_FIXTURE, 'land'],
+    ['land', NEGATIVE_LAND_FIXTURE, 'farmer'],
+  ]) {
+    test(`an unlisted ${role} issuer is refused, though its signature is valid`, async () => {
+      guard();
+      const { untrustedIssuerDid } = deployEnv();
+      if (!untrustedIssuerDid) throw new Error('no UNTRUSTED_ISSUER_DID — run scripts/bootstrap.sh');
+
+      const config = await ensureNegativeFixture(untrustedIssuerDid, fixture);
+      try {
+        // The genuine pair, so the ONLY thing wrong with the presentation is who
+        // signed one half of it.
+        const good = await walletWithBothCredentials(FIXTURES.eligiblePaddy);
+
+        // The same claims, the same vct, a real signature — from the wrong issuer.
+        const forgedClaims =
+          role === 'farmer'
+            ? { farmerId: good.records.farmer.farmerId, registeredFarmer: true }
+            : {
+                farmerId: good.records.land.farmerId,
+                ownershipStatus: 'ACTIVE',
+                cropType: good.records.land.cropType,
+                cultivatedAreaAcres: good.records.land.cultivatedAreaAcres,
+              };
+        // Issued through the REGISTRY's own instance, so the vct is minted under
+        // that registry's path and matches what the bank's query pins. Only the
+        // signing DID is wrong.
+        const offer = await issueAgricultureCredential({
+          base,
+          which: role,
+          issuerDid: untrustedIssuerDid,
+          credentialName: fixture.name,
+          claims: forgedClaims,
+        });
+        const forged = (await collectCredential({ base: offer.issuerBase, offer, holder: good.holder })).credential;
+
+        const session = await startFarmCreditVerification(base);
+        const request = await fetchRequestObject({ requestUri: requestUriFromQr(session.qrData) });
+        const policy = await farmCreditPolicy(base);
+        const presentations = {
+          [FARMER_ID]: await presentSdJwt({
+            credential: role === 'farmer' ? forged : good.farmer,
+            disclose: policy.requestedClaims.farmer,
+            nonce: request.nonce,
+            audience: request.client_id,
+            holder: good.holder,
+          }),
+          [LAND_ID]: await presentSdJwt({
+            credential: role === 'land' ? forged : good.land,
+            disclose: policy.requestedClaims.land,
+            nonce: request.nonce,
+            audience: request.client_id,
+            holder: good.holder,
+          }),
+        };
+        const sent = await submitMultiPresentation({
+          base,
+          responseUri: request.response_uri,
+          state: request.state,
+          presentations,
+        });
+        // Upstream accepts it: every signature is real and the holder binding
+        // holds. If this were a 4xx the test would prove nothing about trust.
+        assert.equal(sent.status, 200, 'the forged credential must be cryptographically valid');
+
+        const { body } = await readFarmCreditVerification(base, session.sessionId);
+        assert.equal(body.state, 'rejected', `an unlisted ${role} issuer must not be accepted`);
+        assert.equal(body.decision, undefined, 'a trust rejection is not a lending decision');
+        assert.equal(body.loan, undefined);
+        // And the trusted issuer for the OTHER role must not be what excused it.
+        assert.doesNotMatch(String(body.reason), new RegExp(otherRole, 'i'));
+      } finally {
+        await retireNegativeFixture(config.schemaId);
+      }
+    });
+  }
 });
