@@ -80,6 +80,11 @@ obtains a Let's Encrypt certificate for a host reachable on ports 80 and 443.
 - [Iteration 01 review feedback, round 2](docs/reviews/ITERATION-01-FEEDBACK-ROUND2.md)
 - [Iteration 01 formal sign-off](docs/reviews/ITERATION-01-SIGNOFF.md)
 - [Iteration 01 evidence](docs/evidence/01-age/README.md)
+- [Iteration 03 — Education: Start Here](iterations/03-education/START.md)
+- [Iteration 03 — Product Definition](iterations/03-education/PRODUCT.md)
+- [Iteration 03 — Requirements](iterations/03-education/REQUIREMENTS.md)
+- [Iteration 03 — Architecture & Design](iterations/03-education/DESIGN.md)
+- [Iteration 03 — Final Demo Expectations](iterations/03-education/DEMO.md)
 
 These documents are the authoritative project baseline. Architecture and implementation must remain aligned with them.
 
