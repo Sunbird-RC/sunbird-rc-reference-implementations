@@ -110,8 +110,53 @@ three frozen mid-fade, and two lines describing a screen that had already gone.
 Structure confirmed: `ftyp moov free mdat` (faststart), −16.1 LUFS integrated,
 LRA 5.5, final 1.4 s true silence, closing line peaking at −3.2 dB.
 
-## Still to come
+## Acceptance
 
-- The line-by-line acceptance table against `REQUIREMENTS.md` and `DEMO.md`.
-- Captured test and verification runs, as `docs/evidence/01-age/runs/` holds for
-  Iteration 01.
+**[`ACCEPTANCE.md`](ACCEPTANCE.md)** maps every requirement in
+`REQUIREMENTS.md`, in its own order, to the recording, test, configuration or
+other reproducible evidence that closes it — and states the seven known
+deviations rather than leaving them to be inferred.
+
+## Captured runs
+
+**[`runs/`](runs/)** holds the verbatim output, each file headed with the branch,
+commit, environment, image tag, both fork tips, Node version and timestamp.
+
+| Run | Environment | Result |
+|---|---|---|
+| [`runs/test-unit.txt`](runs/test-unit.txt) | checkout only | **101 passed, 0 failed** |
+| [`runs/test-e2e.txt`](runs/test-e2e.txt) | demo deployment | **96 passed, 0 failed** |
+| [`runs/verify.txt`](runs/verify.txt) | demo deployment | **100 passed, 0 failed, 0 skipped** |
+| [`runs/age-regression.txt`](runs/age-regression.txt) | demo deployment | **39 unit + 51 e2e passed, 0 failed** |
+
+The Age regression is the Iteration 01 suites run in isolation against the same
+deployment that now serves Agriculture, so it is a regression result rather than a
+separate installation. `verify.txt` also carries the `sunbird-rc-core` fork's own
+jest suite: **136 passed, 136 total**.
+
+No password, token, private key, raw credential, raw presentation, National ID or
+undisclosed claim value appears in any of them — scanned, not assumed; see
+[`runs/README.md`](runs/README.md).
+
+## Versions and configuration
+
+| Component | Version |
+|---|---|
+| Sunbird RC | `-v2.1.0` (registry, identity, credential, credential-schema) |
+| `oid4vc-service` | **`sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b`** — local build of the fork branch `oid4vc-keycloak-as-v2.1.0` |
+| `sunbird-rc-core` fork tip | `9caf3c2b` |
+| Wallet | vendored at `vendor/paradym-wallet`; upstream `animo/paradym-wallet@2d68168` plus eight showcase commits, fork tip `6dc0a3c` |
+| Keycloak | `26.0` |
+| Protocol profile | OpenID4VCI 1.0 final (`DRAFT13_COMPAT_MODE=false`), OpenID4VP `direct_post` with a signed request object, DCQL |
+| Credential format | SD-JWT VC — `vc+sd-jwt` for issuance, `dc+sd-jwt` for DCQL |
+| Approved algorithms | **ES256 only**, enforced — `config/policy/algorithms.json` |
+| Device | Samsung SM-A055F, Android 15 |
+| Deployment | `https://135.235.192.9.sslip.io`, real Let's Encrypt certificate |
+| Branch / commit | `iteration/agriculture-02-rural-credit` @ `a0b3abe7718623c011401e6f4be1c39fb48d0f65` |
+
+Session TTL, signing and store settings are as recorded in
+[`docs/evidence/01-age/README.md`](../01-age/README.md#configuration-that-matters);
+Agriculture changes none of them. What it adds is a second Keycloak realm
+(`agriculture`), two issuer instances (`oid4vc-farmer`, `oid4vc-land`), the bank's
+own signer (`oid4vc-bank`), and `ADVERTISE_OWN_CREDENTIALS_ONLY=true` on every
+issuer.

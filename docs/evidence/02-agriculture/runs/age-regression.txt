@@ -1,0 +1,681 @@
+# Age regression — Iteration 01 suites in isolation
+#
+# Run against the SAME deployment that now serves Agriculture, so this is a
+# regression result and not a separate installation.
+#
+# branch        iteration/agriculture-02-rural-credit
+# commit        a0b3abe7718623c011401e6f4be1c39fb48d0f65
+# environment   https://135.235.192.9.sslip.io; operator endpoints via ssh -L 8090:127.0.0.1:8088
+# node          v22.16.0
+# host os       Darwin 25.2.0 arm64
+# captured      2026-08-31T15:44:12Z
+#
+# Age unit suites: age-claims, age-decision, dcql, trust, verification-gate
+# Age e2e suites : age-verification, flow1-wallet-issuance, data-isolation
+#
+# The Age boundary fixtures are date-relative (one citizen turns 18 today, one
+# tomorrow), so seed-age-citizens.sh was re-run first. The suite detects that
+# staleness itself rather than passing quietly.
+#
+
+=== Age unit ===
+TAP version 13
+# Subtest: completedYears: the day before, the day of, and the day after an 18th birthday
+ok 1 - completedYears: the day before, the day of, and the day after an 18th birthday
+  ---
+  duration_ms: 1.733625
+  type: 'test'
+  ...
+# Subtest: completedYears: a leap-day birth has a birthday in common years too
+ok 2 - completedYears: a leap-day birth has a birthday in common years too
+  ---
+  duration_ms: 0.341875
+  type: 'test'
+  ...
+# Subtest: completedYears: month boundary does not leak into the year count
+ok 3 - completedYears: month boundary does not leak into the year count
+  ---
+  duration_ms: 0.34225
+  type: 'test'
+  ...
+# Subtest: parseCalendarDate rejects anything that is not a real calendar date
+ok 4 - parseCalendarDate rejects anything that is not a real calendar date
+  ---
+  duration_ms: 0.73225
+  type: 'test'
+  ...
+# Subtest: parseCalendarDate does not shift the day for timezone reasons
+ok 5 - parseCalendarDate does not shift the day for timezone reasons
+  ---
+  duration_ms: 0.555916
+  type: 'test'
+  ...
+# Subtest: deriveAgeClaims asserts both thresholds, as booleans
+ok 6 - deriveAgeClaims asserts both thresholds, as booleans
+  ---
+  duration_ms: 0.170625
+  type: 'test'
+  ...
+# Subtest: deriveAgeClaims: a minor gets ageOver18 present and false, never missing
+ok 7 - deriveAgeClaims: a minor gets ageOver18 present and false, never missing
+  ---
+  duration_ms: 0.24625
+  type: 'test'
+  ...
+# Subtest: deriveAgeClaims: over 18 but under 21
+ok 8 - deriveAgeClaims: over 18 but under 21
+  ---
+  duration_ms: 0.082458
+  type: 'test'
+  ...
+# Subtest: deriveAgeClaims refuses to invent an assertion without authoritative data
+ok 9 - deriveAgeClaims refuses to invent an assertion without authoritative data
+  ---
+  duration_ms: 0.416666
+  type: 'test'
+  ...
+# Subtest: deriveAgeClaims rejects a future date of birth
+ok 10 - deriveAgeClaims rejects a future date of birth
+  ---
+  duration_ms: 0.478292
+  type: 'test'
+  ...
+# Subtest: APPROVED only for a boolean true
+ok 11 - APPROVED only for a boolean true
+  ---
+  duration_ms: 1.09125
+  type: 'test'
+  ...
+# Subtest: DENIED for a boolean false — a verified answer, not a failure
+ok 12 - DENIED for a boolean false — a verified answer, not a failure
+  ---
+  duration_ms: 0.168792
+  type: 'test'
+  ...
+# Subtest: a non-boolean assertion is refused, not silently approved
+ok 13 - a non-boolean assertion is refused, not silently approved
+  ---
+  duration_ms: 1.141084
+  type: 'test'
+  ...
+# Subtest: an empty claim set is refused
+ok 14 - an empty claim set is refused
+  ---
+  duration_ms: 0.161
+  type: 'test'
+  ...
+# Subtest: the credential request asks for one claim and pins the credential type
+ok 15 - the credential request asks for one claim and pins the credential type
+  ---
+  duration_ms: 0.490875
+  type: 'test'
+  ...
+# Subtest: requests exactly the domain claim plus the issuer identifier
+ok 16 - requests exactly the domain claim plus the issuer identifier
+  ---
+  duration_ms: 2.027959
+  type: 'test'
+  ...
+# Subtest: uses the DCQL spelling of the SD-JWT format, not the OID4VCI one
+ok 17 - uses the DCQL spelling of the SD-JWT format, not the OID4VCI one
+  ---
+  duration_ms: 0.116541
+  type: 'test'
+  ...
+# Subtest: pins the credential type through meta.vct_values
+ok 18 - pins the credential type through meta.vct_values
+  ---
+  duration_ms: 0.176167
+  type: 'test'
+  ...
+# Subtest: does NOT constrain the value of the age claim
+ok 19 - does NOT constrain the value of the age claim
+  ---
+  duration_ms: 0.092042
+  type: 'test'
+  ...
+# Subtest: refuses a request that would disclose everything
+ok 20 - refuses a request that would disclose everything
+  ---
+  duration_ms: 0.313041
+  type: 'test'
+  ...
+# Subtest: refuses a request with no credential type
+ok 21 - refuses a request with no credential type
+  ---
+  duration_ms: 0.083583
+  type: 'test'
+  ...
+# Subtest: refuses an empty query
+ok 22 - refuses an empty query
+  ---
+  duration_ms: 0.07
+  type: 'test'
+  ...
+# Subtest: supports several credentials in one request, for later iterations
+ok 23 - supports several credentials in one request, for later iterations
+  ---
+  duration_ms: 0.095375
+  type: 'test'
+  ...
+# Subtest: expectedClaimNames matches what the query asks for
+ok 24 - expectedClaimNames matches what the query asks for
+  ---
+  duration_ms: 0.365458
+  type: 'test'
+  ...
+# Subtest: an allowlisted issuer is accepted, and named
+ok 25 - an allowlisted issuer is accepted, and named
+  ---
+  duration_ms: 1.837459
+  type: 'test'
+  ...
+# Subtest: a valid credential from an unlisted issuer is rejected
+ok 26 - a valid credential from an unlisted issuer is rejected
+  ---
+  duration_ms: 1.147292
+  type: 'test'
+  ...
+# Subtest: a missing or non-string issuer identifier is rejected, never treated as absent-therefore-fine
+ok 27 - a missing or non-string issuer identifier is rejected, never treated as absent-therefore-fine
+  ---
+  duration_ms: 0.796875
+  type: 'test'
+  ...
+# Subtest: an unresolved ${VAR} is a startup failure, not an empty allowlist entry
+ok 28 - an unresolved ${VAR} is a startup failure, not an empty allowlist entry
+  ---
+  duration_ms: 0.944875
+  type: 'test'
+  ...
+# Subtest: a policy that allowlists nobody is a startup failure
+ok 29 - a policy that allowlists nobody is a startup failure
+  ---
+  duration_ms: 0.689208
+  type: 'test'
+  ...
+# Subtest: passes only when every required check is OK
+ok 30 - passes only when every required check is OK
+  ---
+  duration_ms: 1.679458
+  type: 'test'
+  ...
+# Subtest: a single failed check fails the whole gate, and is named
+ok 31 - a single failed check fails the whole gate, and is named
+  ---
+  duration_ms: 0.265333
+  type: 'test'
+  ...
+# Subtest: a MISSING check is a failure, not a pass
+ok 32 - a MISSING check is a failure, not a pass
+  ---
+  duration_ms: 0.112334
+  type: 'test'
+  ...
+# Subtest: holder binding and audience are among the required checks
+ok 33 - holder binding and audience are among the required checks
+  ---
+  duration_ms: 0.11325
+  type: 'test'
+  ...
+# Subtest: verified:false never passes, whatever the checks say
+ok 34 - verified:false never passes, whatever the checks say
+  ---
+  duration_ms: 0.204792
+  type: 'test'
+  ...
+# Subtest: pending is distinguished from rejected
+ok 35 - pending is distinguished from rejected
+  ---
+  duration_ms: 0.219584
+  type: 'test'
+  ...
+# Subtest: claim policy: exactly the expected claims
+ok 36 - claim policy: exactly the expected claims
+  ---
+  duration_ms: 0.36975
+  type: 'test'
+  ...
+# Subtest: claim policy rejects an unrequested claim
+ok 37 - claim policy rejects an unrequested claim
+  ---
+  duration_ms: 0.1845
+  type: 'test'
+  ...
+# Subtest: claim policy rejects a missing claim
+ok 38 - claim policy rejects a missing claim
+  ---
+  duration_ms: 0.605125
+  type: 'test'
+  ...
+# Subtest: sessions expire, and do not accumulate a history of holder activity
+ok 39 - sessions expire, and do not accumulate a history of holder activity
+  ---
+  duration_ms: 0.719666
+  type: 'test'
+  ...
+1..39
+# tests 39
+# suites 0
+# pass 39
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 116.945083
+
+=== Age end-to-end ===
+TAP version 13
+# Subtest: positive flow
+    # Subtest: an adult is APPROVED, with every verification check passing
+    ok 1 - an adult is APPROVED, with every verification check passing
+      ---
+      duration_ms: 718.750083
+      type: 'test'
+      ...
+    # Subtest: the credential is holder-bound to the wallet key that requested it
+    ok 2 - the credential is holder-bound to the wallet key that requested it
+      ---
+      duration_ms: 196.099791
+      type: 'test'
+      ...
+    1..2
+ok 1 - positive flow
+  ---
+  duration_ms: 1239.927708
+  type: 'suite'
+  ...
+# Subtest: issuer-side backend
+    # Subtest: the offer is a standards OpenID4VCI offer, and carries no QR
+    ok 1 - the offer is a standards OpenID4VCI offer, and carries no QR
+      ---
+      duration_ms: 48.671666
+      type: 'test'
+      ...
+    # Subtest: the response never carries claim VALUES
+    ok 2 - the response never carries claim VALUES
+      ---
+      duration_ms: 47.007292
+      type: 'test'
+      ...
+    # Subtest: an unknown citizen is refused
+    ok 3 - an unknown citizen is refused
+      ---
+      duration_ms: 39.51775
+      type: 'test'
+      ...
+    # Subtest: a caller cannot dictate the claims that get issued
+    ok 4 - a caller cannot dictate the claims that get issued
+      ---
+      duration_ms: 277.477
+      type: 'test'
+      ...
+    1..4
+ok 2 - issuer-side backend
+  ---
+  duration_ms: 413.51175
+  type: 'suite'
+  ...
+# Subtest: privacy and minimum disclosure
+    # Subtest: the verifier asks for one claim only
+    ok 1 - the verifier asks for one claim only
+      ---
+      duration_ms: 32.283667
+      type: 'test'
+      ...
+    # Subtest: the credential CAN disclose more, and the holder does not
+    ok 2 - the credential CAN disclose more, and the holder does not
+      ---
+      duration_ms: 516.8795
+      type: 'test'
+      ...
+    # Subtest: the verifier surfaces only the requested claim, and never the holder identifier
+    ok 3 - the verifier surfaces only the requested claim, and never the holder identifier
+      ---
+      duration_ms: 417.151625
+      type: 'test'
+      ...
+    # Subtest: over-disclosure by the wallet never reaches the decision or the page
+    ok 4 - over-disclosure by the wallet never reaches the decision or the page
+      ---
+      duration_ms: 371.060542
+      type: 'test'
+      ...
+    1..4
+ok 3 - privacy and minimum disclosure
+  ---
+  duration_ms: 1338.732167
+  type: 'suite'
+  ...
+# Subtest: domain decision
+    # Subtest: a minor is DENIED — verified, not failed
+    ok 1 - a minor is DENIED — verified, not failed
+      ---
+      duration_ms: 484.650125
+      type: 'test'
+      ...
+    # Subtest: the boundary fixtures decide correctly
+    ok 2 - the boundary fixtures decide correctly
+      ---
+      duration_ms: 1030.310833
+      type: 'test'
+      ...
+    # Subtest: the boundary fixtures still straddle the 18th birthday
+    ok 3 - the boundary fixtures still straddle the 18th birthday
+      ---
+      duration_ms: 174.631375
+      type: 'test'
+      ...
+    # Subtest: a leap-day date of birth is handled
+    ok 4 - a leap-day date of birth is handled
+      ---
+      duration_ms: 396.025209
+      type: 'test'
+      ...
+    1..4
+ok 4 - domain decision
+  ---
+  duration_ms: 2086.247709
+  type: 'suite'
+  ...
+# Subtest: negative flows
+    # Subtest: a tampered disclosure value is rejected
+    ok 1 - a tampered disclosure value is rejected
+      ---
+      duration_ms: 500.647542
+      type: 'test'
+      ...
+    # Subtest: a tampered issuer signature is rejected
+    ok 2 - a tampered issuer signature is rejected
+      ---
+      duration_ms: 470.841042
+      type: 'test'
+      ...
+    # Subtest: a valid credential from an issuer outside the allowlist is rejected
+    ok 3 - a valid credential from an issuer outside the allowlist is rejected
+      ---
+      duration_ms: 556.989625
+      type: 'test'
+      ...
+    # Subtest: a presentation signed by the wrong holder key is rejected
+    ok 4 - a presentation signed by the wrong holder key is rejected
+      ---
+      duration_ms: 695.880292
+      type: 'test'
+      ...
+    # Subtest: a wrong nonce is rejected
+    ok 5 - a wrong nonce is rejected
+      ---
+      duration_ms: 419.549291
+      type: 'test'
+      ...
+    # Subtest: a presentation bound to a different audience is rejected
+    ok 6 - a presentation bound to a different audience is rejected
+      ---
+      duration_ms: 474.211625
+      type: 'test'
+      ...
+    # Subtest: replaying a verified presentation is rejected
+    ok 7 - replaying a verified presentation is rejected
+      ---
+      duration_ms: 519.11025
+      type: 'test'
+      ...
+    # Subtest: an unknown or expired transaction state is rejected
+    ok 8 - an unknown or expired transaction state is rejected
+      ---
+      duration_ms: 339.943083
+      type: 'test'
+      ...
+    # Subtest: a pre-authorised code cannot be redeemed twice
+    ok 9 - a pre-authorised code cannot be redeemed twice
+      ---
+      duration_ms: 382.846167
+      type: 'test'
+      ...
+    # Subtest: a holder who never responds produces no claims and no approval
+    ok 10 - a holder who never responds produces no claims and no approval
+      ---
+      duration_ms: 129.49475
+      type: 'test'
+      ...
+    # Subtest: a holder who declines is reported as declined, not as a failure
+    ok 11 - a holder who declines is reported as declined, not as a failure
+      ---
+      duration_ms: 193.109125
+      type: 'test'
+      ...
+    1..11
+ok 5 - negative flows
+  ---
+  duration_ms: 4684.150208
+  type: 'suite'
+  ...
+# Subtest: the credential artefact
+    # Subtest: what the issuer returns is an SD-JWT VC, holder-bound and selectively disclosable
+    ok 1 - what the issuer returns is an SD-JWT VC, holder-bound and selectively disclosable
+      ---
+      duration_ms: 343.360042
+      type: 'test'
+      ...
+    1..1
+ok 6 - the credential artefact
+  ---
+  duration_ms: 343.680083
+  type: 'suite'
+  ...
+# Subtest: the customer-facing issuer directory
+    # Subtest: the issuer advertises exactly one credential
+    ok 1 - the issuer advertises exactly one credential
+      ---
+      duration_ms: 45.492083
+      type: 'test'
+      ...
+    1..1
+ok 7 - the customer-facing issuer directory
+  ---
+  duration_ms: 45.77
+  type: 'suite'
+  ...
+# Subtest: session lifecycle
+    # Subtest: a cancelled check stays cancelled, even if a valid presentation arrives afterwards
+    ok 1 - a cancelled check stays cancelled, even if a valid presentation arrives afterwards
+      ---
+      duration_ms: 575.605334
+      type: 'test'
+      ...
+    # Subtest: cancelling a session the verifier does not hold is reported expired, not cancelled
+    ok 2 - cancelling a session the verifier does not hold is reported expired, not cancelled
+      ---
+      duration_ms: 38.849875
+      type: 'test'
+      ...
+    # Subtest: a session the verifier no longer holds is expired, and never decided
+    ok 3 - a session the verifier no longer holds is expired, and never decided
+      ---
+      duration_ms: 96.138916
+      type: 'test'
+      ...
+    1..3
+ok 8 - session lifecycle
+  ---
+  duration_ms: 711.147792
+  type: 'suite'
+  ...
+# Subtest: what a real wallet needs in order to name us
+    # Subtest: the verifier identifies itself with a bare did:web under the deployment host
+    ok 1 - the verifier identifies itself with a bare did:web under the deployment host
+      ---
+      duration_ms: 122.724208
+      type: 'test'
+      ...
+    # Subtest: the issuer identifies itself with the deployment origin, and its logo resolves
+    ok 2 - the issuer identifies itself with the deployment origin, and its logo resolves
+      ---
+      duration_ms: 126.941209
+      type: 'test'
+      ...
+    1..2
+ok 9 - what a real wallet needs in order to name us
+  ---
+  duration_ms: 250.060708
+  type: 'suite'
+  ...
+# Subtest: Age data lives in the showcase database, in its own entity tables
+ok 10 - Age data lives in the showcase database, in its own entity tables
+  ---
+  duration_ms: 581.979083
+  type: 'test'
+  ...
+# Subtest: there is exactly one database holding use-case data
+ok 11 - there is exactly one database holding use-case data
+  ---
+  duration_ms: 170.808708
+  type: 'test'
+  ...
+# Subtest: there is no shared cross-domain person table
+ok 12 - there is no shared cross-domain person table
+  ---
+  duration_ms: 173.467834
+  type: 'test'
+  ...
+# Subtest: use-case tables do not overlap
+ok 13 - use-case tables do not overlap
+  ---
+  duration_ms: 1623.700042
+  type: 'test'
+  ...
+# Subtest: each Agriculture registry keeps its own national-id mapping
+ok 14 - each Agriculture registry keeps its own national-id mapping
+  ---
+  duration_ms: 422.321959
+  type: 'test'
+  ...
+# Subtest: the protocol services keep their own stores, separate from domain data
+ok 15 - the protocol services keep their own stores, separate from domain data
+  ---
+  duration_ms: 554.502167
+  type: 'test'
+  ...
+# Subtest: domain data is reachable only through the registry API, not a shared login
+ok 16 - domain data is reachable only through the registry API, not a shared login
+  ---
+  duration_ms: 357.576417
+  type: 'test'
+  ...
+# Subtest: Flow 1 — the citizen signs in and the wallet fetches the credential
+    # Subtest: the account is linked to exactly one citizen, and Keycloak says which
+    ok 1 - the account is linked to exactly one citizen, and Keycloak says which
+      ---
+      duration_ms: 430.150917
+      type: 'test'
+      ...
+    # Subtest: the credential is built from that citizen’s own registry record
+    ok 2 - the credential is built from that citizen’s own registry record
+      ---
+      duration_ms: 553.085458
+      type: 'test'
+      ...
+    # Subtest: the credential is bound to the wallet key that asked for it
+    ok 3 - the credential is bound to the wallet key that asked for it
+      ---
+      duration_ms: 454.700541
+      type: 'test'
+      ...
+    # Subtest: the credential the wallet fetched is one the verifier accepts
+    ok 4 - the credential the wallet fetched is one the verifier accepts
+      ---
+      duration_ms: 883.911625
+      type: 'test'
+      ...
+    1..4
+ok 17 - Flow 1 — the citizen signs in and the wallet fetches the credential
+  ---
+  duration_ms: 2584.71775
+  type: 'suite'
+  ...
+# Subtest: Flow 1 — cross-citizen protection (answer 8)
+    # Subtest: a different citizen receives their own credential, not the first one’s
+    ok 1 - a different citizen receives their own credential, not the first one’s
+      ---
+      duration_ms: 1012.250584
+      type: 'test'
+      ...
+    # Subtest: naming another citizen in the request does not reach their record
+    ok 2 - naming another citizen in the request does not reach their record
+      ---
+      duration_ms: 523.651167
+      type: 'test'
+      ...
+    1..2
+ok 18 - Flow 1 — cross-citizen protection (answer 8)
+  ---
+  duration_ms: 1536.371167
+  type: 'suite'
+  ...
+# Subtest: Flow 1 — refusals
+    # Subtest: the wrong password yields no code and no token
+    ok 1 - the wrong password yields no code and no token
+      ---
+      duration_ms: 190.586333
+      type: 'test'
+      ...
+    # Subtest: an account with no linked citizen is refused, without inventing a record
+    ok 2 - an account with no linked citizen is refused, without inventing a record
+      ---
+      duration_ms: 341.094667
+      type: 'test'
+      ...
+    # Subtest: a credential type the issuer does not publish is refused
+    ok 3 - a credential type the issuer does not publish is refused
+      ---
+      duration_ms: 387.863375
+      type: 'test'
+      ...
+    # Subtest: a random bearer token is not accepted as a signed-in citizen
+    ok 4 - a random bearer token is not accepted as a signed-in citizen
+      ---
+      duration_ms: 165.018542
+      type: 'test'
+      ...
+    1..4
+ok 19 - Flow 1 — refusals
+  ---
+  duration_ms: 1085.547583
+  type: 'suite'
+  ...
+# Subtest: Flow 1 — the authorization server accepts what the issuer advertises
+    # Subtest: every scope in issuer metadata is a scope Keycloak will grant
+    ok 1 - every scope in issuer metadata is a scope Keycloak will grant
+      ---
+      duration_ms: 351.285875
+      type: 'test'
+      ...
+    1..1
+ok 20 - Flow 1 — the authorization server accepts what the issuer advertises
+  ---
+  duration_ms: 351.582125
+  type: 'suite'
+  ...
+# Subtest: Flow 1 — the other grant still works (regression)
+    # Subtest: pre-authorised issuance is unaffected by Keycloak being enabled
+    ok 1 - pre-authorised issuance is unaffected by Keycloak being enabled
+      ---
+      duration_ms: 421.438125
+      type: 'test'
+      ...
+    1..1
+ok 21 - Flow 1 — the other grant still works (regression)
+  ---
+  duration_ms: 421.6505
+  type: 'suite'
+  ...
+1..21
+# tests 51
+# suites 14
+# pass 51
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 21383.753542

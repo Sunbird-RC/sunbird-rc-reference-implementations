@@ -1,0 +1,713 @@
+# npm run test:unit
+#
+# branch        iteration/agriculture-02-rural-credit
+# commit        a0b3abe7718623c011401e6f4be1c39fb48d0f65
+# environment   checkout only — no stack required
+# oid4vc image  sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b
+# core fork     9caf3c2b (branch oid4vc-keycloak-as-v2.1.0)
+# wallet fork   6dc0a3c (branch v1.0.3)
+# node          v22.16.0
+# host os       Darwin 25.2.0 arm64
+# captured      2026-08-31T15:41:26Z
+#
+
+TAP version 13
+# Subtest: completedYears: the day before, the day of, and the day after an 18th birthday
+ok 1 - completedYears: the day before, the day of, and the day after an 18th birthday
+  ---
+  duration_ms: 2.162333
+  type: 'test'
+  ...
+# Subtest: completedYears: a leap-day birth has a birthday in common years too
+ok 2 - completedYears: a leap-day birth has a birthday in common years too
+  ---
+  duration_ms: 0.357125
+  type: 'test'
+  ...
+# Subtest: completedYears: month boundary does not leak into the year count
+ok 3 - completedYears: month boundary does not leak into the year count
+  ---
+  duration_ms: 0.37075
+  type: 'test'
+  ...
+# Subtest: parseCalendarDate rejects anything that is not a real calendar date
+ok 4 - parseCalendarDate rejects anything that is not a real calendar date
+  ---
+  duration_ms: 0.622
+  type: 'test'
+  ...
+# Subtest: parseCalendarDate does not shift the day for timezone reasons
+ok 5 - parseCalendarDate does not shift the day for timezone reasons
+  ---
+  duration_ms: 0.555
+  type: 'test'
+  ...
+# Subtest: deriveAgeClaims asserts both thresholds, as booleans
+ok 6 - deriveAgeClaims asserts both thresholds, as booleans
+  ---
+  duration_ms: 0.172791
+  type: 'test'
+  ...
+# Subtest: deriveAgeClaims: a minor gets ageOver18 present and false, never missing
+ok 7 - deriveAgeClaims: a minor gets ageOver18 present and false, never missing
+  ---
+  duration_ms: 0.159333
+  type: 'test'
+  ...
+# Subtest: deriveAgeClaims: over 18 but under 21
+ok 8 - deriveAgeClaims: over 18 but under 21
+  ---
+  duration_ms: 0.091708
+  type: 'test'
+  ...
+# Subtest: deriveAgeClaims refuses to invent an assertion without authoritative data
+ok 9 - deriveAgeClaims refuses to invent an assertion without authoritative data
+  ---
+  duration_ms: 1.725333
+  type: 'test'
+  ...
+# Subtest: deriveAgeClaims rejects a future date of birth
+ok 10 - deriveAgeClaims rejects a future date of birth
+  ---
+  duration_ms: 0.481292
+  type: 'test'
+  ...
+# Subtest: APPROVED only for a boolean true
+ok 11 - APPROVED only for a boolean true
+  ---
+  duration_ms: 1.350292
+  type: 'test'
+  ...
+# Subtest: DENIED for a boolean false — a verified answer, not a failure
+ok 12 - DENIED for a boolean false — a verified answer, not a failure
+  ---
+  duration_ms: 0.257541
+  type: 'test'
+  ...
+# Subtest: a non-boolean assertion is refused, not silently approved
+ok 13 - a non-boolean assertion is refused, not silently approved
+  ---
+  duration_ms: 0.615917
+  type: 'test'
+  ...
+# Subtest: an empty claim set is refused
+ok 14 - an empty claim set is refused
+  ---
+  duration_ms: 0.246417
+  type: 'test'
+  ...
+# Subtest: the credential request asks for one claim and pins the credential type
+ok 15 - the credential request asks for one claim and pins the credential type
+  ---
+  duration_ms: 0.725584
+  type: 'test'
+  ...
+# Subtest: what the bank asks for
+    # Subtest: two credentials, and only the claims REQUIREMENTS permits
+    ok 1 - two credentials, and only the claims REQUIREMENTS permits
+      ---
+      duration_ms: 1.034333
+      type: 'test'
+      ...
+    # Subtest: each request carries the role the verifier pins its issuer against
+    ok 2 - each request carries the role the verifier pins its issuer against
+      ---
+      duration_ms: 0.102083
+      type: 'test'
+      ...
+    # Subtest: nothing the bank must never see is requested
+    ok 3 - nothing the bank must never see is requested
+      ---
+      duration_ms: 0.205584
+      type: 'test'
+      ...
+    # Subtest: the requests build a valid two-credential DCQL query
+    ok 4 - the requests build a valid two-credential DCQL query
+      ---
+      duration_ms: 0.283542
+      type: 'test'
+      ...
+    1..4
+ok 16 - what the bank asks for
+  ---
+  duration_ms: 2.324917
+  type: 'suite'
+  ...
+# Subtest: an eligible farmer
+    # Subtest: the PRODUCT example, end to end
+    ok 1 - the PRODUCT example, end to end
+      ---
+      duration_ms: 2.584416
+      type: 'test'
+      ...
+    # Subtest: every funded crop produces its own rate and amount
+    ok 2 - every funded crop produces its own rate and amount
+      ---
+      duration_ms: 0.28525
+      type: 'test'
+      ...
+    # Subtest: the smallest fundable area is still eligible
+    ok 3 - the smallest fundable area is still eligible
+      ---
+      duration_ms: 0.318959
+      type: 'test'
+      ...
+    # Subtest: the result echoes only verified inputs, and no identity data
+    ok 4 - the result echoes only verified inputs, and no identity data
+      ---
+      duration_ms: 0.613708
+      type: 'test'
+      ...
+    1..4
+ok 17 - an eligible farmer
+  ---
+  duration_ms: 4.339792
+  type: 'suite'
+  ...
+# Subtest: a verified business answer: NOT ELIGIBLE
+    # Subtest: not a registered farmer
+    ok 1 - not a registered farmer
+      ---
+      duration_ms: 0.407958
+      type: 'test'
+      ...
+    # Subtest: ownership that is not active
+    ok 2 - ownership that is not active
+      ---
+      duration_ms: 0.382166
+      type: 'test'
+      ...
+    # Subtest: nothing cultivated
+    ok 3 - nothing cultivated
+      ---
+      duration_ms: 0.12
+      type: 'test'
+      ...
+    # Subtest: a crop the policy does not fund
+    ok 4 - a crop the policy does not fund
+      ---
+      duration_ms: 0.101375
+      type: 'test'
+      ...
+    # Subtest: a business answer never carries a loan amount
+    ok 5 - a business answer never carries a loan amount
+      ---
+      duration_ms: 0.261792
+      type: 'test'
+      ...
+    1..5
+ok 18 - a verified business answer: NOT ELIGIBLE
+  ---
+  duration_ms: 1.584917
+  type: 'suite'
+  ...
+# Subtest: a verification failure: REJECTED / UNABLE TO VERIFY
+    # Subtest: the two credentials name different farmers
+    ok 1 - the two credentials name different farmers
+      ---
+      duration_ms: 0.540041
+      type: 'test'
+      ...
+    # Subtest: a missing credential
+    ok 2 - a missing credential
+      ---
+      duration_ms: 0.124084
+      type: 'test'
+      ...
+    # Subtest: a farmerId that is absent or not a string
+    ok 3 - a farmerId that is absent or not a string
+      ---
+      duration_ms: 0.376417
+      type: 'test'
+      ...
+    # Subtest: registeredFarmer that is not a boolean — including the string "false"
+    ok 4 - registeredFarmer that is not a boolean — including the string "false"
+      ---
+      duration_ms: 0.327083
+      type: 'test'
+      ...
+    # Subtest: an ownership status outside the registry vocabulary
+    ok 5 - an ownership status outside the registry vocabulary
+      ---
+      duration_ms: 0.115917
+      type: 'test'
+      ...
+    # Subtest: an acreage the schema could not have produced
+    ok 6 - an acreage the schema could not have produced
+      ---
+      duration_ms: 0.277834
+      type: 'test'
+      ...
+    # Subtest: correlation is checked before any business rule
+    ok 7 - correlation is checked before any business rule
+      ---
+      duration_ms: 0.086291
+      type: 'test'
+      ...
+    1..7
+ok 19 - a verification failure: REJECTED / UNABLE TO VERIFY
+  ---
+  duration_ms: 2.0315
+  type: 'suite'
+  ...
+# Subtest: acreage precision
+    # Subtest: whole and two-decimal acreages convert exactly
+    ok 1 - whole and two-decimal acreages convert exactly
+      ---
+      duration_ms: 0.74375
+      type: 'test'
+      ...
+    # Subtest: a value that is not exactly representable in binary still converts
+    ok 2 - a value that is not exactly representable in binary still converts
+      ---
+      duration_ms: 0.115125
+      type: 'test'
+      ...
+    # Subtest: more precision than the schema permits is a malformed claim, not a decision
+    ok 3 - more precision than the schema permits is a malformed claim, not a decision
+      ---
+      duration_ms: 0.358833
+      type: 'test'
+      ...
+    # Subtest: a non-numeric or negative acreage is a malformed claim
+    ok 4 - a non-numeric or negative acreage is a malformed claim
+      ---
+      duration_ms: 0.581333
+      type: 'test'
+      ...
+    # Subtest: the round trip back to acres is exact
+    ok 5 - the round trip back to acres is exact
+      ---
+      duration_ms: 0.248625
+      type: 'test'
+      ...
+    1..5
+ok 20 - acreage precision
+  ---
+  duration_ms: 2.838584
+  type: 'suite'
+  ...
+# Subtest: the loan calculation
+    # Subtest: the example from PRODUCT
+    ok 1 - the example from PRODUCT
+      ---
+      duration_ms: 1.425834
+      type: 'test'
+      ...
+    # Subtest: fractional acreage stays exact in whole rupees
+    ok 2 - fractional acreage stays exact in whole rupees
+      ---
+      duration_ms: 0.235625
+      type: 'test'
+      ...
+    # Subtest: a half rupee rounds up, deterministically
+    ok 3 - a half rupee rounds up, deterministically
+      ---
+      duration_ms: 0.315667
+      type: 'test'
+      ...
+    # Subtest: zero cultivated area is zero rupees, not an error
+    ok 4 - zero cultivated area is zero rupees, not an error
+      ---
+      duration_ms: 0.227584
+      type: 'test'
+      ...
+    # Subtest: a nonsensical rate is a programming error, not a claim problem
+    ok 5 - a nonsensical rate is a programming error, not a claim problem
+      ---
+      duration_ms: 0.330791
+      type: 'test'
+      ...
+    # Subtest: Indian digit grouping, which is what the customer reads
+    ok 6 - Indian digit grouping, which is what the customer reads
+      ---
+      duration_ms: 0.091916
+      type: 'test'
+      ...
+    1..6
+ok 21 - the loan calculation
+  ---
+  duration_ms: 2.893875
+  type: 'suite'
+  ...
+# Subtest: the lending policy as committed
+    # Subtest: every rate PRODUCT lists is present and within the demo ceiling
+    ok 1 - every rate PRODUCT lists is present and within the demo ceiling
+      ---
+      duration_ms: 0.660625
+      type: 'test'
+      ...
+    # Subtest: a crop the registry permits but the policy does not fund returns no rate
+    ok 2 - a crop the registry permits but the policy does not fund returns no rate
+      ---
+      duration_ms: 0.053833
+      type: 'test'
+      ...
+    # Subtest: every committed rate produces a whole-rupee loan for a whole acre
+    ok 3 - every committed rate produces a whole-rupee loan for a whole acre
+      ---
+      duration_ms: 0.062125
+      type: 'test'
+      ...
+    1..3
+ok 22 - the lending policy as committed
+  ---
+  duration_ms: 0.859541
+  type: 'suite'
+  ...
+# Subtest: the policy loader refuses a policy it cannot trust
+    # Subtest: a rate above the demo ceiling is a startup failure, not a higher limit
+    ok 1 - a rate above the demo ceiling is a startup failure, not a higher limit
+      ---
+      duration_ms: 1.182208
+      type: 'test'
+      ...
+    # Subtest: a fractional or non-positive rate is refused
+    ok 2 - a fractional or non-positive rate is refused
+      ---
+      duration_ms: 1.573833
+      type: 'test'
+      ...
+    # Subtest: an empty policy is refused rather than treated as "fund nothing"
+    ok 3 - an empty policy is refused rather than treated as "fund nothing"
+      ---
+      duration_ms: 0.573209
+      type: 'test'
+      ...
+    # Subtest: a missing ceiling is refused
+    ok 4 - a missing ceiling is refused
+      ---
+      duration_ms: 1.444208
+      type: 'test'
+      ...
+    # Subtest: a lower-case crop name is refused, because lookups are case sensitive
+    ok 5 - a lower-case crop name is refused, because lookups are case sensitive
+      ---
+      duration_ms: 0.779417
+      type: 'test'
+      ...
+    1..5
+ok 23 - the policy loader refuses a policy it cannot trust
+  ---
+  duration_ms: 5.699666
+  type: 'suite'
+  ...
+# Subtest: the approved-algorithm policy
+    # Subtest: the shipped policy approves ES256, and only ES256
+    ok 1 - the shipped policy approves ES256, and only ES256
+      ---
+      duration_ms: 2.042583
+      type: 'test'
+      ...
+    # Subtest: an ES256 presentation is accepted
+    ok 2 - an ES256 presentation is accepted
+      ---
+      duration_ms: 0.695875
+      type: 'test'
+      ...
+    # Subtest: both signatures being ES256 is accepted
+    ok 3 - both signatures being ES256 is accepted
+      ---
+      duration_ms: 0.155625
+      type: 'test'
+      ...
+    # Subtest: an unapproved algorithm is rejected
+    ok 4 - an unapproved algorithm is rejected
+      ---
+      duration_ms: 0.982417
+      type: 'test'
+      ...
+    # Subtest: `none` is rejected like any other unapproved algorithm
+    ok 5 - `none` is rejected like any other unapproved algorithm
+      ---
+      duration_ms: 0.146542
+      type: 'test'
+      ...
+    # Subtest: one approved algorithm does not excuse an unapproved one beside it
+    ok 6 - one approved algorithm does not excuse an unapproved one beside it
+      ---
+      duration_ms: 0.105166
+      type: 'test'
+      ...
+    # Subtest: a missing algorithm is rejected, not defaulted
+    ok 7 - a missing algorithm is rejected, not defaulted
+      ---
+      duration_ms: 0.365459
+      type: 'test'
+      ...
+    # Subtest: a malformed algorithm is rejected
+    ok 8 - a malformed algorithm is rejected
+      ---
+      duration_ms: 1.977333
+      type: 'test'
+      ...
+    # Subtest: a malformed algorithm is not echoed back unbounded
+    ok 9 - a malformed algorithm is not echoed back unbounded
+      ---
+      duration_ms: 1.159292
+      type: 'test'
+      ...
+    # Subtest: a policy approving nothing refuses to load
+    ok 10 - a policy approving nothing refuses to load
+      ---
+      duration_ms: 1.7925
+      type: 'test'
+      ...
+    # Subtest: a policy listing a malformed algorithm refuses to load
+    ok 11 - a policy listing a malformed algorithm refuses to load
+      ---
+      duration_ms: 1.130125
+      type: 'test'
+      ...
+    # Subtest: a widened policy accepts what it lists, and still nothing else
+    ok 12 - a widened policy accepts what it lists, and still nothing else
+      ---
+      duration_ms: 1.867042
+      type: 'test'
+      ...
+    1..12
+ok 24 - the approved-algorithm policy
+  ---
+  duration_ms: 15.020458
+  type: 'suite'
+  ...
+# Subtest: requests exactly the domain claim plus the issuer identifier
+ok 25 - requests exactly the domain claim plus the issuer identifier
+  ---
+  duration_ms: 4.182209
+  type: 'test'
+  ...
+# Subtest: uses the DCQL spelling of the SD-JWT format, not the OID4VCI one
+ok 26 - uses the DCQL spelling of the SD-JWT format, not the OID4VCI one
+  ---
+  duration_ms: 0.376708
+  type: 'test'
+  ...
+# Subtest: pins the credential type through meta.vct_values
+ok 27 - pins the credential type through meta.vct_values
+  ---
+  duration_ms: 0.19925
+  type: 'test'
+  ...
+# Subtest: does NOT constrain the value of the age claim
+ok 28 - does NOT constrain the value of the age claim
+  ---
+  duration_ms: 0.101917
+  type: 'test'
+  ...
+# Subtest: refuses a request that would disclose everything
+ok 29 - refuses a request that would disclose everything
+  ---
+  duration_ms: 0.427542
+  type: 'test'
+  ...
+# Subtest: refuses a request with no credential type
+ok 30 - refuses a request with no credential type
+  ---
+  duration_ms: 0.189375
+  type: 'test'
+  ...
+# Subtest: refuses an empty query
+ok 31 - refuses an empty query
+  ---
+  duration_ms: 0.134917
+  type: 'test'
+  ...
+# Subtest: supports several credentials in one request, for later iterations
+ok 32 - supports several credentials in one request, for later iterations
+  ---
+  duration_ms: 0.104833
+  type: 'test'
+  ...
+# Subtest: expectedClaimNames matches what the query asks for
+ok 33 - expectedClaimNames matches what the query asks for
+  ---
+  duration_ms: 0.389625
+  type: 'test'
+  ...
+# Subtest: an allowlisted issuer is accepted, and named
+ok 34 - an allowlisted issuer is accepted, and named
+  ---
+  duration_ms: 1.568625
+  type: 'test'
+  ...
+# Subtest: a valid credential from an unlisted issuer is rejected
+ok 35 - a valid credential from an unlisted issuer is rejected
+  ---
+  duration_ms: 2.10125
+  type: 'test'
+  ...
+# Subtest: a missing or non-string issuer identifier is rejected, never treated as absent-therefore-fine
+ok 36 - a missing or non-string issuer identifier is rejected, never treated as absent-therefore-fine
+  ---
+  duration_ms: 0.8025
+  type: 'test'
+  ...
+# Subtest: an unresolved ${VAR} is a startup failure, not an empty allowlist entry
+ok 37 - an unresolved ${VAR} is a startup failure, not an empty allowlist entry
+  ---
+  duration_ms: 0.754083
+  type: 'test'
+  ...
+# Subtest: a policy that allowlists nobody is a startup failure
+ok 38 - a policy that allowlists nobody is a startup failure
+  ---
+  duration_ms: 0.531458
+  type: 'test'
+  ...
+# Subtest: passes only when every required check is OK
+ok 39 - passes only when every required check is OK
+  ---
+  duration_ms: 1.23275
+  type: 'test'
+  ...
+# Subtest: a single failed check fails the whole gate, and is named
+ok 40 - a single failed check fails the whole gate, and is named
+  ---
+  duration_ms: 0.23875
+  type: 'test'
+  ...
+# Subtest: a MISSING check is a failure, not a pass
+ok 41 - a MISSING check is a failure, not a pass
+  ---
+  duration_ms: 0.108417
+  type: 'test'
+  ...
+# Subtest: holder binding and audience are among the required checks
+ok 42 - holder binding and audience are among the required checks
+  ---
+  duration_ms: 0.1095
+  type: 'test'
+  ...
+# Subtest: verified:false never passes, whatever the checks say
+ok 43 - verified:false never passes, whatever the checks say
+  ---
+  duration_ms: 0.177708
+  type: 'test'
+  ...
+# Subtest: pending is distinguished from rejected
+ok 44 - pending is distinguished from rejected
+  ---
+  duration_ms: 0.068833
+  type: 'test'
+  ...
+# Subtest: claim policy: exactly the expected claims
+ok 45 - claim policy: exactly the expected claims
+  ---
+  duration_ms: 0.203792
+  type: 'test'
+  ...
+# Subtest: claim policy rejects an unrequested claim
+ok 46 - claim policy rejects an unrequested claim
+  ---
+  duration_ms: 0.12375
+  type: 'test'
+  ...
+# Subtest: claim policy rejects a missing claim
+ok 47 - claim policy rejects a missing claim
+  ---
+  duration_ms: 0.367959
+  type: 'test'
+  ...
+# Subtest: sessions expire, and do not accumulate a history of holder activity
+ok 48 - sessions expire, and do not accumulate a history of holder activity
+  ---
+  duration_ms: 0.566792
+  type: 'test'
+  ...
+# Subtest: the vendored wallet trusts this showcase
+    # Subtest: the showcase verifier is a trusted DID entity
+    ok 1 - the showcase verifier is a trusted DID entity
+      ---
+      duration_ms: 0.716458
+      type: 'test'
+      ...
+    # Subtest: every pinned showcase DID has a host-scoped fallback beside it
+    ok 2 - every pinned showcase DID has a host-scoped fallback beside it
+      ---
+      duration_ms: 0.256791
+      type: 'test'
+      ...
+    # Subtest: every showcase logo the wallet points at is actually served from this repo
+    ok 3 - every showcase logo the wallet points at is actually served from this repo
+      ---
+      duration_ms: 0.389584
+      type: 'test'
+      ...
+    # Subtest: the showcase entities are marked as demonstration entities
+    ok 4 - the showcase entities are marked as demonstration entities
+      ---
+      duration_ms: 0.24625
+      type: 'test'
+      ...
+    1..4
+ok 49 - the vendored wallet trusts this showcase
+  ---
+  duration_ms: 2.251958
+  type: 'suite'
+  ...
+# Subtest: the vendored wallet names the right verifier
+    # Subtest: no DID entity is shadowed by a less specific one listed before it
+    ok 1 - no DID entity is shadowed by a less specific one listed before it
+      ---
+      duration_ms: 0.221458
+      type: 'test'
+      ...
+    # Subtest: a host-scoped DID entity does not claim to be a party
+    ok 2 - a host-scoped DID entity does not claim to be a party
+      ---
+      duration_ms: 0.151667
+      type: 'test'
+      ...
+    # Subtest: the bank presents as itself, not as the age service
+    ok 3 - the bank presents as itself, not as the age service
+      ---
+      duration_ms: 0.26175
+      type: 'test'
+      ...
+    1..3
+ok 50 - the vendored wallet names the right verifier
+  ---
+  duration_ms: 0.972125
+  type: 'suite'
+  ...
+# Subtest: the vendored wallet trusts both Agriculture registries
+    # Subtest: each registry the deployment runs is a trusted issuer entity
+    ok 1 - each registry the deployment runs is a trusted issuer entity
+      ---
+      duration_ms: 0.385208
+      type: 'test'
+      ...
+    # Subtest: no issuer entity is shadowed by a less specific one listed before it
+    ok 2 - no issuer entity is shadowed by a less specific one listed before it
+      ---
+      duration_ms: 0.246375
+      type: 'test'
+      ...
+    # Subtest: the two registries are named distinctly, and not as the Age issuer
+    ok 3 - the two registries are named distinctly, and not as the Age issuer
+      ---
+      duration_ms: 0.949792
+      type: 'test'
+      ...
+    # Subtest: the showcase issuer entities are marked as demonstration entities
+    ok 4 - the showcase issuer entities are marked as demonstration entities
+      ---
+      duration_ms: 0.093375
+      type: 'test'
+      ...
+    1..4
+ok 51 - the vendored wallet trusts both Agriculture registries
+  ---
+  duration_ms: 1.837458
+  type: 'suite'
+  ...
+1..51
+# tests 101
+# suites 12
+# pass 101
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 184.95375
