@@ -3,14 +3,15 @@
 ## The demonstration video
 
 **[`Agriculture-Rural-Credit-Showcase-31Aug.mp4`](Agriculture-Rural-Credit-Showcase-31Aug.mp4)**
-— 4 min 43 s, 720×1600, H.264 + AAC 48 kHz stereo, −16.1 LUFS, 13.7 MB.
+— 5 min 15 s, 720×1600, H.264 + AAC 48 kHz stereo, −16.1 LUFS, 15.2 MB.
+Eight parts, covering **all four outcomes**.
 
 Filmed on the deployment at `https://135.235.192.9.sslip.io` on 31 August 2026,
 on a Samsung SM-A055F (Android 15). Recorded on the real applications: the
 vendored wallet, the mock bank page, and the installed Farm Credit app. Nothing
 in it is scripted or simulated.
 
-`sha256 6a4ab9faba66302f2def66da83039a6bc9975b0c13200638642150437d0bfa79`
+`sha256 aa95aa5ef339249c2c6b0baa506265d02e4f01ca105406038a48d0f330a0b9a3`
 
 | Part | What it demonstrates | `DEMO.md` |
 |---|---|---|
@@ -20,7 +21,14 @@ in it is scripted or simulated.
 | 4 | The bank's page and published policy on a laptop, the phone's camera on its code, **"Do you trust Gramin Bank?"**, six values consented, then the laptop showing **ELIGIBLE** with the calculation | §4, §5 |
 | 5 | The installed Farm Credit app asking the wallet directly — same bank, now *Last interaction: Today* | — |
 | 6 | `farmer.suresh`: land **INACTIVE** → **NOT ELIGIBLE**, every cryptographic check still green | §6 |
-| 7 | The farmer stops; the bank reports **NO DATA SHARED — the holder declined the request** | §6 |
+| 7 | Ravi's farmer card beside **Lakshmi's** land card: `REJECTED / UNABLE TO VERIFY`, "the two credentials name different farmers", every check still green | §6 |
+| 8 | The farmer stops; the bank reports **NO DATA SHARED — the holder declined the request** | §6 |
+
+Parts 7 and 8 were added after Anand's review, which asked for a mismatched,
+untrusted, tampered or wrong-holder combination shown as
+`REJECTED / UNABLE TO VERIFY`. The outcomes now follow `DEMO.md` §6's order —
+NOT ELIGIBLE, then REJECTED, then NO DATA SHARED — so the holder's own refusal
+closes the film.
 
 Two farmers, both synthetic:
 
@@ -29,14 +37,48 @@ Two farmers, both synthetic:
 | `farmer.ravi` | FRM-KA-0041 | paddy on 4 of 6.5 acres, ACTIVE | **ELIGIBLE** ₹1,20,000 |
 | `farmer.suresh` | FRM-KA-0058 | paddy on 3 acres, INACTIVE | **NOT ELIGIBLE** |
 
-### Not shown, and why
+### The fourth outcome, on the device
 
-**`REJECTED / UNABLE TO VERIFY` is absent from the video.** It needs a mismatched,
-tampered or untrusted credential, and an honest wallet will not build one, so it
-is not producible from a phone. It is covered by the automated suite instead —
-`tests/e2e/agriculture.test.mjs` exercises tampering, the wrong issuer, a
-`farmerId` mismatch and cross-holder binding. It must not be presented as a
-device outcome.
+**Corrected after Anand's feedback.** An earlier version of this file said
+`REJECTED / UNABLE TO VERIFY` was not producible from a phone. That was wrong: it
+generalised from "an honest wallet will not forge a credential" to "no rejection
+is possible", and missed the case Anand names first — a mismatched
+**combination**.
+
+It is producible, with nothing tampered with and nothing pre-authorised:
+
+1. Collect the **Farmer** card signing in as `farmer.ravi`.
+2. Clear the agriculture realm's SSO session, or the second issuance silently
+   reuses the first farmer.
+3. Collect the **Land** card signing in as `farmer.lakshmi`.
+4. Apply for credit.
+
+Both cards are genuinely issued through `authorization_code`, each signed by its
+own registry, both bound to the one holder key in that wallet. Only `farmerId`
+disagrees. That is a farmer combining their own farmer card with somebody else's
+land record — precisely the fraud the correlation check exists to stop.
+
+Filmed on the SM-A055F on 31 August 2026 and cut in as **part 7**. The bank
+reports:
+
+```text
+UNABLE TO VERIFY
+REJECTED / UNABLE TO VERIFY
+the two credentials name different farmers
+holderSignature ✓  nonce ✓  audience ✓  credentialSignatures ✓
+holderBinding ✓  revocation ✓  dcql ✓
+```
+
+Every cryptographic check passes, and there is no decision and no loan figure.
+That is the point worth narrating: nothing was forged, and the bank still refused
+— because it refused the **combination**, not either card. It is also visibly
+distinct from `NOT ELIGIBLE`, which means the claims were trusted and the answer
+was no.
+
+`tests/e2e/flow2-agriculture-issuance.test.mjs` pins the same journey through the
+real issuance protocol, and `tests/e2e/agriculture.test.mjs` additionally covers
+tampering, the wrong issuer and cross-holder binding — those three remain
+suite-only, because an honest wallet cannot produce them.
 
 **One limitation is narrated, not hidden.** The wallet's review screen reports
 that no reason was given for the request. That is accurate: the issuer build

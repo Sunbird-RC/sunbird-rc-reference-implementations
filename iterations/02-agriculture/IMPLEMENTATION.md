@@ -437,6 +437,62 @@ therefore what the suite should have done from the start. The `base` forms are
 kept for the Age tests. `readSession` returns `qrData` with the waiting state so a
 client holding only a session id can still find the request.
 
+## REJECTED / UNABLE TO VERIFY, on the device
+
+Anand's review of the first demo video asked for a mismatched, untrusted,
+tampered or wrong-holder combination shown as `REJECTED / UNABLE TO VERIFY`.
+
+I had recorded that this outcome was not producible from a phone. **That was
+wrong**, and worth stating plainly: it generalised from "an honest wallet will not
+forge a credential" to "no rejection is possible at all", and so missed the case
+Anand lists first — a mismatched **combination**, which needs no forgery.
+
+### The recipe
+
+Nothing is tampered with and nothing is pre-authorised:
+
+| Step | Action |
+|---|---|
+| 1 | Clear the wallet, then collect the **Farmer** card as `farmer.ravi` |
+| 2 | Clear the agriculture realm's SSO session (below) |
+| 3 | Collect the **Land** card as `farmer.lakshmi` — the offer will read `Crop type WHEAT`, which is *her* land, not his |
+| 4 | Start the credit check and consent |
+
+Step 2 is the one that is easy to miss. Keycloak keeps an SSO session in the
+browser the wallet hands off to, so without clearing it the second issuance
+silently reuses the first farmer and you get a matching pair:
+
+```bash
+docker exec sunbird-rc-age-keycloak-1 /opt/keycloak/bin/kcadm.sh \
+  create realms/agriculture/logout-all
+```
+
+Confirmed on the SM-A055F on 31 August 2026, through the installed Farm Credit
+app. The bank reported **REJECTED / UNABLE TO VERIFY**, "the two credentials name
+different farmers", with **all seven cryptographic checks green** and no decision
+and no loan figure.
+
+That combination of facts is what makes it worth watching: nothing was forged,
+every signature verified, the holder binding held — and the bank still refused,
+because what it refused was the **combination**. It is also visibly distinct from
+`NOT ELIGIBLE`, which means the claims were trusted and the answer was no.
+
+### What remains suite-only, and why
+
+Tampering, an untrusted issuer, and two credentials held by different wallets are
+covered by `tests/e2e/agriculture.test.mjs` and stay there: an honest wallet
+cannot produce any of them, and the Agriculture build's issuer directory is baked
+to the two registries, so a farmer cannot collect from an untrusted issuer through
+the app at all. The mismatched combination is the one member of that family a real
+device can demonstrate, and it is the one the charter's §7 fixture describes.
+
+`scripts/wallet-agriculture.sh` gained `--land <fixture>` so the same pair can be
+produced on a laptop for the web channel:
+
+```bash
+./scripts/wallet-agriculture.sh eligiblePaddy <sessionId> --land eligibleWheat
+```
+
 ## Known limitations, carried forward deliberately
 
 1. **Inji is unproven against this stack.** Deferred to Iteration 03, where
