@@ -15,6 +15,16 @@
 //   ./scripts/wallet-agriculture.sh eligiblePaddy <sessionId>     collect, then apply
 //   ./scripts/wallet-agriculture.sh FRM-KA-0041  <sessionId>      by farmer id
 //
+// A MISMATCHED pair — the land card of a different farmer, which the bank must
+// refuse with REJECTED / UNABLE TO VERIFY rather than NOT ELIGIBLE:
+//
+//   ./scripts/wallet-agriculture.sh eligiblePaddy <sessionId> --land eligibleWheat
+//
+// Both credentials in that pair are genuinely issued, genuinely signed by their
+// own registry, and genuinely held by this one wallet key. Nothing is tampered
+// with. Only the farmerId disagrees, which is the whole point: it is the
+// combination that is wrong, not either card.
+//
 // The session id is shown under the QR on the bank page.
 //
 // Pre-authorised offers are used to get the credentials in. That is supporting
@@ -49,13 +59,23 @@ const FIXTURES = {
   noLandRecord: 'FRM-KA-0072',
 };
 
-const [which, sessionId] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+// --land <fixture> takes the LAND credential from a different farmer. Parsed out
+// before the positionals so the existing two-argument form is untouched.
+let landFrom = null;
+const landFlag = argv.indexOf('--land');
+if (landFlag !== -1) {
+  landFrom = argv[landFlag + 1];
+  argv.splice(landFlag, 2);
+}
+const [which, sessionId] = argv;
 if (!which) {
   console.error('usage: ./scripts/wallet-agriculture.sh <fixture|farmerId> [bankSessionId]');
   console.error(`\nfixtures: ${Object.entries(FIXTURES).map(([k, v]) => `${k} (${v})`).join(', ')}\n`);
   process.exit(2);
 }
 const farmerId = FIXTURES[which] || which;
+const landFarmerId = landFrom ? FIXTURES[landFrom] || landFrom : farmerId;
 
 const { base, opsBase } = deployEnv();
 const problem = await requireStack(base);
@@ -78,22 +98,25 @@ if (farmerIssuerDid === landIssuerDid) {
   process.exit(1);
 }
 
-async function record(entity) {
+async function record(entity, id) {
   const res = await json(`${opsBase}/api/v1/${entity}/search`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ filters: { farmerId: { eq: farmerId } } }),
+    body: JSON.stringify({ filters: { farmerId: { eq: id } } }),
   });
   const rows = Array.isArray(res.body) ? res.body : res.body?.data || [];
   return rows[0] || null;
 }
 
-const farmerRecord = await record('FarmerRecord');
+const farmerRecord = await record('FarmerRecord', farmerId);
 if (!farmerRecord) {
   console.error(`\n  no seeded FarmerRecord for ${farmerId} — run ./scripts/seed-agriculture.sh\n`);
   process.exit(1);
 }
-const landRecord = await record('LandRecord');
+const landRecord = await record('LandRecord', landFarmerId);
+if (landFrom) {
+  console.log(`\nMISMATCHED PAIR: farmer card ${farmerId}, land card ${landFarmerId}`);
+}
 
 const holder = await createHolder();
 console.log('\nwallet: fresh ES256 holder key (ONE key, both credentials)');

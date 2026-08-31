@@ -24,9 +24,25 @@
 
 import test, { before, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { deployEnv, requireStack, json } from './lib/stack.mjs';
+import {
+  deployEnv,
+  requireStack,
+  json,
+  startFarmCreditVerification,
+  readFarmCreditVerification,
+  requestUriFromQr,
+  farmCreditPolicy,
+} from './lib/stack.mjs';
 import { signIn, WALLET_CLIENT_ID } from './lib/keycloak.mjs';
-import { createHolder, requestCredential, tryRequestCredential, disclosableValues } from './lib/wallet.mjs';
+import {
+  createHolder,
+  requestCredential,
+  tryRequestCredential,
+  disclosableValues,
+  presentSdJwt,
+  fetchRequestObject,
+  submitMultiPresentation,
+} from './lib/wallet.mjs';
 
 const { base, opsBase, demoPassword } = deployEnv();
 
@@ -316,5 +332,91 @@ describe('Flow 2 — what the registries refuse', () => {
       extra: { credential_configuration_id: advertised.land.configurationId },
     });
     assert.notEqual(res.status, 200, 'the Farmer Registry must not issue the Land credential');
+  });
+});
+
+// The fourth outcome, produced the way a PHONE can produce it.
+//
+// Anand's feedback on the first demo video was that REJECTED / UNABLE TO VERIFY
+// had to be shown on the applications, not only in this suite. The earlier note
+// that it was not producible from a device was wrong: it generalised from
+// "tampering is impossible with an honest wallet" to "no rejection is possible",
+// and missed the case Anand names first — a mismatched COMBINATION.
+//
+// Nothing here is tampered with, and nothing is pre-authorised. Both credentials
+// are fetched by the wallet itself through authorization_code, each signed by its
+// own registry, both bound to ONE holder key. Only the farmerId disagrees. That
+// is a farmer combining their own farmer card with somebody else's land record,
+// which is precisely the fraud the correlation check exists to stop.
+//
+// On a device this is two sign-ins: the Farmer Registry as one farmer, the Land
+// Registry as another. The Keycloak SSO session has to be cleared between them or
+// the second issuance silently reuses the first farmer — see DEMO steps in
+// iterations/02-agriculture/IMPLEMENTATION.md.
+describe('Flow 2 — a mismatched pair, collected by the wallet itself', () => {
+  test('two farmers, one wallet, and the bank refuses the combination', async () => {
+    guard();
+    // ONE holder key, two different authenticated farmers.
+    const holder = await createHolder();
+    const ravi = await signInAs(RAVI);
+    const lakshmi = await signInAs(LAKSHMI);
+
+    const farmer = await collect('farmer', ravi, holder);
+    const land = await collect('land', lakshmi, holder);
+
+    const farmerClaims = disclosableValues(farmer.credential);
+    const landClaims = disclosableValues(land.credential);
+    assert.equal(farmerClaims.farmerId, RAVI.farmerId);
+    assert.equal(landClaims.farmerId, LAKSHMI.farmerId);
+    assert.notEqual(
+      farmerClaims.farmerId,
+      landClaims.farmerId,
+      'the premise of this test is that the two cards name different farmers',
+    );
+
+    // Present them to the bank exactly as the wallet would.
+    const session = await startFarmCreditVerification(base);
+    const request = await fetchRequestObject({ requestUri: requestUriFromQr(session.qrData) });
+    const policy = await farmCreditPolicy(base);
+    const presentations = {
+      farmer_cred: await presentSdJwt({
+        credential: farmer.credential,
+        disclose: policy.requestedClaims.farmer,
+        nonce: request.nonce,
+        audience: request.client_id,
+        holder,
+      }),
+      land_cred: await presentSdJwt({
+        credential: land.credential,
+        disclose: policy.requestedClaims.land,
+        nonce: request.nonce,
+        audience: request.client_id,
+        holder,
+      }),
+    };
+    const sent = await submitMultiPresentation({
+      base,
+      responseUri: request.response_uri,
+      state: request.state,
+      presentations,
+    });
+    assert.equal(sent.status, 200, 'the presentation itself is well-formed and must be accepted');
+
+    const { body } = await readFarmCreditVerification(base, session.sessionId);
+
+    // The fourth outcome, and distinct from the third: REJECTED is not
+    // NOT_ELIGIBLE. One means we could not trust what we were shown; the other
+    // means we trusted it and the answer was no.
+    assert.equal(body.state, 'rejected');
+    assert.match(body.reason, /different farmers/);
+    assert.equal(body.decision, undefined, 'a rejection is not a business answer');
+    assert.equal(body.loan, undefined, 'and it must carry no loan figure');
+
+    // The part that makes the demo worth watching: every cryptographic check
+    // passed. Nothing was forged. The COMBINATION is what the bank refused.
+    for (const [check, value] of Object.entries(body.checks || {})) {
+      assert.equal(value, 'OK', `${check} should have passed — nothing here is tampered with`);
+    }
+    assert.ok(Object.keys(body.checks || {}).length >= 7, 'all seven checks should be reported');
   });
 });
