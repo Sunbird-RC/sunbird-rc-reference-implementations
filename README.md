@@ -39,8 +39,8 @@ cd deploy && cp env.example .env && docker compose up -d
 ../scripts/seed-age-citizens.sh  # deterministic synthetic citizens
 cd .. && npm install
 
-npm run test:unit                # 43 tests, no stack needed
-npm run test:e2e                 # 50 tests against the running stack
+npm run test:unit                # 89 tests, no stack needed
+npm run test:e2e                 # 89 tests against the running stack (Age + Agriculture)
 ./scripts/demo.sh                # headless walkthrough: positive and negative cases
 ./scripts/verify.sh              # environment and regression checks
 
@@ -60,6 +60,60 @@ wallet-driven through Keycloak, with no QR code, as the iteration charter requir
 mandates https, and the origin is baked into every DID and credential, so it has
 to be fixed *before* any demo credential is issued. `scripts/enable-https.sh`
 obtains a Let's Encrypt certificate for a host reachable on ports 80 and 443.
+
+## Running the Agriculture / rural credit showcase
+
+The same stack: two more issuers, a second Keycloak realm and the bank page. It
+builds on the Age steps above rather than replacing them.
+
+```bash
+cd deploy && docker compose up -d          # brings up oid4vc-farmer and oid4vc-land too
+../scripts/bootstrap.sh                    # also mints the two registry DIDs and publishes their schemas
+../scripts/seed-agriculture.sh             # six farmers, five land records, every decision branch
+cd .. && npm run test:e2e                  # includes 27 Agriculture and 11 wallet-driven issuance tests
+```
+
+Then open `http://localhost/bank/` and press "Start farm credit check". With no
+phone in the loop, answer the request from the same laptop:
+
+```bash
+./scripts/wallet-agriculture.sh eligiblePaddy               # collect both credentials
+./scripts/wallet-agriculture.sh eligiblePaddy <sessionId>   # ...then apply
+```
+
+The session id is printed under the QR. The fixtures are named by the outcome
+they produce — `eligiblePaddy`, `eligibleWheat`, `inactiveOwner`, `unfundedCrop`,
+`unregistered`, `noLandRecord` — so a demo can pick an outcome instead of
+remembering an id. That script is the same holder implementation the test suite
+uses: real keys, real signatures, real key binding, nothing stubbed. It is
+supporting evidence and not the customer journey, which is wallet-driven issuance
+on a real device.
+
+**The Agriculture wallet build must not list the Age issuer** — `DEMO.md`'s
+quality gate. The issuer directory is baked in at build time, so pass only the
+two registries:
+
+```bash
+./scripts/build-wallet.sh --issuer https://<host>/farmer,https://<host>/land
+```
+
+The installed mobile verifier is one app with a build-time channel, so an
+Agriculture build is named **Farm Credit** and contains no Age option at all:
+
+```bash
+cd services/verifier-mobile
+VERIFIER_USE_CASE=agriculture VERIFIER_BASE_URL=https://<host> \
+  npx expo prebuild --platform android --no-install
+cd android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+```
+
+It is **not required** for Iteration 02 acceptance — `REQUIREMENTS.md` §1 makes web
+QR verification the customer-facing channel — and it shares a package with the Age
+build, so installing one replaces the other.
+
+One APK cannot satisfy both demos: both builds share the package name, so
+installing one replaces the other. See
+[iterations/02-agriculture/IMPLEMENTATION.md](iterations/02-agriculture/IMPLEMENTATION.md).
 
 | I want to | Read |
 |---|---|
