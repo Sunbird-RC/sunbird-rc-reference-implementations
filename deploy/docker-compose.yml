@@ -521,6 +521,10 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost}
       TRUST_POLICY_FILE: /app/config/trust/issuers.json
       CROP_POLICY_FILE: /app/config/policy/crop-rates.json
+      # The approved-algorithm allowlist (REQUIREMENTS §8), enforced rather than
+      # recorded. Named explicitly even though it defaults to this path, because a
+      # security control that is easy to overlook in configuration is easy to lose.
+      ALG_POLICY_FILE: /app/config/policy/algorithms.json
       # How long a presentation request stays answerable. 300s matches
       # oid4vc-service's VP_TXN_TTL. Lower it on a demo host (90s or so) when you
       # need the "nobody answered" outcome to land while an audience is watching:

@@ -20,11 +20,26 @@ import * as jose from 'jose';
 const ES256 = 'ES256';
 
 /** Creates a fresh holder key pair — the wallet's device-bound key. */
-export async function createHolder() {
-  const { publicKey, privateKey } = await jose.generateKeyPair(ES256, { extractable: true });
+/**
+ * A holder key.
+ *
+ * `alg` is a parameter so the approved-algorithm policy can be tested with a
+ * presentation that is CRYPTOGRAPHICALLY VALID and still refused. That is the
+ * only interesting negative case: a broken signature is rejected by upstream
+ * long before any policy runs, and proves nothing about the policy.
+ *
+ * The algorithm has to travel with the key, because it decides the curve — an
+ * ES256 key cannot produce an ES384 signature — and because proof of possession
+ * at issuance and key binding at presentation must both use it, or `cnf` will
+ * not match.
+ *
+ * @param {{alg?: string}} [options]
+ */
+export async function createHolder({ alg = ES256 } = {}) {
+  const { publicKey, privateKey } = await jose.generateKeyPair(alg, { extractable: true });
   const publicJwk = await jose.exportJWK(publicKey);
-  publicJwk.alg = ES256;
-  return { publicKey, privateKey, publicJwk };
+  publicJwk.alg = alg;
+  return { publicKey, privateKey, publicJwk, alg };
 }
 
 async function http(url, init) {
@@ -96,7 +111,7 @@ export async function tryRedeemCode({ base, code }) {
  */
 export async function proofOfPossession({ base, holder, nonce }) {
   return new jose.SignJWT({ aud: base, nonce })
-    .setProtectedHeader({ alg: ES256, typ: 'openid4vci-proof+jwt', jwk: holder.publicJwk })
+    .setProtectedHeader({ alg: holder.alg || ES256, typ: 'openid4vci-proof+jwt', jwk: holder.publicJwk })
     .setIssuedAt()
     .sign(holder.privateKey);
 }
@@ -202,6 +217,10 @@ export async function presentSdJwt({
   holder,
   tamperDisclosures,
   tamperJws,
+  // Overrides the key-binding algorithm independently of the holder key. Only
+  // useful for asserting the algorithm policy; the signature must still verify,
+  // so it has to match the key's curve.
+  holderAlg,
 }) {
   const parsed = parseSdJwt(credential);
   let selected = parsed.disclosures.filter((d) => disclose.includes(d.name));
@@ -214,7 +233,7 @@ export async function presentSdJwt({
   // typ 'kb+jwt' per the SD-JWT VC key-binding profile. Verified against the
   // credential's own `cnf` — so signing with any other key fails.
   const kbJwt = await new jose.SignJWT({ nonce, aud: audience })
-    .setProtectedHeader({ alg: ES256, typ: 'kb+jwt' })
+    .setProtectedHeader({ alg: holderAlg || holder.alg || ES256, typ: 'kb+jwt' })
     .setIssuedAt()
     .sign(holder.privateKey);
 

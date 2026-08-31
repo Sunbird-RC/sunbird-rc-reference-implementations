@@ -13,6 +13,7 @@
 
 import { createServer } from 'node:http';
 import { oid4vcClient } from './core/oid4vc-client.mjs';
+import { loadAlgorithmPolicy } from './core/algorithms.mjs';
 import { buildDcqlQuery, expectedClaimNames, ISSUER_CLAIM } from './core/dcql.mjs';
 import { evaluateChecks } from './core/checks.mjs';
 import { loadTrustPolicy } from './core/trust.mjs';
@@ -36,6 +37,7 @@ const FARMER_VCT = process.env.FARMER_VCT || `${PUBLIC_URL}/vct/farmer-identity-
 const LAND_VCT = process.env.LAND_VCT || `${PUBLIC_URL}/vct/land-ownership-credential`;
 const TRUST_POLICY_FILE = process.env.TRUST_POLICY_FILE || '/app/config/trust/issuers.json';
 const CROP_POLICY_FILE = process.env.CROP_POLICY_FILE || '/app/config/policy/crop-rates.json';
+const ALG_POLICY_FILE = process.env.ALG_POLICY_FILE || '/app/config/policy/algorithms.json';
 // Mirrors oid4vc-service's VP_TXN_TTL default. A verifier session outliving the
 // protocol transaction would show a QR that can no longer be answered.
 const SESSION_TTL_SECONDS = Number(process.env.SESSION_TTL_SECONDS || 300);
@@ -73,6 +75,10 @@ const trust = loadTrustPolicy({ file: TRUST_POLICY_FILE });
 // Same rule as the trust allowlist: a verifier that cannot read the lending
 // policy must not start and then quote a rupee figure it made up.
 const cropPolicy = loadCropPolicy({ file: CROP_POLICY_FILE });
+// Deliberately allowed to throw: a verifier that cannot read its algorithm
+// policy must not start and silently accept anything, which is exactly the
+// failure mode Iteration 01 refused to ship.
+const algPolicy = loadAlgorithmPolicy({ file: ALG_POLICY_FILE });
 
 /**
  * Strips anything that looks like a token, credential or disclosure out of an
@@ -247,6 +253,27 @@ async function readSession(sessionId) {
     });
   }
 
+  // 1b. The approved-algorithm policy (REQUIREMENTS §8). After cryptographic
+  //     verification, because a signature that does not verify is a different
+  //     and worse failure; before the disclosure, trust and domain steps,
+  //     because none of them should run on a presentation signed with something
+  //     we have not approved.
+  //
+  //     A failure here is a REJECTION, not a business answer — the same class as
+  //     an untrusted issuer. Both mean "we could not trust what we were shown".
+  const algorithms = algPolicy.check(status.algs);
+  if (!algorithms.ok) {
+    console.log(`[verifier] session ${sessionId} rejected: ${algorithms.reason}`);
+    return reject(algorithms.reason, {
+      failedCheck: 'algorithm',
+      diagnostic: algorithms.diagnostic,
+    });
+  }
+  // Reported alongside the upstream checks so the enforcement is visible on the
+  // page rather than only in this file. An unenforced control that claims a pill
+  // would be worse than no pill, which is why this line sits AFTER the check.
+  status.checks = { ...(status.checks || {}), algorithm: 'OK' };
+
   // Steps 2-4, once per credential the request asked for. Age passes through
   // this with a single entry; Agriculture with two. The loop is what makes a
   // multi-credential presentation safe: every credential is disclosure-checked
@@ -405,6 +432,7 @@ const server = createServer(async (req, res) => {
         requestedClaims: [AGE_CLAIM],
         protocolClaims: [ISSUER_CLAIM],
         trustedIssuers: trust.issuers.map((i) => i.name),
+        approvedAlgorithms: algPolicy.approved,
       });
     }
     if (req.method === 'GET' && path === '/agriculture/policy') {
@@ -419,6 +447,7 @@ const server = createServer(async (req, res) => {
         maxRatePerAcre: cropPolicy.maxRatePerAcre,
         currency: cropPolicy.currency,
         trustedIssuers: trust.issuers.map((i) => ({ name: i.name, roles: i.roles })),
+        approvedAlgorithms: algPolicy.approved,
       });
     }
     if (req.method === 'POST' && path === '/sessions') {

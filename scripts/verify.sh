@@ -134,6 +134,21 @@ check "a refusal is distinguished from a verification failure" 'grep -q "decline
 check "the page renders a refusal without a failure verdict" 'grep -q "NO DATA SHARED" services/verifier-web/app.js && grep -q "decision.neutral" services/web-assets/styles.css'
 check "a cancelled check is enforced server-side, not just labelled" 'grep -q "sessions/:id/cancel\|abandoned" services/verifier/src/server.mjs && grep -q "cancel" services/verifier-mobile/App.js'
 check "the negative fixture is owned by the tests, not bootstrap" 'grep -q "ensureNegativeFixture" tests/e2e/lib/stack.mjs && ! grep -q "create_schema .Age Verification Credential (unlisted" scripts/bootstrap.sh'
+# --- the approved-algorithm policy (REQUIREMENTS §8) -------------------------
+# Iteration 01 shipped this as a recorded deviation because `alg` was not
+# observable. It is enforced now, and these assert it stays enforced rather than
+# decaying back into a policy file nobody reads.
+check "the approved-algorithm policy is version-controlled" '[ -f config/policy/algorithms.json ] && python3 -c "import json;d=json.load(open(\"config/policy/algorithms.json\"));assert d[\"approved\"]==[\"ES256\"]"'
+check "the verifier enforces it, not just loads it" 'grep -q "algPolicy.check(status.algs)" services/verifier/src/server.mjs && grep -q "failedCheck: .algorithm." services/verifier/src/server.mjs'
+# The ORDER is the control, not just the presence of the check: an unapproved
+# algorithm has to be refused before the lending rule runs, or the rule has
+# already run on a presentation we do not accept. Compared by line number, which
+# is crude but readable — the previous attempt nested python inside an eval'd
+# single-quoted string and was wrong in a way that took a run to notice.
+check "it is checked before the domain decision" '[ "$(grep -n "algPolicy.check" services/verifier/src/server.mjs | head -1 | cut -d: -f1)" -lt "$(grep -n "decideFarmCredit({" services/verifier/src/server.mjs | head -1 | cut -d: -f1)" ]'
+gone  "no algorithm is silently defaulted in the verifier" 'grep -qE "algs \|\| \[.ES256.\]|alg \|\| .ES256." services/verifier/src/core/algorithms.mjs'
+check "positive and negative algorithm tests exist" '[ -f tests/unit/algorithm-policy.test.mjs ] && [ -f tests/e2e/algorithm-policy.test.mjs ]'
+
 check "the installed mobile verifier exists and calls the shared service" '[ -f services/verifier-mobile/App.js ] && grep -q "/api/verifier" services/verifier-mobile/App.js'
 # The charter's constraint on that app: it "displays results; it does not
 # independently trust claims or make cryptographic decisions". The way that
@@ -257,7 +272,7 @@ if [ -d "$WFORK/.git" ]; then
   # check() later evals loses its \$3 to the shell, and awk then fails with a
   # syntax error the check reports as drift that does not exist.
   check "the vendored copy matches the fork, apart from the recorded adaptation" \
-    '[ -z "$(diff <(git -C "$WFORK" ls-tree -r --format="%(objectname) %(path)" cbe9407 | sort) <(git ls-tree -r --format="%(objectname) %(path)" "HEAD:$W" | sort) | grep -E "^[<>]" | grep -vE "($ADAPTED)$")" ]'
+    '[ -z "$(diff <(git -C "$WFORK" ls-tree -r --format="%(objectname) %(path)" 6dc0a3c | sort) <(git ls-tree -r --format="%(objectname) %(path)" "HEAD:$W" | sort) | grep -E "^[<>]" | grep -vE "($ADAPTED)$")" ]'
 else
   skip "wallet drift vs the fork" "no checkout at $WFORK - set WALLET_FORK_PATH"
 fi
