@@ -48,6 +48,26 @@ function showcaseEntities() {
     .filter((entity) => entity.includes('/assets/logos/'));
 }
 
+/** The trusted-OID4VCI-issuer list as text. This is the issuance side. */
+function trustedIssuerBlock() {
+  const list = source.slice(source.indexOf('export const trustedOpenId4VciIssuerEntities'));
+  return list.slice(0, list.indexOf('satisfies Array<TrustedOpenId4VciEntity>'));
+}
+
+/** Each issuer entity as `{ issuer, block }`, in source order. Order matters. */
+function trustedIssuers() {
+  return trustedIssuerBlock()
+    .split(/\n  \{/)
+    .slice(1)
+    .map((block) => ({ issuer: block.match(/^\s*issuer: '([^']+)'/m)?.[1], block }))
+    .filter((e) => e.issuer);
+}
+
+/** The issuer entities this repository added, again identified by our own logos. */
+function showcaseIssuers() {
+  return trustedIssuers().filter((e) => e.block.includes('/assets/logos/'));
+}
+
 describe('the vendored wallet trusts this showcase', () => {
   test('the showcase verifier is a trusted DID entity', () => {
     guard();
@@ -102,6 +122,139 @@ describe('the vendored wallet trusts this showcase', () => {
     assert.ok(blocks.length > 0);
     for (const block of blocks) {
       assert.match(block, /demo: true/, `a showcase trust entity is not marked demo: true:\n${block.slice(0, 160)}`);
+    }
+  });
+});
+
+
+// The presentation side, and the same ordering trap as the issuer list below.
+//
+// packages/sdk/src/trust/handlers/did.ts resolves a client id with
+//   trustedDidEntities.find((e) => baseDid.startsWith(e.did))
+// so a host-scoped entry is a prefix of EVERY did:web minted on that host. This
+// deployment now signs presentation requests with two different verifier DIDs —
+// the age-restricted service and the bank — and a host-scoped entry listed above
+// either of them claims both. It did: the fallback was named "Age Check", and a
+// farmer applying for crop credit was asked to trust Age Check.
+describe('the vendored wallet names the right verifier', () => {
+  test('no DID entity is shadowed by a less specific one listed before it', () => {
+    guard();
+    const dids = trustedDids();
+    for (let i = 0; i < dids.length; i++) {
+      for (let j = i + 1; j < dids.length; j++) {
+        assert.ok(
+          !(dids[j] !== dids[i] && dids[j].startsWith(dids[i])),
+          `'${dids[i]}' is listed before '${dids[j]}' and is a prefix of it, so it matches first ` +
+            'and the wallet will name the wrong party. More specific DIDs must come first.',
+        );
+      }
+    }
+  });
+
+  test('a host-scoped DID entity does not claim to be a party', () => {
+    guard();
+    // It cannot be one. Several parties are minted under this host, so any party
+    // name on a host-scoped entry is right for at most one of them and silently
+    // wrong for the rest after a re-bootstrap.
+    const parties = ['Age Check', 'Gramin Bank', 'National Identity Authority', 'Farmer Registry', 'Land Registry'];
+    for (const entity of showcaseEntities()) {
+      const did = entity.match(/^\s*did: '([^']+)'/m)?.[1] || '';
+      if (did.split(':').length > 3) continue; // pinned to one deployment: a party name is correct
+      const name = entity.match(/^\s*name: '([^']+)'/m)?.[1] || '';
+      assert.equal(
+        parties.includes(name),
+        false,
+        `the host-scoped entry '${did}' is named '${name}', so it will claim every other party minted on that host`,
+      );
+    }
+  });
+
+  test('the bank presents as itself, not as the age service', () => {
+    guard();
+    // REQUIREMENTS R3.4 and DEMO.md step 4: the farmer must be shown the bank.
+    const names = showcaseEntities()
+      .map((e) => e.match(/^\s*name: '([^']+)'/m)?.[1])
+      .filter(Boolean);
+    assert.ok(
+      names.includes('Gramin Bank'),
+      'no trusted DID entity names the bank, so its consent screen would name whatever matched first',
+    );
+  });
+});
+
+// The issuance side. Every credential in the Agriculture demo is offered by one
+// of two registries the wallet has never seen before, and the trust screen the
+// farmer reads before accepting is drawn entirely from these entries.
+describe('the vendored wallet trusts both Agriculture registries', () => {
+  test('each registry the deployment runs is a trusted issuer entity', () => {
+    guard();
+    // Path-scoped, because both registries are served from the one demo host.
+    // Absent, the wallet offers the credential under "Unknown organisation",
+    // which is a demo failure and not a test failure — nothing goes red.
+    const issuers = trustedIssuers().map((e) => e.issuer);
+    for (const path of ['/farmer', '/land']) {
+      assert.ok(
+        issuers.some((issuer) => issuer.includes('sslip.io') && issuer.endsWith(path)),
+        `no trusted issuer entity ends in ${path}: the wallet would call that registry unknown`,
+      );
+    }
+  });
+
+  test('no issuer entity is shadowed by a less specific one listed before it', () => {
+    guard();
+    // This is the trap this list has. The handler is
+    //   trustedEntities.find((e) => issuer.startsWith(e.issuer))
+    // in packages/sdk/src/trust/handlers/fallback.ts — a PREFIX match resolved by
+    // the FIRST hit. The Age entry is host-scoped, so it is a prefix of both
+    // Agriculture issuers; listed above them it would claim both, and a farmer
+    // accepting a land credential would be told the National Identity Authority
+    // was issuing it. Wrong, confidently, with a trusted badge on it.
+    //
+    // Nothing about that fails: the offer still resolves, the credential is still
+    // stored, only the organisation name is wrong. So the ordering is asserted
+    // here rather than left to whoever next appends an entry.
+    const entities = trustedIssuers();
+    for (let i = 0; i < entities.length; i++) {
+      for (let j = i + 1; j < entities.length; j++) {
+        assert.ok(
+          !(entities[j].issuer !== entities[i].issuer && entities[j].issuer.startsWith(entities[i].issuer)),
+          `'${entities[i].issuer}' is listed before '${entities[j].issuer}' and is a prefix of it, ` +
+            'so it will match first and the wallet will name the wrong organisation. ' +
+            'More specific issuer prefixes must come first.',
+        );
+      }
+    }
+  });
+
+  test('the two registries are named distinctly, and not as the Age issuer', () => {
+    guard();
+    // REQUIREMENTS §3 is that the wallet shows two INDEPENDENT issuers. Two
+    // entries carrying one name would satisfy every other check here and still
+    // fail the thing the demo has to show.
+    const names = showcaseIssuers()
+      .map((e) => e.block.match(/^\s*name: '([^']+)'/m)?.[1])
+      .filter(Boolean);
+    assert.equal(new Set(names).size, names.length, `showcase issuers share a name: ${names.join(', ')}`);
+    for (const path of ['/farmer', '/land']) {
+      const entity = showcaseIssuers().find((e) => e.issuer.endsWith(path));
+      assert.ok(entity, `no showcase issuer entity for ${path}`);
+      const name = entity.block.match(/^\s*name: '([^']+)'/m)?.[1];
+      assert.doesNotMatch(
+        name ?? '',
+        /Identity Authority/,
+        `${path} is presented as the Age issuer ('${name}') — see the shadowing test above`,
+      );
+    }
+  });
+
+  test('the showcase issuer entities are marked as demonstration entities', () => {
+    guard();
+    // Same reason as the DID entities: synthetic registries must not be shown
+    // inside a wallet's trust UI as production-trusted.
+    const entities = showcaseIssuers();
+    assert.ok(entities.length > 0, 'expected to find the showcase issuer entities');
+    for (const { issuer, block } of entities) {
+      assert.match(block, /demo: true/, `showcase issuer ${issuer} is not marked demo: true`);
     }
   });
 });

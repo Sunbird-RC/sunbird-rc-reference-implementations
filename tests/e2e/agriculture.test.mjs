@@ -27,6 +27,9 @@ import {
   startFarmCreditVerification,
   farmCreditPolicy,
   readVerification,
+  readFarmCreditVerification,
+  cancelFarmCreditVerification,
+  requestUriFromQr,
   cancelVerification,
   json,
 } from './lib/stack.mjs';
@@ -147,7 +150,7 @@ async function walletWithBothCredentials(fixture, { holder: existing } = {}) {
 /** Runs one full two-credential presentation and returns the bank's answer. */
 async function applyForCredit({ holder, farmer, land, landHolder, disclose }) {
   const session = await startFarmCreditVerification(base);
-  const request = await fetchRequestObject({ base, transactionId: session.sessionId });
+  const request = await fetchRequestObject({ requestUri: requestUriFromQr(session.qrData) });
 
   const presentations = {};
   presentations[FARMER_ID] = await presentSdJwt({
@@ -169,7 +172,7 @@ async function applyForCredit({ holder, farmer, land, landHolder, disclose }) {
     });
   }
 
-  const submission = await submitMultiPresentation({ base, state: request.state, presentations });
+  const submission = await submitMultiPresentation({ base, responseUri: request.response_uri, state: request.state, presentations });
   const result = await readVerification(base, session.sessionId);
   return { session, request, presentations, submission, result: result.body };
 }
@@ -364,12 +367,22 @@ describe('privacy: what actually travelled', () => {
     const { result, presentations } = await applyForCredit(wallet);
     assert.equal(result.decision, 'ELIGIBLE');
 
-    // What the bank was told.
-    assert.deepEqual(Object.keys(result.disclosed).sort(), [
-      'cropType',
-      'cultivatedAreaAcres',
-      'farmerId',
-    ]);
+    // What the bank was told - derived from the bank's own published request,
+    // not restated, and asserted in BOTH directions.
+    //
+    // Nothing extra is the privacy half. Nothing missing is the honesty half:
+    // the page prints these beside a list of withheld claims, so a report that
+    // omits a claim the farmer did disclose overstates the guarantee. This
+    // assertion was a hardcoded three-claim list, which matched a payload that
+    // omitted registeredFarmer and ownershipStatus and so pinned the defect in
+    // place instead of catching it.
+    const policy = await farmCreditPolicy(base);
+    const requested = [...new Set([...policy.requestedClaims.farmer, ...policy.requestedClaims.land])].sort();
+    assert.deepEqual(
+      Object.keys(result.disclosed).sort(),
+      requested,
+      'the bank must report exactly the claims it asked for: no more, and no fewer',
+    );
 
     // And what is absent from the wire, not merely unread. The withheld values
     // are in the credentials as salted digests, so they are unrecoverable.
@@ -466,7 +479,7 @@ describe('verification failures: REJECTED / UNABLE TO VERIFY', () => {
     // ROLE: the Land Registry is not trusted to issue the farmer credential.
     const wallet = await walletWithBothCredentials(FIXTURES.eligiblePaddy);
     const session = await startFarmCreditVerification(base);
-    const request = await fetchRequestObject({ base, transactionId: session.sessionId });
+    const request = await fetchRequestObject({ requestUri: requestUriFromQr(session.qrData) });
     const swapped = await presentSdJwt({
       credential: wallet.land,
       disclose: ['farmerId'],
@@ -476,6 +489,7 @@ describe('verification failures: REJECTED / UNABLE TO VERIFY', () => {
     });
     await submitMultiPresentation({
       base,
+      responseUri: request.response_uri,
       state: request.state,
       presentations: { [FARMER_ID]: swapped },
     });
@@ -489,8 +503,8 @@ describe('no data shared', () => {
   test('a farmer who declines is reported as declined, not as a failure', async () => {
     guard();
     const session = await startFarmCreditVerification(base);
-    const request = await fetchRequestObject({ base, transactionId: session.sessionId });
-    const submission = await declinePresentation({ base, state: request.state });
+    const request = await fetchRequestObject({ requestUri: requestUriFromQr(session.qrData) });
+    const submission = await declinePresentation({ base, responseUri: request.response_uri, state: request.state });
     assert.ok(submission.status < 500, `declining must not fault the service, got ${submission.status}`);
 
     const { body } = await readVerification(base, session.sessionId);
@@ -504,7 +518,7 @@ describe('no data shared', () => {
     guard();
     const wallet = await walletWithBothCredentials(FIXTURES.eligiblePaddy);
     const session = await startFarmCreditVerification(base);
-    const request = await fetchRequestObject({ base, transactionId: session.sessionId });
+    const request = await fetchRequestObject({ requestUri: requestUriFromQr(session.qrData) });
 
     const cancelled = await cancelVerification(base, session.sessionId);
     assert.equal(cancelled.body.state, 'cancelled');
@@ -525,11 +539,84 @@ describe('no data shared', () => {
         holder: wallet.holder,
       }),
     };
-    await submitMultiPresentation({ base, state: request.state, presentations });
+    await submitMultiPresentation({ base, responseUri: request.response_uri, state: request.state, presentations });
 
     const { body } = await readVerification(base, session.sessionId);
     assert.equal(body.state, 'cancelled', 'a cancelled application must never report a decision');
     assert.equal(body.decision, undefined);
     assert.equal(body.loan, undefined);
+  });
+});
+
+// The URLs services/bank-web/app.js actually calls.
+//
+// Every other test here reaches the same sessions through the Age path
+// /api/verifier/sessions/<id>, and that is how a real defect survived a green
+// suite: the bank page polls /api/verifier/agriculture/sessions/<id>, no route
+// matched it, and the page rendered the 404 as "No presentation arrived before
+// the request expired" for an application the verifier had decided ELIGIBLE.
+// A passing API test proves nothing about a page that calls a different URL.
+describe('the endpoints the bank page itself uses', () => {
+  test("the page's polling URL returns the decision, not a 404", async () => {
+    guard();
+    const wallet = await walletWithBothCredentials(FIXTURES.eligiblePaddy);
+    const session = await startFarmCreditVerification(base);
+    const request = await fetchRequestObject({ requestUri: requestUriFromQr(session.qrData) });
+    const presentations = {
+      [FARMER_ID]: await presentSdJwt({
+        credential: wallet.farmer,
+        disclose: ['farmerId', 'registeredFarmer'],
+        nonce: request.nonce,
+        audience: request.client_id,
+        holder: wallet.holder,
+      }),
+      [LAND_ID]: await presentSdJwt({
+        credential: wallet.land,
+        disclose: ['farmerId', 'ownershipStatus', 'cropType', 'cultivatedAreaAcres'],
+        nonce: request.nonce,
+        audience: request.client_id,
+        holder: wallet.holder,
+      }),
+    };
+    await submitMultiPresentation({ base, responseUri: request.response_uri, state: request.state, presentations });
+
+    const res = await readFarmCreditVerification(base, session.sessionId);
+    assert.equal(res.status, 200, 'the bank page polls this URL; a 404 here is shown as "expired"');
+    assert.equal(res.body.state, 'decided');
+    assert.equal(res.body.decision, 'ELIGIBLE');
+    assert.ok(res.body.loan?.maximumLoanFormatted, 'the page renders this figure');
+  });
+
+  test("the page's cancel URL actually cancels", async () => {
+    guard();
+    // The page's Cancel button posts here. Unrouted, it would report success to
+    // the user - fetch resolves - while the session stayed live and answerable.
+    const session = await startFarmCreditVerification(base);
+    const cancelled = await cancelFarmCreditVerification(base, session.sessionId);
+    assert.equal(cancelled.status, 200);
+    assert.equal(cancelled.body.state, 'cancelled');
+    const after = await readFarmCreditVerification(base, session.sessionId);
+    assert.equal(after.body.state, 'cancelled');
+  });
+
+  test('a session is readable through either namespace', async () => {
+    guard();
+    // Reading is use-case agnostic on purpose: the session records its own use
+    // case. This pins that, so nobody "fixes" it by splitting the store.
+    const session = await startFarmCreditVerification(base);
+    const viaAge = await readVerification(base, session.sessionId);
+    const viaAgriculture = await readFarmCreditVerification(base, session.sessionId);
+    assert.equal(viaAge.status, 200);
+    assert.equal(viaAgriculture.status, 200);
+    assert.equal(viaAge.body.state, viaAgriculture.body.state);
+  });
+
+  test('an unknown use-case prefix is not a route', async () => {
+    guard();
+    // The prefix is built from the use-case map, so it must not accept anything
+    // that is not a use case - otherwise it is just a wildcard.
+    const session = await startFarmCreditVerification(base);
+    const res = await json(`${base}/api/verifier/education/sessions/${session.sessionId}`);
+    assert.equal(res.status, 404);
   });
 });

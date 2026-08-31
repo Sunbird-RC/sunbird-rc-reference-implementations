@@ -237,8 +237,21 @@ export function forgeDisclosureValue(disclosure, newValue) {
  * asks for something else. Paradym behaves this way, which is why request
  * signing is on for this stack at all.
  */
-export async function fetchRequestObject({ base, transactionId }) {
-  const res = await fetch(`${base}/vp/request-object/${transactionId}`, {
+/**
+ * Fetches the request object the way a wallet does.
+ *
+ * `requestUri` is preferred, and it is what the QR actually carries. It matters
+ * now that more than one signer exists: the bank's transactions live on the bank
+ * instance, published under its own path prefix, so a URL rebuilt from `base`
+ * points at the wrong instance and 404s. A wallet never rebuilds this URL — it
+ * uses the one it was given — and neither should the suite.
+ *
+ * The `base` + `transactionId` form is kept because the Age tests use it and the
+ * age signer is served from the root.
+ */
+export async function fetchRequestObject({ base, transactionId, requestUri }) {
+  const url = requestUri || `${base}/vp/request-object/${transactionId}`;
+  const res = await fetch(url, {
     headers: { accept: 'application/oauth-authz-req+jwt' },
   });
   if (!res.ok) throw new Error(`request-object -> ${res.status}: ${(await res.text()).slice(0, 200)}`);
@@ -258,16 +271,16 @@ export async function fetchRequestObject({ base, transactionId }) {
  * both as a refusal, because the alternative is telling the citizen that
  * verification failed when they simply said no.
  */
-export async function declinePresentation({ base, state, error = 'access_denied' }) {
-  return http(`${base}/vp/response`, {
+export async function declinePresentation({ base, state, error = 'access_denied', responseUri }) {
+  return http(responseUri || `${base}/vp/response`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ state, error }),
   });
 }
 
-export async function submitPresentation({ base, state, queryId, presentation }) {
-  return http(`${base}/vp/response`, {
+export async function submitPresentation({ base, state, queryId, presentation, responseUri }) {
+  return http(responseUri || `${base}/vp/response`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ state, vp_token: JSON.stringify({ [queryId]: [presentation] }) }),
@@ -287,9 +300,12 @@ export async function submitPresentation({ base, state, queryId, presentation })
  *
  * @param {{base: string, state: string, presentations: Record<string, string>}} args
  */
-export async function submitMultiPresentation({ base, state, presentations }) {
+export async function submitMultiPresentation({ base, state, presentations, responseUri }) {
   const vpToken = Object.fromEntries(Object.entries(presentations).map(([id, p]) => [id, [p]]));
-  return http(`${base}/vp/response`, {
+  // response_uri comes from the request object the verifier signed. Same reason
+  // as fetchRequestObject: the signer that holds this transaction decides where
+  // the response goes, and it is not always at the root.
+  return http(responseUri || `${base}/vp/response`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ state, vp_token: JSON.stringify(vpToken) }),

@@ -319,6 +319,39 @@ export function farmCreditPolicy(base) {
   return ok('farm credit policy', json(`${base}/api/verifier/agriculture/policy`));
 }
 
+/**
+ * Reads and cancels a farm-credit session through the BANK PAGE's own URLs.
+ *
+ * Deliberately separate from readVerification below, which uses the Age path.
+ * Both work, and that is the point: the suite once exercised only the Age path,
+ * so a missing route under /agriculture went unnoticed while every API test
+ * passed and the bank page showed "the request expired" for decided
+ * applications. Whatever the app calls is what the tests must call.
+ */
+export function readFarmCreditVerification(base, sessionId) {
+  return json(`${base}/api/verifier/agriculture/sessions/${sessionId}`);
+}
+
+export function cancelFarmCreditVerification(base, sessionId) {
+  return json(`${base}/api/verifier/agriculture/sessions/${sessionId}/cancel`, { method: 'POST' });
+}
+
+/**
+ * The request-object URL out of a session's QR, which is where a wallet gets it.
+ *
+ * Needed because the two verifier parties are served by two signer instances on
+ * different path prefixes. Reading it from the QR means a test cannot be right
+ * about the age signer and wrong about the bank's, which is what rebuilding the
+ * URL from PUBLIC_URL would do.
+ */
+export function requestUriFromQr(qrData) {
+  const uri = new URL(qrData.replace(/^openid4vp:\/\//, 'https://placeholder/')).searchParams.get(
+    'request_uri',
+  );
+  if (!uri) throw new Error(`no request_uri in the QR: ${String(qrData).slice(0, 120)}`);
+  return uri;
+}
+
 /** Starts a verifier session: the QR the wallet would scan. */
 export function startVerification(base) {
   return ok('start verification', json(`${base}/api/verifier/sessions`, { method: 'POST' }));
