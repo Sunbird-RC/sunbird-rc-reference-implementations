@@ -1,18 +1,31 @@
-// Flow 3: the installed mobile verifier.
+// Flow 3: the installed mobile verifier, for both use cases.
 //
 // Deliberately thin. The charter is explicit that the mobile UI "displays
 // results; it does not independently trust claims or make cryptographic
 // decisions", and that one reusable verification service serves both the web and
 // mobile channels. So this screen does exactly three things:
 //
-//   1. POST /api/verifier/sessions        — ask the verifier service for a request
-//   2. Linking.openURL(openid4vp://...)   — hand that request to the wallet
-//   3. GET  /api/verifier/sessions/{id}   — poll, and render whatever it says
+//   1. POST <api>/sessions               — ask the verifier service for a request
+//   2. Linking.openURL(openid4vp://...)  — hand that request to the wallet
+//   3. GET  <api>/sessions/{id}          — poll, and render whatever it says
 //
-// There is no credential parsing here, no signature check, no age comparison.
-// Every one of those happens server side, and the public gateway enforces it:
-// /vp/* is refused on the citizen listener, so this app could not reach the
-// protocol endpoints directly even if it tried.
+// There is no credential parsing here, no signature check, no age comparison, no
+// loan arithmetic. Every one of those happens server side, and the public gateway
+// enforces it: /vp/* is refused on the citizen listener, so this app could not
+// reach the protocol endpoints directly even if it tried.
+//
+// Iteration 02 added the second use case, and the ONLY thing that differs between
+// them is `<api>` and the labels — see USE_CASES below. That is the charter's
+// "one reusable verification service serves both channels" made visible: the farm
+// credit screen contains no lending logic, and the age screen no age logic,
+// because neither app ever had any.
+//
+// A note for whoever adds a third: the loan figure this screen prints is
+// `loan.maximumLoanFormatted`, already formatted by the service in Indian digit
+// grouping. Do not recompute it here from the rate and the acreage. A mobile app
+// capable of producing a different number from the same credential is a second
+// implementation of the lending policy, which is exactly what the iteration must
+// not ship.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -29,6 +42,66 @@ import { StatusBar } from 'expo-status-bar';
 
 const BASE = (Constants.expoConfig?.extra?.verifierBaseUrl ?? '').replace(/\/+$/, '');
 const POLL_MS = 1500;
+
+/**
+ * The two channels this app can be, and everything that differs between them.
+ *
+ * `api` is the whole functional difference. Both paths are served by the one
+ * verifier service; the agriculture namespace exists so a front end can poll and
+ * cancel where it started, which it could not always do — the routes under
+ * /agriculture were read-only-by-accident and a poll fell through to a 404 that
+ * this app would have rendered as "the request expired".
+ */
+/**
+ * The channel this build serves, from app.config.js.
+ *
+ * Defaults to age so that an Iteration 01 build with no variable set is exactly
+ * what it always was. An unknown value is a hard failure rather than a silent
+ * fallback: a verifier quietly asking for the wrong credential type is worse
+ * than one that will not start.
+ */
+const USE_CASE_NAME = Constants.expoConfig?.extra?.useCase ?? 'age';
+
+const USE_CASES = {
+  age: {
+    api: `${BASE}/api/verifier`,
+    eyebrow: 'AGE-RESTRICTED SERVICE',
+    title: 'Prove you are over 18',
+    lede:
+      'This app asks your wallet for one thing only — whether you are over 18. Not your date of birth, not your name.',
+    startLabel: 'Start age check',
+    cancelLabel: 'Cancel this check',
+    againLabel: 'Run another check',
+    nothingLine: 'Nothing was disclosed and no approval was produced.',
+    cancelledLine: 'The check was cancelled. Nothing was disclosed and no approval was produced.',
+    expiredLine: 'No presentation arrived before the request expired.',
+    approved: 'APPROVED',
+    rejectedLabel: 'NOT VERIFIED',
+    withheld: [],
+  },
+  agriculture: {
+    api: `${BASE}/api/verifier/agriculture`,
+    eyebrow: 'GRAMIN BANK — FARM CREDIT',
+    title: 'Apply for crop credit',
+    lede:
+      'This app asks your wallet for six things from two cards — enough to confirm you are a registered farmer, that the land is yours, and how much of it you are cultivating. Not your National ID, not your name, not the size of your holding.',
+    startLabel: 'Start farm credit check',
+    cancelLabel: 'Cancel this application',
+    againLabel: 'Run another application',
+    nothingLine: 'Nothing was disclosed and no credit decision was produced.',
+    cancelledLine:
+      'The application was cancelled. Nothing was disclosed and no credit decision was produced.',
+    expiredLine:
+      'No presentation arrived before the request expired. Nothing was disclosed and no credit decision was produced.',
+    approved: 'ELIGIBLE',
+    rejectedLabel: 'REJECTED / UNABLE TO VERIFY',
+    // Named so the screen can state what it did NOT receive. A bank that can
+    // lend against verified cultivation without learning who the farmer is or
+    // how much land they hold is the argument of the iteration, and it is only
+    // legible if the app names the absence.
+    withheld: ['National ID', 'name', 'land ID', 'total land area', 'district', 'farmer category'],
+  },
+};
 
 const COLOURS = {
   ivory: '#FDF9F0',
@@ -56,7 +129,24 @@ function Checks({ checks }) {
   );
 }
 
+/** One line of the bank's working. Values arrive formatted; nothing is computed. */
+function Calc({ label, value, total }) {
+  return (
+    <View style={styles.calcLine}>
+      <Text style={total ? styles.calcTotalKey : styles.calcKey}>{label}</Text>
+      <Text style={total ? styles.calcTotalValue : styles.calcValue}>{value}</Text>
+    </View>
+  );
+}
+
 export default function App() {
+  // Which channel this app IS. Baked in at build time by VERIFIER_USE_CASE (see
+  // app.config.js), not chosen on screen: an Agriculture demo must not put an
+  // Age option in front of a farmer, and an idle-screen picker does precisely
+  // that. Same rule as the wallet's issuer directory.
+  const useCase = USE_CASES[USE_CASE_NAME];
+  const api = useRef(useCase.api);
+
   const [phase, setPhase] = useState('idle');
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -83,7 +173,7 @@ export default function App() {
   const poll = useCallback(async () => {
     if (!session.current) return;
     try {
-      const res = await fetch(`${BASE}/api/verifier/sessions/${session.current}`);
+      const res = await fetch(`${api.current}/sessions/${session.current}`);
       const body = res.status === 404 ? { state: 'expired' } : await res.json();
       switch (body.state) {
         case 'waiting':
@@ -94,9 +184,7 @@ export default function App() {
         case 'cancelled':
           return finish('nothing', body);
         case 'expired':
-          return finish('nothing', {
-            reason: 'No presentation arrived before the request expired.',
-          });
+          return finish('nothing', { reason: useCase.expiredLine });
         default:
           return finish('rejected', body);
       }
@@ -110,8 +198,10 @@ export default function App() {
     setError(null);
     setResult(null);
     setPhase('starting');
+    // Pinned for the whole run: the timers below must keep polling the namespace
+    // this session was created in, even if the picker is touched afterwards.
     try {
-      const res = await fetch(`${BASE}/api/verifier/sessions`, { method: 'POST' });
+      const res = await fetch(`${api.current}/sessions`, { method: 'POST' });
       if (res.status !== 201) throw new Error(`the verifier service answered ${res.status}`);
       const body = await res.json();
       session.current = body.sessionId;
@@ -157,12 +247,12 @@ export default function App() {
     stop();
     if (id) {
       try {
-        await fetch(`${BASE}/api/verifier/sessions/${id}/cancel`, { method: 'POST' });
+        await fetch(`${api.current}/sessions/${id}/cancel`, { method: 'POST' });
       } catch {
         // The screen is honest either way: nothing was shared.
       }
     }
-    setResult({ reason: 'The check was cancelled. Nothing was disclosed and no approval was produced.' });
+    setResult({ reason: useCase.cancelledLine });
     setPhase('nothing');
   }, [stop]);
 
@@ -174,31 +264,41 @@ export default function App() {
     setPhase('idle');
   };
 
-  const verdict = phase === 'decided' ? result?.decision : phase === 'nothing' ? 'NO DATA SHARED' : 'NOT VERIFIED';
+  // The service's own decision, relabelled for reading and nothing more. The two
+  // channels use different words for the same three outcomes, and the third —
+  // "we could not trust what we were shown" — must never read as the second:
+  // NOT ELIGIBLE means the claims were verified and the answer was no.
+  const decided = phase === 'decided' ? result?.decision : null;
+  const verdict =
+    phase === 'decided'
+      ? String(decided ?? '').replace(/_/g, ' ')
+      : phase === 'nothing'
+        ? 'NO DATA SHARED'
+        : useCase.rejectedLabel;
   const verdictColour =
-    verdict === 'APPROVED'
+    decided === useCase.approved
       ? COLOURS.approved
-      : verdict === 'DENIED'
+      : decided === 'DENIED' || decided === 'NOT_ELIGIBLE'
         ? COLOURS.denied
         : phase === 'nothing'
           ? COLOURS.muted
           : COLOURS.failed;
+
+  /** The issuers behind the answer; agriculture returns two. */
+  const issuers = Array.isArray(result?.issuer) ? result.issuer.join(' · ') : result?.issuer;
 
   return (
     <View style={styles.screen}>
       <StatusBar style="dark" />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.brand}>sunbird</Text>
-        <Text style={styles.eyebrow}>AGE-RESTRICTED SERVICE</Text>
-        <Text style={styles.title}>Prove you are over 18</Text>
-        <Text style={styles.lede}>
-          This app asks your wallet for one thing only — whether you are over 18. Not your date of
-          birth, not your name.
-        </Text>
+        <Text style={styles.eyebrow}>{useCase.eyebrow}</Text>
+        <Text style={styles.title}>{useCase.title}</Text>
+        <Text style={styles.lede}>{useCase.lede}</Text>
 
         {phase === 'idle' && (
           <Pressable style={styles.primary} onPress={start}>
-            <Text style={styles.primaryText}>Start age check</Text>
+            <Text style={styles.primaryText}>{useCase.startLabel}</Text>
           </Pressable>
         )}
 
@@ -213,7 +313,7 @@ export default function App() {
             )}
             {phase === 'waiting' && (
               <Pressable style={styles.secondary} onPress={cancel}>
-                <Text style={styles.secondaryText}>Cancel this check</Text>
+                <Text style={styles.secondaryText}>{useCase.cancelLabel}</Text>
               </Pressable>
             )}
           </View>
@@ -222,34 +322,56 @@ export default function App() {
         {(phase === 'decided' || phase === 'nothing' || phase === 'rejected') && (
           <View style={styles.card}>
             <Text style={styles.eyebrow}>
-              {phase === 'decided' ? 'VERIFIED RESULT' : phase === 'nothing' ? 'NO RESULT' : 'REJECTED'}
+              {phase === 'decided' ? 'VERIFIED RESULT' : phase === 'nothing' ? 'NO RESULT' : 'UNABLE TO VERIFY'}
             </Text>
             <Text style={[styles.verdict, { color: verdictColour }]}>{verdict}</Text>
             {!!result?.reason && <Text style={styles.reason}>{result.reason}</Text>}
 
-            {!!result?.issuer && (
+            {/* The arithmetic, shown rather than asserted — and taken whole from
+                the service. A loan amount with no visible derivation is
+                indistinguishable from a hardcoded one. */}
+            {!!result?.loan && !!result?.disclosed && (
+              <View style={styles.calc}>
+                <Calc label="Crop" value={result.disclosed.cropType} />
+                <Calc label="Cultivated area" value={`${result.disclosed.cultivatedAreaAcres} acres`} />
+                <Calc
+                  label="Applicable rate"
+                  value={`${result.loan.ratePerAcreFormatted} per acre`}
+                />
+                <Calc label="Maximum loan" value={result.loan.maximumLoanFormatted} total />
+              </View>
+            )}
+
+            {!!issuers && (
               <View style={styles.row}>
-                <Text style={styles.rowKey}>Issuer</Text>
-                <Text style={styles.rowValue}>{result.issuer}</Text>
+                <Text style={styles.rowKey}>{Array.isArray(result?.issuer) ? 'ISSUERS' : 'ISSUER'}</Text>
+                <Text style={styles.rowValue}>{issuers}</Text>
               </View>
             )}
             {!!result?.disclosed && (
               <View style={styles.row}>
-                <Text style={styles.rowKey}>Shared with us</Text>
-                <Text style={styles.rowValue}>
-                  {Object.entries(result.disclosed)
-                    .map(([k, v]) => `${k} = ${v}`)
-                    .join(', ')}
-                </Text>
+                <Text style={styles.rowKey}>SHARED WITH US</Text>
+                <View style={styles.pills}>
+                  {Object.entries(result.disclosed).map(([k, v]) => (
+                    <Text key={k} style={[styles.pill, styles.pillShared]}>
+                      {k} = {String(v)}
+                    </Text>
+                  ))}
+                  {/* What was deliberately NOT received. The privacy claim is
+                      only legible if the absence is named. */}
+                  {useCase.withheld.map((name) => (
+                    <Text key={name} style={[styles.pill, styles.pillWithheld]}>
+                      {name}
+                    </Text>
+                  ))}
+                </View>
               </View>
             )}
-            {phase === 'nothing' && (
-              <Text style={styles.muted}>Nothing was disclosed and no approval was produced.</Text>
-            )}
+            {phase === 'nothing' && <Text style={styles.muted}>{useCase.nothingLine}</Text>}
             <Checks checks={result?.checks} />
 
             <Pressable style={styles.secondary} onPress={reset}>
-              <Text style={styles.secondaryText}>Run another check</Text>
+              <Text style={styles.secondaryText}>{useCase.againLabel}</Text>
             </Pressable>
           </View>
         )}
@@ -312,7 +434,27 @@ const styles = StyleSheet.create({
   row: { marginTop: 10 },
   rowKey: { color: COLOURS.muted, fontSize: 12, letterSpacing: 0.6, fontWeight: '700' },
   rowValue: { color: COLOURS.ink, fontSize: 15, fontWeight: '600' },
+  calc: {
+    backgroundColor: '#FFFDF7',
+    borderWidth: 1,
+    borderColor: COLOURS.hairline,
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 12,
+    gap: 8,
+  },
+  calcLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+  calcKey: { color: COLOURS.muted, fontSize: 14 },
+  calcValue: { color: COLOURS.ink, fontSize: 15, fontWeight: '700' },
+  calcTotalKey: { color: COLOURS.ink, fontSize: 15, fontWeight: '700' },
+  calcTotalValue: { color: COLOURS.approved, fontSize: 22, fontWeight: '800' },
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
+  pillShared: { backgroundColor: '#FBF0D8', color: COLOURS.ink },
+  pillWithheld: {
+    backgroundColor: '#F4F1EA',
+    color: COLOURS.muted,
+    textDecorationLine: 'line-through',
+  },
   pill: { fontSize: 11, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, overflow: 'hidden' },
   pillOk: { backgroundColor: '#E8F2EC', color: COLOURS.approved },
   pillBad: { backgroundColor: '#F6E7E1', color: COLOURS.failed },

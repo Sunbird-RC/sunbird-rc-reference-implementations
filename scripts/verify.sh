@@ -134,7 +134,16 @@ check "a refusal is distinguished from a verification failure" 'grep -q "decline
 check "the page renders a refusal without a failure verdict" 'grep -q "NO DATA SHARED" services/verifier-web/app.js && grep -q "decision.neutral" services/web-assets/styles.css'
 check "a cancelled check is enforced server-side, not just labelled" 'grep -q "sessions/:id/cancel\|abandoned" services/verifier/src/server.mjs && grep -q "cancel" services/verifier-mobile/App.js'
 check "the negative fixture is owned by the tests, not bootstrap" 'grep -q "ensureNegativeFixture" tests/e2e/lib/stack.mjs && ! grep -q "create_schema .Age Verification Credential (unlisted" scripts/bootstrap.sh'
-check "the installed mobile verifier exists and calls the shared service" '[ -f services/verifier-mobile/App.js ] && grep -q "api/verifier/sessions" services/verifier-mobile/App.js'
+check "the installed mobile verifier exists and calls the shared service" '[ -f services/verifier-mobile/App.js ] && grep -q "/api/verifier" services/verifier-mobile/App.js'
+# The charter's constraint on that app: it "displays results; it does not
+# independently trust claims or make cryptographic decisions". The way that
+# breaks is a well-meaning change that reaches a protocol endpoint directly, so
+# assert the absence rather than trusting the comment at the top of the file.
+gone  "the mobile verifier never touches the protocol endpoints" 'grep -qE "\\\$\\{?BASE\\}?/(vp|oid4vc)/|/vp/response|/oid4vc/credential" services/verifier-mobile/App.js'
+# An Agriculture build must not put an Age option in front of a farmer, so the
+# use case is baked in at build time and there is no on-screen picker.
+check "the mobile verifier's use case is a build-time choice" 'grep -q "VERIFIER_USE_CASE" services/verifier-mobile/app.config.js && grep -q "extra?.useCase" services/verifier-mobile/App.js'
+gone  "the mobile verifier offers no on-screen use-case picker" 'grep -qE "setUseCaseName|styles.picker" services/verifier-mobile/App.js'
 gone "the mobile verifier does not verify anything itself" 'grep -qiE "jose|sd-jwt|verifyJwt|createHash" services/verifier-mobile/App.js'
 
 head_ '8. Data model matches the approved design'
