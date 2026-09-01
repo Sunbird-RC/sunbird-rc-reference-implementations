@@ -186,3 +186,128 @@ because `verify.sh` asserts a clean tree.
 3. **Percentage boundaries are inclusive** (`>=`), as PRODUCT states. The tests
    pin 59.9 / 60 / 60.1 and 69.9 / 70 / 70.1 so the boundary is evidence, not
    assumption.
+
+## Progress — 1 September 2026
+
+Build-order items 1 to 5 are done and green on the local stack. Items 6 and 7 are
+not, and the wallet has one gap that has to be closed on the demo host rather than
+here.
+
+**Done, with the evidence that says so.**
+
+| Item | Built | Proven by |
+|---|---|---|
+| 1. Entities, schemas, fixtures | 4 registry schemas, `scripts/seed-education.sh` | 42 unit tests; the seed script runs idempotently (38 records unchanged on a second run) |
+| 1. Percentage arithmetic | `domains/education/percentage.mjs` | 12 unit tests, boundaries at 59.99 / 60 / 60.01 and 69.99 / 70 / 70.01 |
+| 2. Realm and issuers | `realm-education.json` (12 learners), `oid4vc-school` / `-college` / `-university` | `bootstrap.sh` mints 5 DIDs and publishes 3 schemas; all three instances healthy |
+| 3. Trust policy | 3 issuer roles in `config/trust/issuers.json` | `/education/*/policy` reports one trusted issuer per role; the wrong-role and untrusted-issuer e2e cases are REJECTED |
+| 4. Verifier | `education/masters` and `education/job` use cases | 24 e2e tests against the running stack |
+| 5. Portals | `/admissions/` and `/employer/`, one shared `app.js` | driven end to end in a browser with `scripts/wallet-education.sh` |
+| §1 Issuance | `flow3-education-issuance.test.mjs` | 14 e2e tests: one Keycloak sign-in, three credentials, three distinct issuer keys, one holder key, and every refusal §2 asks for |
+| §8 Security | tampering, replay, cross-verifier replay, single-use state, algorithm allowlist | 9 more e2e tests in `education.test.mjs` |
+
+Two things worth naming because they were found by looking rather than by a test:
+
+* **The admissions screen lied about thresholds it had cleared.** The
+  NOT_ELIGIBLE branch returned only `shortfall`, so a learner with a 72% school
+  result was told "school — not reached". Fixed by returning the thresholds
+  already verified, and now asserted in both the unit and e2e suites. Nothing
+  would have caught it: every test passed while the screen was wrong.
+* **An institution can be made to sign another institution's credential type.**
+  `ADVERTISE_OWN_CREDENTIALS_ONLY` filters issuer metadata but not the credential
+  endpoint, so asking the school instance for the college configuration returns a
+  credential signed with the College's DID carrying the learner's school
+  percentage. It is contained — the `vct` is scoped to the minting instance, so no
+  portal's query matches it, and `flow3-education-issuance.test.mjs` proves both
+  the mint and the refusal — but a trust boundary resting on URL construction
+  rather than an authorization check is not something to leave as a passing test.
+  Recorded as finding 16 in `docs/design/COMPATIBILITY.md` and **needs Anand's
+  decision**: the fix is a few lines in the fork applying the same `author` filter
+  to the credential endpoint, which changes a security guarantee.
+
+* **Over-disclosure is dropped upstream, not refused.** A wallet that reveals a
+  claim the request did not ask for gets a DECIDED answer, because DCQL claim
+  filtering in `oid4vc-service` strips the extra disclosure before the verifier
+  sees it. The relying party cannot learn it and the decision cannot use it —
+  both asserted — but the disclosure did reach the protocol façade. Stated
+  plainly in `tests/e2e/education.test.mjs` rather than papered over.
+
+Totals on the local stack, 1 September 2026: **158 unit**, **144 e2e** (47 of them
+Education), **0 failures**. `verify.sh`: 107 passed, 1 failed, 1 skipped — the
+failure is "working tree clean" (the work is uncommitted by design) and the skip is
+the pre-existing wallet-trust pinning skip, because the APK targets the demo host
+while this `deploy/.env` describes localhost.
+
+## Deployed — 1 September 2026
+
+The demo host runs all three iterations. `bootstrap.sh` **reused** the six existing
+DIDs and minted five new ones, so the accepted Age and Agriculture evidence still
+describes the deployment it was captured from.
+
+Verified against it over HTTPS from a clean run, captured in
+[`../../docs/evidence/03-education/runs/`](../../docs/evidence/03-education/runs/):
+
+- **159 unit**, **144 e2e** (47 Education), **109 `verify.sh`** checks
+- **97** Iteration 01 and 02 tests green on the same deployment — the regression
+  §10 requires
+- Each of the five path-scoped issuers advertises exactly one credential
+- Both portals reached over HTTPS in a browser and answered by the hand-driven
+  wallet: the same three cards gave **SELECTED FOR INTERVIEW — ROUND 1** from the
+  employer and **NOT ELIGIBLE, university 65% short of 70%** from admissions
+- The wallet's pinned verifier DID and issuer origin match the live deployment,
+  so `verify.sh`'s trust-pinning check now runs and passes instead of skipping
+
+The two Education verifier DIDs are now in the wallet's `trustedDidEntities`,
+above the host-scoped fallback, so the consent screens name **University
+Admissions** and **Employer** rather than the deployment.
+
+Four things this deployment cost, all now in the runbook or the code:
+
+1. **`docker compose up -d` dropped HTTPS.** The TLS setup is an overlay
+   (`docker-compose.tls.yml`), so recreating nginx without `-f` both files served
+   plain HTTP on port 80 and stopped listening on 443. Worse, the overlay
+   **replaces** nginx's volume list rather than adding to it, so the new
+   `education-web` mount had to be added there too or the portals 404 over HTTPS.
+2. **`rsync --delete` would have destroyed the host's `deploy/.env`** — its public
+   origin and all six existing DIDs — because the file is gitignored and so exists
+   on both machines with different contents. Backed up first, then excluded.
+3. **A 404 logo silently truncated `verify.sh` at check 41**, so sixty later
+   checks never ran and no summary printed: the logo check's `|| exit 1` ran in the
+   current shell. `check()` and `gone()` now eval in a subshell, which fixes the
+   class rather than the instance.
+4. **A half-set environment mixed two deployments.** Exporting `PUBLIC_URL` but not
+   `AGE_ISSUER_DID` falls through to the local `deploy/.env`, so offers were
+   created on the host and redeemed against localhost — surfacing only as
+   `invalid_grant: bad or used code`. `deployEnv()` now refuses that combination
+   with the correct invocation in the message.
+
+**Open, and in this order.**
+
+1. **The wallet change is not vendored as a fork commit.** The three issuer
+   entries and the two verifier entries are complete and tested, but they sit in
+   both working trees rather than in the fork's history — so `scripts/vendor-wallet.sh`
+   still names tip `6dc0a3c` and `SUNBIRD-CHANGES.md` has no row for them. The
+   sequence: commit in the fork → `./scripts/vendor-wallet.sh --tip <new>` → add
+   the row → bump `TIP`. `verify.sh`'s tree-hash check passes today only because
+   the edit is identical in both copies.
+2. **(done)** Education APK built and installed on the Samsung SM-A055F — three
+   institutions in the issuer directory and both new verifier DIDs compiled in,
+   both verified by reading them out of the APK. Wallet data cleared, so the app
+   is at its onboarding screen awaiting a PIN.
+
+   The mobile verifier also gained two Education channels, because the installed
+   Agriculture build was still called **Farm Credit** — the same defect Iteration
+   02 was sent back for. `education-masters` is built and installed, verified end
+   to end against the deployment, and `Farm Credit` / `Age Check` are absent from
+   its resources.
+
+   **Still needs a person and a phone:** set the wallet PIN, collect all three
+   credentials through the wallet's own issuer directory, in-app browser and trust
+   screens, and present to both portals. The server half of that journey is
+   covered by `flow3-education-issuance.test.mjs`, so a device failure can be
+   attributed to the wallet rather than to the stack.
+3. Evidence pack: the line-by-line acceptance table. The run outputs and the
+   Age/Agriculture regression are captured and committed already, but must be
+   **recaptured after the commit** — their headers say so, because they were taken
+   from a dirty tree.
+4. Recordings.
