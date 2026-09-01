@@ -37,6 +37,7 @@ participants, environmental attestations, and other domains that depend on
 trusted records and portable evidence.
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontFamily':'Inter, system-ui, Arial','primaryColor':'#E0EEFF','primaryTextColor':'#1C1D1F','primaryBorderColor':'#346DDB','lineColor':'#79859B','secondaryColor':'#F6F7FA','tertiaryColor':'#FFFFFF'}}}%%
 flowchart TB
   subgraph EX[Reference applications demonstrated here]
     A[Age and identity]

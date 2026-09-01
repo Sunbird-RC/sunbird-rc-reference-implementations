@@ -42,6 +42,7 @@ not imply participation in or endorsement of this demonstration. For reference,
 while [Singpass is Singapore's national digital identity provider](https://docs.developer.singpass.gov.sg/docs/introduction/overview-of-singpass).
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontFamily':'Inter, system-ui, Arial','primaryColor':'#E0EEFF','primaryTextColor':'#1C1D1F','primaryBorderColor':'#346DDB','lineColor':'#79859B','secondaryColor':'#F6F7FA','tertiaryColor':'#FFFFFF'}}}%%
 flowchart LR
   C[Citizen] -->|Authenticates| IDP[Identity provider]
   IDP --> IA[Identity authority and registry]

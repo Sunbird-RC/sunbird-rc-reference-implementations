@@ -49,6 +49,7 @@ and [DILRMP](https://dolr.gov.in/en/programmes-schemes/dilrmp-2/) are concrete
 examples of these broader registry categories.
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontFamily':'Inter, system-ui, Arial','primaryColor':'#E0EEFF','primaryTextColor':'#1C1D1F','primaryBorderColor':'#346DDB','lineColor':'#79859B','secondaryColor':'#F6F7FA','tertiaryColor':'#FFFFFF'}}}%%
 flowchart LR
   F[Farmer] -->|Authenticates| IDP[Identity provider]
   IDP --> FR[Farmer Registry]

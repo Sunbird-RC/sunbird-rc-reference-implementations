@@ -55,6 +55,7 @@ and employment use, while India's
 provides another model for authentic digital academic awards.
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontFamily':'Inter, system-ui, Arial','primaryColor':'#E0EEFF','primaryTextColor':'#1C1D1F','primaryBorderColor':'#346DDB','lineColor':'#79859B','secondaryColor':'#F6F7FA','tertiaryColor':'#FFFFFF'}}}%%
 flowchart LR
   L[Learner] --> S[School issuer]
   L --> C[College issuer]

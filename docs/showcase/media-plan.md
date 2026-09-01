@@ -15,7 +15,8 @@ videos before reading implementation detail.
 The Mermaid diagrams in this draft provide the first version of each ecosystem
 map. GitBook's Mermaid integration must be enabled for them to render. Before
 public release, they may be replaced or supplemented with branded SVG diagrams
-created from the same information.
+created from the same information. All visual assets should follow the
+[Sunbird RC visual style](visual-style.md).
 
 ## Required videos
 
