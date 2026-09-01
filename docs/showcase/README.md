@@ -30,6 +30,42 @@ wallet interactions and verifier decisions. They are examples intended to
 expand the imagination—not a catalogue that limits where Sunbird RC can be
 used.
 
+## Sectoral implementations: one foundation, different ecosystems
+
+A sectoral implementation is not a generic demonstration with different labels.
+Each sector has its own authoritative institutions, records, identifiers, trust
+relationships, credential claims, user journeys and service rules. Sunbird RC
+supplies common Registry and Credential capabilities; the ecosystem configures
+them around its real institutional context.
+
+The three reference implementations show this clearly:
+
+- **Identity and access:** an identity authority maintains citizen records and
+  enables privacy-preserving age evidence for an age-restricted service.
+- **Agriculture and finance:** farmer and land authorities maintain independent
+  records and issue credentials that a lender verifies before applying a
+  rural-credit policy.
+- **Education and employment:** Schools, Colleges and Universities issue
+  qualifications that a learner reuses for admission and job screening.
+
+Across these sectors, Sunbird RC provides the configurable foundation. Each
+implementation retains its own governance, issuers, data boundaries, disclosure
+rules and service outcomes.
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontFamily':'Inter, system-ui, Arial','primaryColor':'#E0EEFF','primaryTextColor':'#1C1D1F','primaryBorderColor':'#346DDB','lineColor':'#79859B','secondaryColor':'#F6F7FA','tertiaryColor':'#FFFFFF'}}}%%
+flowchart LR
+  RC[Sunbird RC<br/>Registry + Credential foundation]
+  RC --> A[Identity and access<br/>Age verification]
+  RC --> G[Agriculture and finance<br/>Rural credit]
+  RC --> E[Learning and opportunity<br/>Education and employment]
+  RC -. configurable extension .-> N[Other sectoral ecosystems]
+  A --> AO[Privacy-preserving access]
+  G --> GO[Verified lending eligibility]
+  E --> EO[Admission and employment eligibility]
+  N --> NO[Context-specific trusted services]
+```
+
 The same patterns can be explored for professional licences, health-worker or
 facility registries, social-protection entitlements, business registrations,
 skills and training, property and asset records, memberships, supply-chain
