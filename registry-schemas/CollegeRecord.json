@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "CollegeRecord": {
+      "$ref": "#/definitions/CollegeRecord"
+    }
+  },
+  "required": [
+    "CollegeRecord"
+  ],
+  "title": "CollegeRecord",
+  "definitions": {
+    "CollegeRecord": {
+      "$id": "#/properties/CollegeRecord",
+      "type": "object",
+      "title": "CollegeRecord",
+      "description": "Authoritative source record held by the College issuer, and the ONLY source of a CollegeDiploma's claims. oid4vc-college resolves the AUTHENTICATED national id to exactly one record here. The School and University issuers must not read it.",
+      "required": [
+        "collegeStudentId",
+        "learnerId",
+        "nationalId",
+        "completionStatus"
+      ],
+      "properties": {
+        "collegeStudentId": {
+          "type": "string",
+          "title": "College student ID",
+          "description": "The College's own identifier, e.g. COL-2022-1194. Issuer-side only; never a credential claim."
+        },
+        "learnerId": {
+          "type": "string",
+          "title": "Learner ID",
+          "description": "The Education correlation identifier, e.g. EDU-L-004512. This is the value both verifiers correlate across the three credentials. A different namespace and sequence from nationalId and from every institution's student id, because PRODUCT forbids treating any of them as interchangeable."
+        },
+        "nationalId": {
+          "type": "string",
+          "title": "National ID",
+          "description": "Issuer-side lookup only, e.g. NAT-70011234. Matched against the authenticated Keycloak account's nationalId claim to decide whose credential may be issued. NEVER issued as a credential claim and never disclosed to either verifier (REQUIREMENTS \u00a72, \u00a77)."
+        },
+        "qualification": {
+          "type": "string",
+          "title": "Qualification",
+          "description": "Controlled vocabulary for the diploma awarded.",
+          "enum": [
+            "DIPLOMA",
+            "ADVANCED_DIPLOMA",
+            "CERTIFICATE"
+          ]
+        },
+        "specialization": {
+          "type": "string",
+          "title": "Specialization",
+          "description": "Disclosable subject area. Requested by neither policy as a threshold; present so the credential carries more than the rules consume.",
+          "enum": [
+            "COMPUTER_SCIENCE",
+            "INFORMATION_TECHNOLOGY",
+            "SOFTWARE_ENGINEERING",
+            "ELECTRONICS",
+            "MECHANICAL",
+            "COMMERCE"
+          ]
+        },
+        "completionStatus": {
+          "type": "string",
+          "title": "Completion status",
+          "description": "Controlled vocabulary. Only COMPLETED satisfies either policy; the others exist so that a genuine, fully verified credential can still produce NOT ELIGIBLE.",
+          "enum": [
+            "COMPLETED",
+            "IN_PROGRESS",
+            "DISCONTINUED",
+            "FAILED"
+          ]
+        },
+        "completionYear": {
+          "type": "integer",
+          "title": "Completion year",
+          "minimum": 1950,
+          "maximum": 2100,
+          "description": "Year of completion. Disclosable; not an eligibility threshold in this iteration."
+        },
+        "percentage": {
+          "type": "number",
+          "title": "Percentage",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage, 0 through 100, at most two decimal places. Compared against a threshold with integer arithmetic (services/verifier/src/domains/education/percentage.mjs) so that a boundary is exact: 60 must pass a >=60 rule and 59.99 must not, regardless of how the value survives JSON. A value with finer precision than the schema permits is a MALFORMED claim, not a business answer. The Master's rule requires >=60 here; the job rule requires only that the diploma was completed."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

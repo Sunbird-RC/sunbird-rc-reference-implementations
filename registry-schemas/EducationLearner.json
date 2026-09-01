@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "EducationLearner": {
+      "$ref": "#/definitions/EducationLearner"
+    }
+  },
+  "required": [
+    "EducationLearner"
+  ],
+  "title": "EducationLearner",
+  "definitions": {
+    "EducationLearner": {
+      "$id": "#/properties/EducationLearner",
+      "type": "object",
+      "title": "EducationLearner",
+      "description": "The Education use case's own learner directory: the one place a National ID is mapped to a Learner ID. Held so that each institution can resolve an authenticated learner without any institution owning the mapping, and so no cross-domain person table is needed \u2014 DESIGN forbids one. This entity belongs to Education alone: it must not read or extend AgeCitizen, FarmerRecord or LandRecord. Synthetic data only; see scripts/seed-education.sh.",
+      "required": [
+        "learnerId",
+        "nationalId"
+      ],
+      "properties": {
+        "learnerId": {
+          "type": "string",
+          "title": "Learner ID",
+          "description": "The Education correlation identifier, e.g. EDU-L-004512. This is the value both verifiers correlate across the three credentials. A different namespace and sequence from nationalId and from every institution's student id, because PRODUCT forbids treating any of them as interchangeable."
+        },
+        "nationalId": {
+          "type": "string",
+          "title": "National ID",
+          "description": "Issuer-side lookup only, e.g. NAT-70011234. Matched against the authenticated Keycloak account's nationalId claim to decide whose credential may be issued. NEVER issued as a credential claim and never disclosed to either verifier (REQUIREMENTS \u00a72, \u00a77)."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
