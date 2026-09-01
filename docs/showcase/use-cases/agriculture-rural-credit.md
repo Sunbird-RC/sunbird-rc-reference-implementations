@@ -1,73 +1,136 @@
-# Agriculture and rural credit
+# Farmer and land credentials for rural credit
 
-## The sector problem
+## The problem
 
-A bank evaluating farm credit needs trusted evidence that the applicant is a
-registered farmer, owns the presented land, and is cultivating an eligible crop.
-The evidence comes from different authorities and must refer to the same farmer.
+A bank evaluating farm credit may need evidence from several authoritative
+sources. Farmer registration can be maintained by one authority and land
+ownership by another. The bank must know that both records refer to the same
+farmer and must calculate eligibility using trusted crop and acreage data.
 
-## What this demonstration proves
+Paper documents and disconnected databases make this slow, difficult to verify
+and prone to inconsistent or excessive data sharing.
 
-A farmer obtains credentials from independent Farmer and Land registries. With
-consent, the wallet presents the minimum required claims from both. The bank
-verifies them, correlates the Farmer ID and calculates the maximum loan from the
-verified crop and cultivated acreage.
+## Ecosystem actors
 
-## Journey
+| Actor | Responsibility |
+|---|---|
+| Farmer | Authenticates, obtains both credentials and consents to presentation |
+| Farmer Registry | Maintains farmer records and issues Farmer Identity Credentials |
+| Land Registry | Maintains ownership, crop and acreage records and issues Land Ownership Credentials |
+| Identity provider | Authenticates the farmer using the National ID mapping |
+| Wallet | Stores both credentials and presents selected claims together |
+| Bank | Verifies both credentials, correlates the farmer and applies the farm-credit rule |
 
-```text
-Farmer Registry ──→ Farmer Identity Credential ─┐
-                                                ├─→ Wallet
-Land Registry ────→ Land Ownership Credential ─┘       │
-                                                       ↓ consent
-                                                Mock bank verifier
-                                                       ↓
-                                  ELIGIBLE / NOT ELIGIBLE / REJECTED
-```
+## The application
 
-## Registry and credential model
+The farmer obtains a **Farmer Identity Credential** from the Farmer Registry and
+a **Land Ownership Credential** from the Land Registry. Each issuer has its own
+authoritative records, identity and signing boundary.
 
-| Issuer | Authoritative record | Credential | Claims used by the bank |
-|---|---|---|---|
-| Farmer Registry | Farmer record mapped from National ID | `FarmerIdentityCredential` | Farmer ID and registered-farmer status |
-| Land Registry | Land record mapped to the farmer | `LandOwnershipCredential` | Farmer ID, ownership, crop and cultivated acreage |
+During a farm-credit application, the wallet presents selected claims from both
+credentials. The bank verifies them, confirms that the Farmer ID matches, and
+uses verified ownership, crop and cultivated acreage to determine eligibility
+and calculate the maximum demonstration loan.
 
-National ID is used for authentication and issuer-side lookup. It is not the
-correlation value disclosed to the bank.
+## How Sunbird RC enables it
 
-## Sunbird RC capabilities shown
+### Farmer Registry
 
-- Separate Farmer and Land registry entities and metadata.
-- Two independent credential issuers and signing identities.
-- Wallet-driven direct issuance through Keycloak authentication.
-- Two holder-bound credentials stored in one wallet.
-- One consented, selective multi-credential presentation.
-- Issuer allowlisting and role validation for each credential.
-- Same-holder validation and Farmer ID correlation.
-- ES256-only algorithm policy enforced before the business rule.
-- Verified-data-based farm-credit calculation.
-- Clear separation of business ineligibility, verification rejection and refusal.
+A Farmer entity represents the authoritative farmer record. The issuer uses the
+authenticated National ID to locate the correct Farmer ID and derive the Farmer
+Identity Credential.
 
-## Decision example
+### Land Registry
 
-```text
-valid registered-farmer credential
-AND valid active land-ownership credential
-AND matching Farmer ID
-AND supported crop
-→ cultivated acres × approved crop rate
-```
+A separate Land entity represents ownership, land area, cultivated area and crop
+metadata. Its issuer independently maps the authenticated person to the farmer's
+land record and derives the Land Ownership Credential.
 
-The result is a demonstration policy outcome, not a real loan approval.
+### Independent credentials
 
-## Demonstration and implementation
+The registries use different issuer identities and keys. This enables the bank
+to verify not only that each credential is signed, but also that the correct
+authority issued the correct credential type.
 
-- [Product definition](../../../iterations/02-agriculture/PRODUCT.md)
-- [Requirements](../../../iterations/02-agriculture/REQUIREMENTS.md)
-- [Architecture and design](../../../iterations/02-agriculture/DESIGN.md)
-- [Customer demonstration and evidence](../../evidence/02-agriculture/README.md)
-- [Line-by-line acceptance](../../evidence/02-agriculture/ACCEPTANCE.md)
-- [Formal sign-off](../../reviews/ITERATION-02-SIGNOFF.md)
+### Multi-credential verification
 
-> **Public-video placeholder:** Add a streamable customer-facing URL and
-> thumbnail. Do not expose the deployment host, credentials or raw evidence.
+The bank requests both credentials in one transaction. Verification confirms:
+
+- both credential signatures and approved algorithms;
+- the trusted issuer for each credential role;
+- control by the same wallet holder;
+- matching Farmer IDs;
+- audience, nonce and transaction integrity; and
+- disclosure of only the required claims.
+
+The lending rule runs only after these checks succeed.
+
+## Experience demonstrated
+
+### Obtain farmer evidence
+
+1. The farmer selects the Farmer Registry in the wallet.
+2. Keycloak authenticates the farmer.
+3. The registry maps the National ID to the Farmer record.
+4. The farmer reviews and stores the Farmer Identity Credential.
+
+### Obtain land evidence
+
+1. The farmer selects the Land Registry.
+2. The Land Registry resolves the corresponding owned land record.
+3. The farmer reviews ownership, crop and acreage information.
+4. The Land Ownership Credential is stored in the same wallet.
+
+### Apply for farm credit
+
+1. The mock bank requests both credentials through a QR code.
+2. The wallet shows the bank, credentials and requested claims.
+3. The farmer consents.
+4. The bank verifies and correlates the credentials.
+5. The bank displays eligibility and, when eligible, the maximum loan.
+
+## Demonstration policy
+
+    valid registered-farmer credential
+    AND valid active land-ownership credential
+    AND matching Farmer ID
+    AND supported crop
+    → maximum loan = cultivated acres × crop rate per acre
+
+The application distinguishes:
+
+- **ELIGIBLE** with a maximum demonstration amount;
+- **NOT ELIGIBLE** when verified facts fail the lending rule;
+- **REJECTED / UNABLE TO VERIFY** when trust or correlation fails; and
+- **NO DATA SHARED** when the farmer refuses.
+
+## Information design
+
+| Needed by the bank | Kept private |
+|---|---|
+| Farmer ID, registered status, ownership status, crop and cultivated acreage | National ID, name, address, date of birth, Land ID, total land metadata and unrelated credentials |
+
+## How to adapt this pattern
+
+1. Identify the authorities responsible for farmer and land records.
+2. Define separate registry schemas, stewardship and access boundaries.
+3. Establish a safe National ID-to-Farmer ID-to-Land ID mapping.
+4. Define the credentials and minimum claims required by lenders.
+5. Establish issuer onboarding, role-based trust and key governance.
+6. Configure wallet discovery to show only relevant ecosystem issuers.
+7. Define the lender's policy separately from credential verification.
+8. Replace the demonstration crop rates with governed policy data.
+9. Add production revocation, expiry, audit, privacy, security and operational
+   controls.
+10. Test mismatched records, wrong issuers, wrong holders, tampering, refusal and
+    incomplete evidence.
+
+## Explore the implementation
+
+- [Sunbird RC documentation](https://docs.sunbirdrc.dev/)
+- [Reference implementation repository](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations)
+- [Agriculture implementation](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/main/iterations/02-agriculture)
+- [Agriculture demonstration evidence](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/main/docs/evidence/02-agriculture)
+
+> Add the public customer demonstration video and live-demo link here when they
+> are ready for external access.

@@ -1,79 +1,131 @@
-# Education and employment
+# Education credentials for admission and employment
 
-> **Status:** In development. This page describes the approved iteration input,
-> not a completed or accepted capability.
+> This application is being built. The page describes the intended solution and
+> will be updated with working evidence after the demonstration is accepted.
 
-## The sector problem
+## The problem
 
-Learners repeatedly provide education records to institutions and employers.
-The receiving organization must verify credentials from different issuers while
-asking only for information relevant to its purpose.
+Learners repeatedly submit certificates and marks to universities and employers.
+Each receiving organization must establish whether the records are authentic,
+whether they belong to the same applicant and whether the applicant satisfies a
+specific rule.
 
-## What the demonstration will prove
+The same education history may be needed for different purposes, but each
+verifier should receive only the information required for its decision.
 
-One learner receives credentials from a School, College and University. The
-same three credentials are then reused for two independent purposes:
+## Ecosystem actors
 
-- eligibility to enter a Master's admission pool;
-- eligibility for Software Engineer interview round one.
+| Actor | Responsibility |
+|---|---|
+| Learner | Authenticates, obtains credentials and controls their presentation |
+| School | Maintains school-completion records and issues School Certificates |
+| College | Maintains college records and issues College Diplomas |
+| University | Maintains degree records and issues University Degrees |
+| Identity provider | Authenticates the learner and supports issuer-side record lookup |
+| Wallet | Stores the three credentials and presents selected information |
+| Master's institution | Verifies education history and evaluates admission-pool eligibility |
+| Job provider | Verifies education history and evaluates interview-round eligibility |
 
-Eligibility does not mean admission or employment.
+## The application
 
-## Planned journey
+One learner obtains credentials independently from a School, College and
+University. The wallet stores all three.
 
-```text
-School ─────→ School Certificate ────┐
-College ────→ College Diploma ───────┼─→ Wallet
-University ─→ University Degree ─────┘      │
-                                            ├─→ Master's admission portal
-                                            └─→ Job application portal
-```
+The learner then reuses the credentials with two verifier applications. A
+Master's institution applies its academic threshold. A job provider applies a
+different employment-screening threshold. Both verify the same credentials, but
+each makes its own transparent decision for its own purpose.
 
-## Planned registry and credential model
+## How Sunbird RC enables it
 
-| Issuer | Credential | Selected information |
+### Education registries
+
+Separate School, College and University entities maintain institution-specific
+records. Each institution remains authoritative for the credential it issues.
+
+### Credential issuance
+
+Each institution issues a holder-bound credential derived from its record:
+
+| Issuer | Credential | Example information |
 |---|---|---|
-| School | `SchoolCertificate` | Learner ID, completion and percentage |
-| College | `CollegeDiploma` | Learner ID, qualification, specialization, completion and percentage |
-| University | `UniversityDegree` | Learner ID, degree level, field, completion and percentage |
+| School | School Certificate | Learner ID, completion, year and percentage |
+| College | College Diploma | Learner ID, qualification, specialization, completion, year and percentage |
+| University | University Degree | Learner ID, degree level, field, completion, year and percentage |
 
-National ID supports authentication and issuer-side lookup. Learner ID
-correlates credentials for verification. Institution-specific Student IDs are
-not disclosed.
+### Correlation without excess identity data
 
-## Planned decisions
+National ID supports authentication and issuer-side lookup. A Learner ID links
+the three credentials during verification. Institution-specific Student IDs do
+not need to be disclosed.
+
+### Reuse for different purposes
+
+The wallet can present the same credentials to different verifiers. Verification
+of signatures, issuers, holder and correlation is reusable; the Master's and job
+rules remain separate application policies.
+
+## Intended experience
+
+### Obtain the credentials
+
+1. The learner authenticates through the wallet.
+2. The learner selects the relevant School, College and University issuers.
+3. Each institution resolves its own record and issues its credential.
+4. The learner reviews and stores all three credentials.
+
+### Apply for a Master's programme
+
+1. The institution requests the three education credentials.
+2. The learner reviews the institution, purpose and requested claims.
+3. The learner consents to presentation.
+4. The verifier validates all credentials and applies the Master's rule.
+5. An eligible applicant is accepted for consideration and waits for the
+   admission list. The result is not an admission decision.
+
+### Apply for a job
+
+1. The job provider requests the education credentials.
+2. The learner reviews and consents.
+3. The verifier validates the credentials and applies the job rule.
+4. An eligible candidate is selected for interview round one. The result is not
+   an employment offer.
+
+## Demonstration policies
 
 ### Master's application
 
-- School: completed and at least 60%.
-- College: completed and at least 60%.
-- University: completed Bachelor degree, relevant field and at least 70%.
-- Eligible result: application accepted for consideration; await the admission
-  list—not admitted.
+- School completed with at least 60%.
+- College completed with at least 60%.
+- Relevant completed Bachelor's degree with at least 70%.
 
 ### Job application
 
-- School and College: completed/passed.
-- University: completed Bachelor degree, relevant field and at least 60%.
-- Eligible result: selected for interview round one—not employed.
+- School and College completed/passed.
+- Relevant completed Bachelor's degree with at least 60%.
 
-## Sunbird RC capabilities to be shown
+## How to adapt this pattern
 
-- Three independent education registries and issuers.
-- Three credentials stored in one wallet.
-- Credential discovery and selective multi-credential presentation.
-- Issuer-role, same-holder and Learner ID validation.
-- Reuse of the same credentials for two verifier purposes.
-- Different transparent policies applied only after verification.
-- Regression of accepted Age and Agriculture capabilities.
+1. Identify recognized institutions and the records each controls.
+2. Define institution and learner identifiers without exposing national identity
+   information unnecessarily.
+3. Model the School, College and University schemas.
+4. Define credentials appropriate to the education system.
+5. Establish accreditation, issuer onboarding and trust governance.
+6. Configure the wallet for the participating institutions.
+7. Define minimum disclosure separately for each application purpose.
+8. Keep admission, ranking, recruitment and employment rules outside credential
+   verification.
+9. Add production revocation, expiry, corrections, appeals, privacy and audit
+   controls.
+10. Test forged issuers, mixed learners, incomplete education histories, refusal
+    and policy-boundary outcomes.
 
-## Iteration inputs
+## Explore the implementation
 
-- [Start here](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/blob/iteration/education-03-employment/iterations/03-education/START.md)
-- [Product definition](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/blob/iteration/education-03-employment/iterations/03-education/PRODUCT.md)
-- [Requirements](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/blob/iteration/education-03-employment/iterations/03-education/REQUIREMENTS.md)
-- [Architecture and design](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/blob/iteration/education-03-employment/iterations/03-education/DESIGN.md)
-- [Final demo expectations](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/blob/iteration/education-03-employment/iterations/03-education/DEMO.md)
+- [Sunbird RC documentation](https://docs.sunbirdrc.dev/)
+- [Reference implementation repository](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations)
+- [Education application inputs](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/iteration/education-03-employment/iterations/03-education)
 
-When the iteration is accepted, replace this status notice with demonstrated
-evidence, the final video, acceptance results and implementation links.
+The reference implementation and public demonstration links will be added after
+the application is completed and accepted.

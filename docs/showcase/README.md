@@ -1,65 +1,89 @@
-# Sunbird RC in Action
+# Applications of Sunbird RC
 
-Sunbird RC provides reusable registry and credential capabilities for building
-trusted digital ecosystems. These demonstrations show how the same foundation
-can support different sectors without turning Sunbird RC into a sector-specific
-application.
+Sunbird RC helps ecosystems create trusted registries and issue verifiable
+credentials from authoritative records. People can hold those credentials in a
+standards-compatible wallet and present only the information required for a
+service or decision.
 
-## What the demonstrations prove
+These applications show how the same Registry and Credential foundation can be
+adapted to very different sectors.
 
-Across Age, Agriculture, and Education, the showcase follows one lifecycle:
+## Explore the applications
 
-> **Register → Issue → Store → Request → Consent → Present → Verify → Decide**
+### Privacy-preserving age verification
 
-Each sector configures its own records, issuers, credential schemas, disclosed
-claims, and decision rules. The reusable Sunbird RC and standards layer remains
-consistent.
+Enable a person to prove that they satisfy an age requirement without sharing
+their date of birth or complete identity record.
 
-| Use case | Sector outcome | Sunbird RC capability focus | Status |
-|---|---|---|---|
-| [Age verification](use-cases/age-verification.md) | Prove an age condition without disclosing full identity | Registry-backed issuance, selective disclosure, web and mobile verification | Demonstrated |
-| [Agriculture and rural credit](use-cases/agriculture-rural-credit.md) | Verify farmer and land records before calculating farm credit | Multiple registries, issuers and credentials; correlation and policy | Demonstrated |
-| [Education and employment](use-cases/education-employment.md) | Reuse three education credentials for admission and employment screening | Credential discovery, multi-credential presentation and purpose-specific decisions | In development |
+[Explore age verification →](use-cases/age-verification.md)
 
-## Reusable capability layers
+### Farmer and land credentials for rural credit
 
-### Registry
+Allow a bank to verify farmer registration, land ownership and crop information
+from independent authoritative sources before calculating farm-credit
+eligibility.
 
-- Define sector-specific entities and schemas.
-- Maintain authoritative synthetic source records for the demonstrations.
-- Keep each issuer's data and responsibilities logically separate.
-- Resolve an authenticated person to the correct domain record.
+[Explore agriculture and rural credit →](use-cases/agriculture-rural-credit.md)
 
-### Credentials
+### Education credentials for admission and employment
 
-- Configure independent credential issuers and signing identities.
-- Issue credentials derived from registry records.
-- Bind credentials to the holder's wallet key.
-- Support SD-JWT selective disclosure and standards-based presentation.
-- Verify credential integrity, issuer trust, holder binding and transaction state.
+Allow a learner to obtain credentials from a School, College and University and
+reuse them for postgraduate admission and employment screening.
 
-### Wallet integration
+[Explore education and employment →](use-cases/education-employment.md)
 
-- Use standards-based OpenID4VCI and OpenID4VP interactions.
-- Authenticate through Keycloak for wallet-driven issuance.
-- Store credentials, display requests, obtain consent and present selected claims.
-- Keep the wallet replaceable where compatible protocol and credential profiles
-  are supported and tested.
+## The common pattern
 
-The current demonstrations use the established customized Paradym-based
-open-source wallet. They demonstrate standards-aligned integration but do not
-claim that every wallet works without compatibility testing.
+```text
+Authoritative sector records
+          ↓
+Sunbird RC Registry
+          ↓
+Trusted credential issuer
+          ↓
+Standards-compatible wallet
+          ↓ holder consent and selected information
+Verifier application
+          ↓
+Service or decision
+```
 
-## Choose your path
+The sector changes, but the reusable pattern remains:
 
-- **Sector and programme leaders:** start with an individual use case and its
-  outcome.
-- **Government and ecosystem architects:** see the [capability matrix](capability-matrix.md).
-- **Implementers:** follow the repository links on each use-case page.
-- **Demonstrators:** use the customer story and final-demo sequence on each page.
+1. Model authoritative records using Registry schemas.
+2. Connect authenticated users to the correct records.
+3. Issue verifiable credentials derived from those records.
+4. Store credentials in a standards-compatible wallet.
+5. Request and present only the information required for a purpose.
+6. Verify trust and integrity before applying a sector rule.
 
-## Important boundary
+## What Sunbird RC contributes
 
-These are capability demonstrations using synthetic data. They are not
-production services, policy recommendations, regulatory certifications, loan
-systems, admission systems, or recruitment systems.
+- Configurable registries for sector-specific records.
+- Credential schemas and issuer configurations.
+- Credentials derived from authoritative registry data.
+- Independent issuer identities and signing boundaries.
+- Standards-based issuance and presentation interfaces.
+- Reusable verification capabilities that can precede sector-specific decisions.
+
+The demonstrations use a customized open-source wallet. The integration is
+standards-aligned; any selected wallet must still be tested against the exact
+protocol and credential profile used by an implementation.
+
+## From application to implementation
+
+Each application guide explains:
+
+- the problem being addressed;
+- the actors and their responsibilities;
+- the records and credentials involved;
+- how Sunbird RC enables the solution;
+- the experience being demonstrated; and
+- how another ecosystem can adapt the pattern.
+
+After understanding an application, use the linked reference implementation and
+Sunbird RC resources to examine schemas, configuration, APIs and working code.
+
+> These applications use synthetic data and simplified policies to demonstrate
+> capabilities. They are reference patterns, not production deployments or
+> sector-policy recommendations.

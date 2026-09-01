@@ -1,47 +1,87 @@
-# Use-case page template
+# Application guide template
 
-Use this structure for every new sector demonstration.
+Use this structure to explain a new application of Sunbird RC.
 
-## The sector problem
+## The problem
 
-Describe the problem and affected actor without leading with technology.
+Describe the sector problem, why current approaches are difficult, and what
+better outcome is required.
 
-## What this demonstration proves
+## Ecosystem actors
 
-State the observable end-to-end outcome in two or three sentences.
+| Actor | Responsibility |
+|---|---|
+| Record authority | Maintains the authoritative data |
+| Credential issuer | Issues a credential from trusted records |
+| Holder | Obtains and controls the credential |
+| Wallet | Stores and presents credentials with consent |
+| Verifier | Verifies evidence and provides a service or decision |
 
-## Journey
+Adapt the actors to the ecosystem. Do not combine distinct authorities merely to
+simplify the diagram.
 
-Show the smallest useful issuer → wallet → verifier → decision flow.
+## The application
 
-## Registry and credential model
+Describe the complete user journey from authoritative record to service outcome.
 
-| Issuer | Authoritative record | Credential | Claims disclosed |
-|---|---|---|---|
-| … | … | … | … |
+## How Sunbird RC enables it
 
-Explain the authentication identifier, domain identifier, correlation key and
-claims deliberately not disclosed.
+### Registry
 
-## Sunbird RC capabilities shown
+Explain the entities, schemas, identifiers, mappings and authoritative records.
 
-List only capabilities that the working demonstration and evidence prove.
+### Credentials
 
-## Decision or outcome
+Explain the issuers, credentials, selected claims, signing boundaries and holder
+binding.
 
-Describe the verified rule and distinguish business rejection from technical
-verification failure and holder refusal.
+### Wallet interaction
 
-## Watch or launch
+Explain issuance, storage, discovery, consent and presentation using the selected
+standards profiles.
 
-Add the customer-ready video, live demonstration URL and a short safe-use note.
+### Verification and outcome
 
-## For implementers
+Explain trust validation, correlation, minimum disclosure and the application
+rule. Clearly separate business ineligibility from inability to verify and holder
+refusal.
 
-Link to Product, Design, schemas, configuration, source, clean-checkout setup,
-acceptance table and sanitised evidence.
+## Experience demonstrated
+
+Present the observable journey as a short sequence. Include both successful and
+important unsuccessful outcomes.
+
+## Information design
+
+| Used for the service | Kept private |
+|---|---|
+| Minimum required claims | Unrelated identifiers and attributes |
+
+## How to adapt this pattern
+
+Explain how another ecosystem should:
+
+1. identify authoritative actors;
+2. model registry records;
+3. define identifiers and mappings;
+4. define issuers and credentials;
+5. establish trust governance;
+6. select and compatibility-test a wallet;
+7. define minimum disclosures and verifier purposes;
+8. keep sector policy separate from credential verification; and
+9. add production privacy, security and operational controls.
+
+## Explore the implementation
+
+Link, in this order:
+
+1. the relevant Sunbird RC documentation;
+2. the working reference implementation;
+3. schemas and configuration;
+4. a public demonstration; and
+5. setup guidance for replication.
 
 ## Boundaries
 
-State what is synthetic, simplified, out of scope, not production-ready or not
-demonstrated. Never turn a planned capability into a demonstrated claim.
+State what is synthetic, simplified, planned, out of scope or not production
+ready. Claim only what the working application demonstrates.

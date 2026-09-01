@@ -1,37 +1,34 @@
-# Capability map
+# Sunbird RC capabilities across applications
 
-The demonstrations progressively expose reusable Sunbird RC capabilities rather
-than three unrelated applications.
+The applications progressively combine Registry and Credential capabilities.
 
-| Capability | Age | Agriculture | Education |
-|---|:---:|:---:|:---:|
-| Sector registry and schema | ✓ | ✓ | Planned |
-| Authenticated record lookup | ✓ | ✓ | Planned |
-| Wallet-driven direct issuance | ✓ | ✓ | Planned |
-| Independent credential issuers | One | Two | Three planned |
-| Holder-bound SD-JWT credentials | ✓ | ✓ | Planned |
-| Selective disclosure | ✓ | ✓ | Planned |
-| Web QR presentation | ✓ | ✓ | Planned |
-| Same-device deep link | ✓ | Supporting channel | Not required |
-| Multiple credentials in one request | — | Two | Three planned |
-| Issuer-role validation | ✓ | ✓ | Planned |
-| Same-holder validation | ✓ | ✓ | Planned |
-| Cross-credential correlation | — | Farmer ID | Learner ID planned |
-| Purpose-specific decision | Age access | Farm credit | Admission and interview planned |
-| Consent refusal / no disclosure | ✓ | ✓ | Planned |
-| Positive and negative outcomes | ✓ | ✓ | Planned |
-| Regression of earlier capabilities | Foundation | Age | Age and Agriculture planned |
+| Capability | Age verification | Rural credit | Education and employment |
+|---|---|---|---|
+| Authoritative sector records | Citizen | Farmer and land | Learner, School, College and University |
+| Registry schemas | One citizen model | Separate Farmer and Land models | Separate education-institution models |
+| Credential issuers | Identity authority | Farmer Registry and Land Registry | School, College and University |
+| Credentials used together | One | Two | Three |
+| Wallet-driven issuance | Yes | Yes | Planned |
+| Selective disclosure | Age condition | Farmer, ownership, crop and acreage facts | Qualification and result facts |
+| Cross-credential correlation | Not required | Farmer ID | Learner ID |
+| Verifier applications | Age-restricted web and mobile services | Bank farm-credit application | Master's and job applications |
+| Example decision | Age condition satisfied | Eligibility and maximum loan | Admission-pool or interview eligibility |
 
-## What remains reusable
+## Reusable foundation
 
-The protocol, credential-validation, consent, trust, holder-binding and
-transaction-protection capabilities are reusable. Sector registries, credential
-claims, correlation keys, policies, presentation purpose and user experience are
-configured for each domain.
+Across the applications, Sunbird RC provides the mechanism to model records,
+configure issuers, derive credentials from authoritative data and support
+credential exchange. Ecosystems add their own governance, identity mapping,
+trust lists, credential definitions, disclosure policies and service rules.
 
-## What the matrix does not claim
+## Application-specific configuration
 
-- A checkmark means demonstrated in this repository, not production readiness.
-- “Planned” means defined for the active Education iteration, not accepted.
-- Wallet interoperability depends on compatible standards profiles and hands-on
-  testing with the selected wallet.
+The following should be deliberately designed for each implementation:
+
+- authoritative organizations and their registry responsibilities;
+- record identifiers and permitted mappings;
+- credential issuers, signing identities and trust governance;
+- credential claims and minimum disclosure requirements;
+- wallet and protocol-profile compatibility;
+- verifier purpose, policy and user-facing outcome; and
+- production privacy, security, revocation and operational controls.

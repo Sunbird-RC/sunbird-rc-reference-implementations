@@ -1,17 +1,13 @@
-# Use cases
+# Application guides
 
-Each use case begins with a sector outcome and then reveals the Sunbird RC
-capabilities that make it possible.
+These guides explain how Sunbird RC can support real ecosystem interactions.
+They begin with a sector problem and follow the participating actors, trusted
+records, credentials, wallet journey and verifier outcome.
 
-## Available demonstrations
+- [Age verification](age-verification.md)
+- [Agriculture and rural credit](agriculture-rural-credit.md)
+- [Education and employment](education-employment.md)
 
-- [Age verification](age-verification.md): one issuer, one credential and
-  privacy-preserving proof.
-- [Agriculture and rural credit](agriculture-rural-credit.md): two registries,
-  two credentials and one correlated lending decision.
-- [Education and employment](education-employment.md): three education issuers
-  and reuse of the same credentials for two purposes. This iteration is still in
-  development.
-
-Every demonstration uses synthetic data and an open-source wallet integrated
-through standards-based credential protocols.
+The examples are designed to be adapted. An ecosystem can replace the synthetic
+records, issuer names, credential claims and demonstration policies while
+retaining the reusable registry and credential pattern.
