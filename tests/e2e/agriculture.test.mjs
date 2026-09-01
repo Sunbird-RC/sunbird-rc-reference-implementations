@@ -205,12 +205,22 @@ describe('what the bank asks for', () => {
     const policy = await farmCreditPolicy(base);
     assert.match(policy.credentialTypes.farmer, /farmer-identity-credential$/);
     assert.match(policy.credentialTypes.land, /land-ownership-credential$/);
-    const roles = policy.trustedIssuers.filter((i) => i.roles?.length);
-    assert.deepEqual(
-      roles.map((i) => i.roles).flat().sort(),
-      ['farmer', 'land'],
-      'exactly one trusted issuer per role',
-    );
+    // One trusted issuer per AGRICULTURE role, and no more. Scoped to this
+    // request's two roles rather than to every role on the allowlist: Iteration 03
+    // added school, college and university roles to the same shared file, and an
+    // assertion over the whole list would fail on a change that leaves this
+    // iteration's guarantee entirely intact. The guarantee under test is unchanged
+    // — exactly one issuer may satisfy 'farmer', exactly one 'land'.
+    const agricultureRoles = policy.trustedIssuers
+      .flatMap((i) => i.roles || [])
+      .filter((role) => ['farmer', 'land'].includes(role));
+    assert.deepEqual(agricultureRoles.sort(), ['farmer', 'land'], 'exactly one trusted issuer per role');
+    // And no OTHER role's issuer may be accepted for one of these two slots.
+    for (const issuer of policy.trustedIssuers) {
+      const roles = issuer.roles || [];
+      if (!roles.some((role) => ['farmer', 'land'].includes(role))) continue;
+      assert.equal(roles.length, 1, `${issuer.name} holds more than one role: ${roles.join(', ')}`);
+    }
   });
 
   test('the lending policy the bank publishes is the committed one', async () => {
