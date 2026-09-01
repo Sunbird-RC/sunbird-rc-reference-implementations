@@ -7,7 +7,7 @@ videos before reading implementation detail.
 
 | Page | Primary visual | Supporting visuals |
 |---|---|---|
-| Applications of Sunbird RC | Three sectors converging on the common Sunbird RC pattern | One image or short animation showing Registry → Credential → Wallet → Verifier |
+| Applications of Sunbird RC | Three reference applications plus an open field of additional possibilities converging on the common Sunbird RC pattern | One image or short animation showing configurable Registry → Credential → Wallet → Verifier, without presenting the three demos as a product boundary |
 | Age verification | Citizen, identity authority, wallet and verifier ecosystem map | Credential card, consent screen, disclosed-versus-private comparison |
 | Agriculture and rural credit | Two registries issuing into one wallet and one bank request | Farmer credential, Land credential and loan-calculation illustration |
 | Education and employment | Three issuers, one wallet and two verifier purposes | Three credential cards and side-by-side Master's/job rules |
@@ -21,8 +21,10 @@ created from the same information.
 
 ### Cross-sector overview
 
-A concise overview that introduces the three real-world problems, shows the
-common Sunbird RC capability pattern and directs viewers to the sector pages.
+A concise overview that first positions Sunbird RC as a domain-neutral Registry
+and Credential foundation, introduces the three real-world reference
+applications, shows their common capability pattern, and closes by illustrating
+additional domains that ecosystems could configure.
 
 ### Age verification
 

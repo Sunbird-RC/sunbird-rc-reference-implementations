@@ -1,6 +1,9 @@
 # Sunbird RC capabilities across applications
 
-The applications progressively combine Registry and Credential capabilities.
+The three reference applications progressively combine Registry and Credential
+capabilities. The matrix describes what these examples demonstrate; it is not a
+boundary on the domains, registry models or credential use cases that can be
+configured using Sunbird RC.
 
 | Capability | Age verification | Rural credit | Education and employment |
 |---|---|---|---|

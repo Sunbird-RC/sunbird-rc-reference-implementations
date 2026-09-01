@@ -1,28 +1,78 @@
 # Applications of Sunbird RC
 
-Sunbird RC helps ecosystems create trusted registries and issue verifiable
-credentials from authoritative records. People can hold those credentials in a
-standards-compatible wallet and present only the information required for a
-service or decision.
+Sunbird RC is a configurable, domain-neutral foundation for building trusted
+digital registries and credential ecosystems. It can help an authority define
+and maintain structured records, establish who is permitted to manage or attest
+to those records, and issue verifiable credentials that can be used beyond the
+original registry.
 
-These applications show how the same Registry and Credential foundation can be
-adapted to very different sectors.
+The core idea is simple: an authoritative record should not remain trapped
+inside one database or portal. With the right governance and consent, a trusted
+fact from that record can become a portable credential. A person or organization
+can hold the credential in a compatible wallet and present the required
+information to another service, which can verify its origin and integrity before
+making a decision.
+
+Sunbird RC does not prescribe a particular sector, registry model, credential or
+service rule. An ecosystem configures these elements for its own context:
+
+- the people, organizations, assets or entitlements being registered;
+- the authorities responsible for those records;
+- the credentials that may be issued from them;
+- the wallets and standards profiles used for exchange;
+- the parties trusted to verify the credentials; and
+- the policies or services that use verified information.
+
+Age verification, rural credit, and education-to-employment are the first
+reference applications presented here. They were chosen because together they
+show progressively richer combinations of registries, issuers, credentials,
+wallet interactions and verifier decisions. They are examples intended to
+expand the imagination—not a catalogue that limits where Sunbird RC can be
+used.
+
+The same patterns can be explored for professional licences, health-worker or
+facility registries, social-protection entitlements, business registrations,
+skills and training, property and asset records, memberships, supply-chain
+participants, environmental attestations, and other domains that depend on
+trusted records and portable evidence.
 
 ```mermaid
-flowchart LR
-  A[Age and identity] --> R[Sunbird RC Registry and Credentials]
-  G[Agriculture and land] --> R
-  E[Education and employment] --> R
-  R --> W[Standards-compatible wallets]
-  W --> V[Web and mobile services]
-  V --> O[Trusted decisions with minimum disclosure]
+flowchart TB
+  subgraph EX[Reference applications demonstrated here]
+    A[Age and identity]
+    G[Agriculture and land]
+    E[Education and employment]
+  end
+
+  subgraph MORE[Illustrative possibilities—not an exhaustive list]
+    H[Health and professional licences]
+    B[Business and organization registries]
+    S[Skills, benefits and memberships]
+    P[Property, assets and supply chains]
+  end
+
+  A --> RC
+  G --> RC
+  E --> RC
+  H -. configurable extension .-> RC
+  B -. configurable extension .-> RC
+  S -. configurable extension .-> RC
+  P -. configurable extension .-> RC
+
+  RC[Sunbird RC configurable registries]
+  RC --> C[Trusted credential issuers]
+  C --> X[Standards-based credential exchange]
+  X --> W[Compatible wallets and holder consent]
+  W --> V[Public and private verifier services]
+  V --> O[Trusted services and decisions]
 ```
 
 ## Watch: Sunbird RC across sectors
 
-> **Overview video placeholder** — A short visual introduction should show the
-> three sector problems, the common Registry → Credential → Wallet → Verifier
-> pattern, and the working applications. Replace this block with the public
+> **Overview video placeholder** — A short visual introduction should present
+> Sunbird RC as a domain-neutral foundation, use the three working applications
+> to make the pattern concrete, and then open out to other possible ecosystems.
+> Replace this block with the public
 > YouTube, Vimeo or other GitBook-compatible video URL.
 
 ## Explore the applications
@@ -52,7 +102,7 @@ reuse them for postgraduate admission and employment screening.
 ## The common pattern
 
 ```text
-Authoritative sector records
+Authoritative ecosystem records
           ↓
 Sunbird RC Registry
           ↓
@@ -60,23 +110,23 @@ Trusted credential issuer
           ↓
 Standards-compatible wallet
           ↓ holder consent and selected information
-Verifier application
+Verifier or relying service
           ↓
-Service or decision
+Trusted service, entitlement or decision
 ```
 
-The sector changes, but the reusable pattern remains:
+The domain, actors and policy may change, but the reusable pattern remains:
 
 1. Model authoritative records using Registry schemas.
 2. Connect authenticated users to the correct records.
 3. Issue verifiable credentials derived from those records.
 4. Store credentials in a standards-compatible wallet.
 5. Request and present only the information required for a purpose.
-6. Verify trust and integrity before applying a sector rule.
+6. Verify trust and integrity before providing a service or applying a rule.
 
 ## What Sunbird RC contributes
 
-- Configurable registries for sector-specific records.
+- Configurable registries for domain-specific records.
 - Credential schemas and issuer configurations.
 - Credentials derived from authoritative registry data.
 - Independent issuer identities and signing boundaries.
