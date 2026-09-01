@@ -1,5 +1,10 @@
 # Sunbird RC Demo — Compatibility Baseline
 
+> **Scope note:** Inji-related material in this file is retained as historical
+> compatibility research only. Anand removed Inji from the current demo
+> programme on 31 August 2026; it creates no implementation, handshake, or
+> acceptance requirement for any iteration.
+
 **Status:** Reference input for engineering
 **Validated:** 20 August 2026
 **Revised:** 25 August 2026 — after the Iteration 01 review and Anand's answers
@@ -89,6 +94,10 @@ rather than by hand on the server.
 
 | 13 | The wallet showed **"Organization not verified"** for our verifier, and no configuration could fix it | not a missing trust entry — a defect in the wallet fork's SDK. Its `did` trust mechanism matched with ``effectiveClientId === `decentralized_identifier:${e.did}` ``, but `effectiveClientId` is the `client_id` verbatim. Our verifier sends the bare `did:web:…` form used by OpenID4VP before draft 26, and `@openid4vc/openid4vp` maps the `did` prefix onto the uniform `decentralized_identifier` prefix (`getOpenid4vpClientId`, `zClientIdPrefixToUniform`) while leaving `effectiveClientId` unprefixed. A string starting `did:` can never equal `'decentralized_identifier:' + anything`, so the lookup was unsatisfiable for every possible configured value — verified in the library source, not inferred | fixed in `vendor/paradym-wallet/packages/sdk/src/trust/handlers/did.ts` by stripping the prefix and any key fragment and then prefix-matching, which is what the OpenID4VCI path in the same file already did. Prefix matching also gives host-scoped trust, so re-provisioning the demo does not silently return the wallet to "unknown organization". **Removal path:** delete the patch if upstream normalises the comparison; nothing in our stack depends on it. The issuance screen needed no code — it runs through the fallback (`none`) mechanism, which already matches on an issuer prefix. Guarded from our side by `tests/e2e/age-verification.test.mjs` → *the verifier identifies itself with a bare did:web under the deployment host* |
 
+| 14 | With two issuers on one deployment, **every issuer advertised every credential** | `credential-schema`'s `/oid4vci-configs` is deployment-wide and takes no filter, and `oid4vci.service.ts`'s `issuerMetadata()` builds `credential_configurations_supported` from all of it. Observed on 28 August 2026: the Farmer Registry, the Land Registry and the National Identity Authority each advertised all three published credentials. A wallet's issuer directory would then show the same credential under whichever issuer the holder opened, and each issuer would appear to offer credentials it cannot issue. It also broke Age's own one-credential invariant, which `verify.sh` asserts | no configuration scopes it — the endpoint takes no parameter and the client passes none, so this is the one Agriculture change that could not be made by configuration. Fixed in the fork by `ADVERTISE_OWN_CREDENTIALS_ONLY`, which filters on the `author` DID a schema already carries and which this service already uses as the per-schema issuer DID. **Off by default**, so a single-issuer deployment sees no change; it also requires `ISSUER_DID`, because filtering on an empty DID would advertise nothing and look exactly like the schema service being down. **Removal path:** delete the flag and the filter if upstream scopes `/oid4vci-configs` by issuer. Covered by `own-credentials.spec.ts` (5 tests) and by `verify.sh`, which asserts each Agriculture issuer advertises only its own |
+
+| 15 | A presentation's signature **algorithm was not observable**, so the approved-algorithm policy REQUIREMENTS §8 asks for could not be enforced | `alg` lives in a JWS protected header and never reaches the claim set, and `/vp/status` reported only the seven checks and the matched claims. Iteration 01 therefore recorded the allowlist as a documented deviation rather than shipping a policy field that did nothing — the alternative would have been a control that looked like a control. Worse than absent: `oid4vp.service.ts` imported the holder key with `(vpHeader.alg as string) \|\| 'ES256'`, so a **missing** `alg` was silently treated as the approved one | fixed in the fork by `presentationAlgs()`, which decodes the protected header of both the issuer JWS and the KB-JWT and reports the set as `algs` in `/vp/status` — and deliberately **omits** an alg it could not parse rather than guessing, so an unreadable header cannot be reported as acceptable. `services/verifier` enforces the allowlist against it (`config/policy/algorithms.json`, ES256 only): an unapproved, absent or malformed algorithm is a **rejection**, not a business answer, and the check runs before the disclosure, trust and domain steps. **Removal path:** delete the reporting if upstream exposes `alg` itself; the verifier-side policy stays either way. Covered by `tests/unit/algorithm-policy.test.mjs` (12 tests, including absent, malformed, `none` and a mixed pair), `tests/e2e/algorithm-policy.test.mjs` (4 tests, one presenting a genuine ES384 holder key that upstream accepts and the verifier refuses), and five `verify.sh` checks including the ordering |
+
 ## Wallet spike results — Age, 26 August 2026
 
 Both wallet-facing journeys were run on a real device against the deployment.
@@ -114,9 +123,10 @@ Keycloak-as-authorization-server viable at all.
 | 10 | A holder who declines is indistinguishable from one who never answers | OpenID4VP lets a wallet post `error=access_denied`, or a response with no `vp_token`, or simply nothing. Upstream turns the first two into a failed transaction, so the verifier reported "verification failed" — telling the citizen the system broke when it did exactly what they asked | the verifier now recognises refusal signatures and returns `state: 'declined'`; the page and the mobile app render both `declined` and `expired` as a neutral "NO DATA SHARED", never as a verification failure. Covered by `tests/e2e/age-verification.test.mjs` |
 | 11 | The negative-test credential appeared in the wallet's issuer directory | issuer metadata is built from every published, OID4VCI-enabled schema with no filter, and offer creation reads the same set — so the fixture could not simply be unpublished | bootstrap no longer creates it; the tests that need it provision it (`ensureNegativeFixture`) and deprecate it afterwards. A customer-facing stack advertises one credential. Note the deprecate route takes the registry's `did:schema:<uuid>`, not the authored `$id` — the latter answers 500 |
 
-Versions used: Keycloak `26.0`, certbot `v3.1.0`, `sunbird-rc-oid4vc-service:v2.1.0-authcode.4889fbdb`
-(fork branch `oid4vc-keycloak-as-v2.1.0`, source commit `4889fbdb`), every other
-Sunbird RC service on its official `ghcr.io/sunbird-rc` `v2.1.0` image.
+Versions used: Keycloak `26.0`, certbot `v3.1.0`, `sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b`
+(fork branch `oid4vc-keycloak-as-v2.1.0`, source commit `9caf3c2b`, five commits off
+`v2.1.0` since Iteration 02 added finding 14's fix), every other Sunbird RC service
+on its official `ghcr.io/sunbird-rc` `v2.1.0` image.
 
 ## Compatibility Matrix
 

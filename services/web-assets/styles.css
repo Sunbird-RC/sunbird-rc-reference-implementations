@@ -413,6 +413,49 @@ button:focus-visible {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a85236' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8v5M12 17h.01'/%3E%3C/svg%3E");
 }
 
+/* ---- the bank's calculation (Iteration 02) ----------------------------
+   A loan figure with no visible derivation is indistinguishable from a hardcoded
+   one, which is exactly what the demo has to prove it is not. So the bank shows
+   its working: the verified crop, the verified acreage, the rate from
+   version-controlled policy, and the product. Sized so the total reads from the
+   back of a room. */
+.calculation {
+  width: 100%;
+  margin-top: 1.2rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--ivory);
+}
+
+.calc-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.35rem 0;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.calc-line strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.calc-line.total {
+  margin-top: 0.5rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--hairline);
+  font-size: 1.05rem;
+}
+
+.calc-line.total strong {
+  font-size: 1.6rem;
+  line-height: 1.2;
+  color: var(--moss, #66a682);
+}
+
 /* ---- detail table ----------------------------------------------------- */
 .detail {
   width: 100%;

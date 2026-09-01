@@ -20,7 +20,9 @@ This iteration establishes the reusable issuer-wallet-verifier foundation for la
 - **Coding and testing agent:** Claude Code / Co-work, operating under Kartheek
 - **Product, Design, and acceptance:** Anand
 
-Kartheek selects the implementation technologies and a suitable open-source mobile wallet within this charter. Inji is not mandatory for this iteration, provided it completes at least one later end-to-end use case.
+Kartheek selects the implementation technologies and the established customized
+open-source mobile wallet within this charter. Inji interoperability is outside
+the scope of the demo programme.
 
 Neither Kartheek nor Claude may reduce, reinterpret, mock, or substitute the required user journeys. A material compatibility or architecture gap must be documented and brought to Anand before changing the baseline.
 

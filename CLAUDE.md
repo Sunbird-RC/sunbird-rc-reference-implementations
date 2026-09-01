@@ -12,7 +12,8 @@ Read these before making changes, in this order:
 
 1. [`docs/project/PRODUCT.md`](docs/project/PRODUCT.md)
 2. [`docs/design/DESIGN.md`](docs/design/DESIGN.md)
-3. The active iteration charter under [`iterations/`](iterations/)
+3. The active iteration charter and its Product, Requirements, Design, and Demo
+   files under [`iterations/`](iterations/)
 4. Any active review feedback under [`docs/reviews/`](docs/reviews/)
 5. [`docs/project/WORKING-ENGAGEMENT-MODEL.md`](docs/project/WORKING-ENGAGEMENT-MODEL.md)
 6. [`docs/project/GIT-WORKING-MODEL.md`](docs/project/GIT-WORKING-MODEL.md)
@@ -35,6 +36,17 @@ Treat approved Product, Design, and iteration acceptance criteria as controlled 
 3. Inspect the existing implementation and tests before proposing changes.
 4. Translate the iteration charter into a small execution plan and acceptance checklist.
 5. Identify genuine blockers or material decisions; do not ask about normal implementation details.
+
+For Iteration 02, read these branch-specific inputs before any implementation:
+
+1. [`iterations/02-agriculture/PRODUCT.md`](iterations/02-agriculture/PRODUCT.md)
+2. [`iterations/02-agriculture/REQUIREMENTS.md`](iterations/02-agriculture/REQUIREMENTS.md)
+3. [`iterations/02-agriculture/DESIGN.md`](iterations/02-agriculture/DESIGN.md)
+4. [`iterations/02-agriculture/DEMO.md`](iterations/02-agriculture/DEMO.md)
+
+Use the established customized Paradym-based wallet. Inji interoperability is
+outside the scope of the current demo programme and must not be introduced as an
+Iteration 03 requirement.
 
 ## Engineering Rules
 

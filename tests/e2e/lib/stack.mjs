@@ -152,6 +152,53 @@ export const NEGATIVE_FIXTURE = {
   name: 'Age Verification Credential (unlisted issuer)',
   schemaId: 'AgeVerificationCredentialUnlisted',
   vctSlug: 'age-verification-credential',
+  properties: {
+    ageOver18: { type: 'boolean' },
+    ageOver21: { type: 'boolean' },
+    name: { type: 'string' },
+    dateOfBirth: { type: 'string', format: 'date' },
+  },
+  required: ['ageOver18'],
+};
+
+/**
+ * The same idea for Agriculture, which REQUIREMENTS §7 lists as two more
+ * required fixtures: a cryptographically valid Farmer credential and a
+ * cryptographically valid Land credential, each from an issuer outside the
+ * allowlist.
+ *
+ * The vct slug MATTERS. It has to be the one the bank's DCQL query pins, or the
+ * presentation fails to match the query and the test proves that the query works
+ * rather than that the trust allowlist works — a much weaker claim, and an easy
+ * one to make by accident.
+ */
+export const NEGATIVE_FARMER_FIXTURE = {
+  name: 'Farmer Identity Credential (unlisted issuer)',
+  schemaId: 'FarmerIdentityCredentialUnlisted',
+  vctSlug: 'farmer-identity-credential',
+  properties: {
+    farmerId: { type: 'string' },
+    registeredFarmer: { type: 'boolean' },
+    farmerCategory: { type: 'string' },
+    district: { type: 'string' },
+  },
+  required: ['farmerId'],
+};
+
+export const NEGATIVE_LAND_FIXTURE = {
+  name: 'Land Ownership Credential (unlisted issuer)',
+  schemaId: 'LandOwnershipCredentialUnlisted',
+  vctSlug: 'land-ownership-credential',
+  properties: {
+    landId: { type: 'string' },
+    farmerId: { type: 'string' },
+    ownershipStatus: { type: 'string' },
+    landAreaAcres: { type: 'number' },
+    cropType: { type: 'string' },
+    cultivatedAreaAcres: { type: 'number' },
+    district: { type: 'string' },
+  },
+  required: ['farmerId'],
 };
 
 /**
@@ -183,10 +230,10 @@ export const NEGATIVE_FIXTURE = {
  * genuinely valid signature, and the only thing that rejects the presentation is
  * the verifier's trust allowlist.
  */
-export async function ensureNegativeFixture(issuerDid) {
+export async function ensureNegativeFixture(issuerDid, fixture = NEGATIVE_FIXTURE) {
   if (!issuerDid) throw new Error('ensureNegativeFixture needs the untrusted issuer DID');
   const listed = await ok('list oid4vci configs', json(`${opsBase()}/credential-schema/oid4vci-configs`));
-  const existing = (listed || []).find((c) => c.name === NEGATIVE_FIXTURE.name && c.author === issuerDid);
+  const existing = (listed || []).find((c) => c.name === fixture.name && c.author === issuerDid);
   if (existing) return existing;
 
   await ok(
@@ -198,41 +245,36 @@ export async function ensureNegativeFixture(issuerDid) {
         schema: {
           type: 'https://w3c-ccg.github.io/vc-json-schemas/',
           version: '1.0.0',
-          id: NEGATIVE_FIXTURE.schemaId,
-          name: NEGATIVE_FIXTURE.name,
+          id: fixture.schemaId,
+          name: fixture.name,
           author: issuerDid,
           authored: '2026-01-01T00:00:00.000Z',
           schema: {
-            $id: NEGATIVE_FIXTURE.schemaId,
+            $id: fixture.schemaId,
             $schema: 'https://json-schema.org/draft/2019-09/schema',
-            description: 'Test fixture: a well-formed age credential from an issuer outside the trust allowlist.',
+            description: `Test fixture: a well-formed ${fixture.name} from an issuer outside the trust allowlist.`,
             type: 'object',
-            properties: {
-              ageOver18: { type: 'boolean' },
-              ageOver21: { type: 'boolean' },
-              name: { type: 'string' },
-              dateOfBirth: { type: 'string', format: 'date' },
-            },
-            required: ['ageOver18'],
+            properties: fixture.properties,
+            required: fixture.required,
             // Issuance always adds credentialSubject.id, which is not a schema
             // claim; false here makes every issuance fail with an opaque 500.
             additionalProperties: true,
           },
         },
-        tags: ['age', 'test-fixture'],
+        tags: ['test-fixture'],
         status: 'PUBLISHED',
         oid4vciConfig: {
           oid4vciEnabled: true,
           oid4vciFormats: ['vc+sd-jwt'],
-          vct: NEGATIVE_FIXTURE.vctSlug,
-          display: [{ name: NEGATIVE_FIXTURE.name, locale: 'en-US' }],
+          vct: fixture.vctSlug,
+          display: [{ name: fixture.name, locale: 'en-US' }],
         },
       }),
     }),
   );
 
   const after = await ok('re-list oid4vci configs', json(`${opsBase()}/credential-schema/oid4vci-configs`));
-  const created = (after || []).find((c) => c.name === NEGATIVE_FIXTURE.name && c.author === issuerDid);
+  const created = (after || []).find((c) => c.name === fixture.name && c.author === issuerDid);
   if (!created) throw new Error('created the negative fixture but it is not in oid4vci-configs');
   return created;
 }
@@ -275,6 +317,92 @@ export async function issueAsIssuer({ base, issuerDid, credentialName, claims })
     }),
   );
   return { ...offer, credentialOfferUri: offer.credential_offer_uri, vct: cfg.vct };
+}
+
+/**
+ * Creates a pre-authorised offer on ONE of the Agriculture issuers.
+ *
+ * Each registry is its own oid4vc-service instance published under its own path
+ * prefix, so the offer is created on that instance and the wallet then collects
+ * from that instance's token and credential endpoints. Using the Age instance
+ * would sign with the right schema author but would exercise the wrong issuer,
+ * and "two independent issuers" is the thing under test.
+ *
+ * Pre-authorised, not wallet-driven: this is the scripted protocol evidence. The
+ * customer journey is authenticated wallet-driven issuance, which the charter says
+ * a scripted client may never stand in for.
+ *
+ * @param {{base: string, which: 'farmer'|'land', issuerDid: string, claims: object}} args
+ */
+/**
+ * `credentialName` overrides which published schema to issue from.
+ *
+ * Needed for the untrusted-issuer fixtures, whose schemas carry a different name
+ * but the SAME vct slug. The instance matters as much as the name: issuing through
+ * /{which}/oid4vc/offer mints a vct under that registry's PUBLIC_URL, which is
+ * what the bank's DCQL query pins. Issued from the Age instance instead, the vct
+ * is `<host>/vct/...` rather than `<host>/farmer/vct/...`, the query never
+ * matches, and the test proves the query works instead of proving the trust
+ * allowlist works.
+ */
+export async function issueAgricultureCredential({ base, which, issuerDid, claims, credentialName }) {
+  const name = credentialName || (which === 'farmer' ? 'Farmer Identity Credential' : 'Land Ownership Credential');
+  const configs = await ok('list oid4vci configs', json(`${opsBase()}/credential-schema/oid4vci-configs`));
+  const cfg = (configs || []).find((c) => c.name === name && c.author === issuerDid);
+  if (!cfg) throw new Error(`no ${name} schema authored by ${issuerDid} — run scripts/bootstrap.sh`);
+  const configurationId = (cfg.formats || []).length > 1 ? `${cfg.schemaId}_vc+sd-jwt` : cfg.schemaId;
+  const offer = await ok(
+    `create ${which} offer`,
+    json(`${opsBase()}/${which}/oid4vc/offer`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ credential_configuration_id: configurationId, format: 'vc+sd-jwt', claims }),
+    }),
+  );
+  return { ...offer, credentialOfferUri: offer.credential_offer_uri, vct: cfg.vct, issuerBase: `${base}/${which}` };
+}
+
+/** Starts the bank's farm-credit session: the QR the farmer's wallet scans. */
+export function startFarmCreditVerification(base) {
+  return ok('start farm credit check', json(`${base}/api/verifier/agriculture/sessions`, { method: 'POST' }));
+}
+
+/** What the bank asks for and lends at, straight from the service. */
+export function farmCreditPolicy(base) {
+  return ok('farm credit policy', json(`${base}/api/verifier/agriculture/policy`));
+}
+
+/**
+ * Reads and cancels a farm-credit session through the BANK PAGE's own URLs.
+ *
+ * Deliberately separate from readVerification below, which uses the Age path.
+ * Both work, and that is the point: the suite once exercised only the Age path,
+ * so a missing route under /agriculture went unnoticed while every API test
+ * passed and the bank page showed "the request expired" for decided
+ * applications. Whatever the app calls is what the tests must call.
+ */
+export function readFarmCreditVerification(base, sessionId) {
+  return json(`${base}/api/verifier/agriculture/sessions/${sessionId}`);
+}
+
+export function cancelFarmCreditVerification(base, sessionId) {
+  return json(`${base}/api/verifier/agriculture/sessions/${sessionId}/cancel`, { method: 'POST' });
+}
+
+/**
+ * The request-object URL out of a session's QR, which is where a wallet gets it.
+ *
+ * Needed because the two verifier parties are served by two signer instances on
+ * different path prefixes. Reading it from the QR means a test cannot be right
+ * about the age signer and wrong about the bank's, which is what rebuilding the
+ * URL from PUBLIC_URL would do.
+ */
+export function requestUriFromQr(qrData) {
+  const uri = new URL(qrData.replace(/^openid4vp:\/\//, 'https://placeholder/')).searchParams.get(
+    'request_uri',
+  );
+  if (!uri) throw new Error(`no request_uri in the QR: ${String(qrData).slice(0, 120)}`);
+  return uri;
 }
 
 /** Starts a verifier session: the QR the wallet would scan. */

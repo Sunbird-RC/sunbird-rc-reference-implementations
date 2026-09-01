@@ -205,6 +205,12 @@ services:
       - KC_HEALTH_ENABLED=true
     volumes:
       - ./keycloak/realm-age.json:/opt/keycloak/data/import/realm-age.json:ro
+      # A second realm for Iteration 02 rather than more accounts in `age`. The
+      # subject claim differs — nationalId here, citizenId there — and that claim
+      # is per-issuer-instance configuration, so one realm would mean accounts
+      # carrying two identity claims for two unrelated purposes. It also leaves
+      # the accepted Age accounts untouched, which Age regression depends on.
+      - ./keycloak/realm-agriculture.json:/opt/keycloak/data/import/realm-agriculture.json:ro
     healthcheck:
       # A TCP connect, not an HTTP probe. The image ships no curl or wget, and
       # hand-rolling an HTTP request through bash's /dev/tcp means embedding CRLF
@@ -223,7 +229,7 @@ services:
   # The OpenID4VCI / OpenID4VP protocol façade. Native to v2.1.0 — this is why
   # the architecture needs no standards adapter.
   oid4vc-service:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.4889fbdb}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -250,6 +256,11 @@ services:
       # Fallback only: each schema is signed with its own `author` DID, which is
       # what makes the National Identity Authority the credential's `iss`.
       ISSUER_DID: ${AGE_ISSUER_DID:-}
+      # Advertise only the credentials THIS issuer authored. credential-schema's
+      # /oid4vci-configs is deployment-wide, so without this every issuer lists
+      # every published credential — the Age issuer would offer the Agriculture
+      # ones and both registries would offer each other's.
+      ADVERTISE_OWN_CREDENTIALS_ONLY: 'true'
       # Paradym requires a signed request object; signing requires a
       # wallet-resolvable DID. Both are written by scripts/bootstrap.sh.
       OID4VP_SIGN_REQUEST: ${OID4VP_SIGN_REQUEST:-true}
@@ -280,6 +291,176 @@ services:
       # has only the hostname to show, and the charter's "the citizen selects the
       # National Identity Authority" stops being a recognisable step.
       ISSUER_DISPLAY_NAME: National Identity Authority
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:3400/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # --- Iteration 02: the bank's own verifier identity --------------------------
+  #
+  # A fourth oid4vc-service instance whose ONLY job is to sign the bank's
+  # OID4VP request objects, with the bank's own DID.
+  #
+  # Why it exists at all: the request object's signature is what a wallet uses to
+  # name the requesting party on its consent screen. With one instance signing for
+  # both use cases, the farmer's screen read "Do you trust Age Check?" while
+  # applying for crop credit — the wallet was telling the truth about the key it
+  # was shown, and the deployment was conflating two unrelated parties. That is
+  # the same mistake DESIGN and bootstrap.sh already refuse between the issuer and
+  # the verifier ("a separate identity because it is a separate party"); this
+  # applies it to the second verifier.
+  #
+  # It issues nothing. No Keycloak, no registry, no ISSUER_DID: an instance that
+  # could also issue would be a fifth issuer nobody asked for, and it would appear
+  # in wallet issuer directories.
+  oid4vc-bank:
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
+    restart: unless-stopped
+    depends_on:
+      identity:
+        condition: service_healthy
+      credential:
+        condition: service_healthy
+      credential-schema:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: '3400'
+      # Published under its own path, so the request_uri the QR carries resolves
+      # back to THIS instance. nginx strips the prefix (routes-citizen.conf).
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/bank-vp
+      INTERNAL_URL: http://oid4vc-bank:3400
+      CREDENTIAL_SERVICE_BASE_URL: http://credential:3000
+      IDENTITY_BASE_URL: http://identity:3332
+      SCHEMA_BASE_URL: http://credential-schema:3333
+      REDIS_URL: redis://redis:6379
+      SESSION_STORE: redis
+      OID4VP_SIGN_REQUEST: ${OID4VP_SIGN_REQUEST:-true}
+      VERIFIER_DID: ${BANK_VERIFIER_DID:-}
+      # Advertise nothing. This instance authored no schema, so with the filter on
+      # its issuer metadata is empty — which is the intent: it is not an issuer.
+      ADVERTISE_OWN_CREDENTIALS_ONLY: 'true'
+      DRAFT13_COMPAT_MODE: 'false'
+      ENABLE_AUTH: 'false'
+      CORS_ALLOWED_ORIGINS: ${PUBLIC_URL:-http://localhost}
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:3400/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # --- Iteration 02: the two Agriculture issuers -------------------------------
+  #
+  # Each registry is its OWN oid4vc-service instance, not a second credential on
+  # the Age one. A wallet's issuer directory lists credential issuers, one per
+  # credential_issuer URL, so two credentials served from one URL would appear as
+  # a single issuer offering two — which is not what REQUIREMENTS §3 asks the demo
+  # to show.
+  #
+  # The same image as the Age instance, unchanged: the fork made claim resolution
+  # configuration rather than code, so declaring a different subject entity is all
+  # that separating the two registries takes. That is also what makes the
+  # separation structural — the Farmer instance is told about FarmerRecord and
+  # declares no related entities, so no configuration exists by which it could
+  # read a land record (DESIGN §4).
+
+  oid4vc-farmer:
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      credential:
+        condition: service_healthy
+      identity:
+        condition: service_healthy
+      credential-schema:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    environment:
+      PORT: '3400'
+      # The path is what makes this a distinct issuer to a wallet: its metadata
+      # says credential_issuer = <host>/farmer, and nginx routes that prefix here.
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/farmer
+      INTERNAL_URL: http://oid4vc-farmer:3400
+      CREDENTIAL_SERVICE_BASE_URL: http://credential:3000
+      IDENTITY_BASE_URL: http://identity:3332
+      SCHEMA_BASE_URL: http://credential-schema:3333
+      REDIS_URL: redis://redis:6379
+      SESSION_STORE: redis
+      ISSUER_DID: ${FARMER_ISSUER_DID:-}
+      # Advertise only the credentials THIS issuer authored. credential-schema's
+      # /oid4vci-configs is deployment-wide, so without this every issuer lists
+      # every published credential — the Age issuer would offer the Agriculture
+      # ones and both registries would offer each other's.
+      ADVERTISE_OWN_CREDENTIALS_ONLY: 'true'
+      DRAFT13_COMPAT_MODE: 'false'
+      ENABLE_AUTH: 'false'
+      CORS_ALLOWED_ORIGINS: ${PUBLIC_URL:-http://localhost}
+      KEYCLOAK_PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/auth
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/auth
+      # Its own realm: the subject claim differs from Age's, and that claim is
+      # per-instance configuration, so one realm cannot carry both.
+      KEYCLOAK_REALM: agriculture
+      KEYCLOAK_SUBJECT_CLAIM: nationalId
+      REGISTRY_BASE_URL: http://registry:8081
+      REGISTRY_SUBJECT_ENTITY: FarmerRecord
+      REGISTRY_SUBJECT_KEY: nationalId
+      ISSUER_DISPLAY_NAME: Farmer Registry
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:3400/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  oid4vc-land:
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      credential:
+        condition: service_healthy
+      identity:
+        condition: service_healthy
+      credential-schema:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    environment:
+      PORT: '3400'
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/land
+      INTERNAL_URL: http://oid4vc-land:3400
+      CREDENTIAL_SERVICE_BASE_URL: http://credential:3000
+      IDENTITY_BASE_URL: http://identity:3332
+      SCHEMA_BASE_URL: http://credential-schema:3333
+      REDIS_URL: redis://redis:6379
+      SESSION_STORE: redis
+      ISSUER_DID: ${LAND_ISSUER_DID:-}
+      # Advertise only the credentials THIS issuer authored. credential-schema's
+      # /oid4vci-configs is deployment-wide, so without this every issuer lists
+      # every published credential — the Age issuer would offer the Agriculture
+      # ones and both registries would offer each other's.
+      ADVERTISE_OWN_CREDENTIALS_ONLY: 'true'
+      DRAFT13_COMPAT_MODE: 'false'
+      ENABLE_AUTH: 'false'
+      CORS_ALLOWED_ORIGINS: ${PUBLIC_URL:-http://localhost}
+      KEYCLOAK_PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/auth
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/auth
+      KEYCLOAK_REALM: agriculture
+      KEYCLOAK_SUBJECT_CLAIM: nationalId
+      REGISTRY_BASE_URL: http://registry:8081
+      # LandRecord carries its own nationalId so this issuer resolves the
+      # authenticated farmer itself, rather than being handed a farmerId by
+      # anyone. DESIGN §7: one issuer must not rely on another's unsigned state.
+      REGISTRY_SUBJECT_ENTITY: LandRecord
+      REGISTRY_SUBJECT_KEY: nationalId
+      ISSUER_DISPLAY_NAME: Land Registry
     healthcheck:
       test: ['CMD-SHELL', 'curl -f http://localhost:3400/health || exit 1']
       interval: 10s
@@ -329,11 +510,21 @@ services:
         condition: service_healthy
     volumes:
       - ../config/trust:/app/config/trust:ro
+      # The Agriculture lending policy. Mounted read-only and version-controlled
+      # for the same reason as the trust allowlist: the per-acre rate is what
+      # turns verified acreage into a rupee figure a customer reads off a screen,
+      # so it must not be editable between demos.
+      - ../config/policy:/app/config/policy:ro
     environment:
       PORT: '4300'
       OID4VC_BASE_URL: http://oid4vc-service:3400
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost}
       TRUST_POLICY_FILE: /app/config/trust/issuers.json
+      CROP_POLICY_FILE: /app/config/policy/crop-rates.json
+      # The approved-algorithm allowlist (REQUIREMENTS §8), enforced rather than
+      # recorded. Named explicitly even though it defaults to this path, because a
+      # security control that is easy to overlook in configuration is easy to lose.
+      ALG_POLICY_FILE: /app/config/policy/algorithms.json
       # How long a presentation request stays answerable. 300s matches
       # oid4vc-service's VP_TXN_TTL. Lower it on a demo host (90s or so) when you
       # need the "nobody answered" outcome to land while an audience is watching:
@@ -342,7 +533,21 @@ services:
       SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-300}
       # Expanded into the trust policy at load time, so the committed policy
       # file stays stable across deployments while the pinned DID does not.
+      # All three are required once the policy names them: the loader treats an
+      # unset variable as a hard failure rather than a wildcard, so the verifier
+      # refuses to start rather than trusting an issuer whose DID is the empty
+      # string. scripts/bootstrap.sh writes all of them.
       AGE_ISSUER_DID: ${AGE_ISSUER_DID:-}
+      FARMER_ISSUER_DID: ${FARMER_ISSUER_DID:-}
+      LAND_ISSUER_DID: ${LAND_ISSUER_DID:-}
+      # Which signer the BANK's presentation requests come from. Age keeps the
+      # instance it always used (OID4VC_BASE_URL below); agriculture requests are
+      # signed by the bank's own identity, so the wallet's consent screen names
+      # the bank rather than the age-restricted service.
+      OID4VC_BANK_BASE_URL: http://oid4vc-bank:3400
+      # The credential types the bank's request pins, one per issuer instance.
+      FARMER_VCT: ${PUBLIC_URL:-http://localhost}/farmer/vct/farmer-identity-credential
+      LAND_VCT: ${PUBLIC_URL:-http://localhost}/land/vct/land-ownership-credential
     healthcheck:
       test: ['CMD-SHELL', 'wget -q -O- http://127.0.0.1:4300/healthz >/dev/null || exit 1']
       interval: 10s
@@ -380,6 +585,7 @@ services:
       # The web pages are static and need no build step, so nginx serves them
       # directly instead of a container existing to hold a handful of files.
       - ../services/verifier-web:/usr/share/nginx/html/verifier:ro
+      - ../services/bank-web:/usr/share/nginx/html/bank:ro
       - ../services/web-assets:/usr/share/nginx/html/assets:ro
     ports:
       # Port 80 on purpose — see the header note about did:web and ports.

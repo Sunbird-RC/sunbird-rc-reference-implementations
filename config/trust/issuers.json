@@ -13,7 +13,13 @@
     "",
     "${VARS} are expanded from the environment at load time, so the policy stays",
     "stable in Git while the locally-minted did:web does not. An unset or unexpanded",
-    "variable is a hard failure, never a wildcard."
+    "variable is a hard failure, never a wildcard.",
+    "",
+    "`roles` matters only for multi-credential requests. Being on this list is not",
+    "the same as being trusted FOR A SLOT: without roles, the Farmer Registry's",
+    "credential could arrive in the Agriculture request's land slot and pass, since",
+    "its signature is valid and its issuer is allowlisted. An issuer with no roles",
+    "is unconstrained, which is how the single-credential Age request works."
   ],
   "allowedAlgorithms": ["ES256"],
   "issuers": [
@@ -21,6 +27,18 @@
       "name": "National Identity Authority",
       "did": "${AGE_ISSUER_DID}",
       "credentials": ["Age Verification Credential"]
+    },
+    {
+      "name": "Farmer Registry",
+      "did": "${FARMER_ISSUER_DID}",
+      "credentials": ["Farmer Identity Credential"],
+      "roles": ["farmer"]
+    },
+    {
+      "name": "Land Registry",
+      "did": "${LAND_ISSUER_DID}",
+      "credentials": ["Land Ownership Credential"],
+      "roles": ["land"]
     }
   ]
 }

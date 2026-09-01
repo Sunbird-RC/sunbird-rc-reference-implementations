@@ -31,7 +31,15 @@ printf 'Iteration 01 verification — %s\n' "$(date -u '+%Y-%m-%d %H:%M UTC')"
 printf 'repo: %s\nfork: %s\n' "$ROOT" "$FORK"
 
 head_ '1. Branch and working tree'
-check "on iteration/age-01-verification" '[ "$(git branch --show-current)" = "iteration/age-01-verification" ]'
+# Any iteration branch, not one named branch: Iteration 01 is merged and accepted,
+# and Iteration 02 continues on its own branch. What must stay true is that this is
+# never run as a substitute for review ON main, which the working model forbids.
+# No `exit` and no `case` in the body: check() evals in the current shell, so an
+# exit here terminates the whole script and every later check is silently skipped.
+# That trap has now bitten twice, so the rule is a prefix test on a precomputed
+# variable.
+BRANCH="$(git branch --show-current)"
+check "on an iteration branch, not main ($BRANCH)" '[ -n "$BRANCH" ] && [ "${BRANCH#iteration/}" != "$BRANCH" ]'
 check "working tree clean (ignoring node_modules)" '[ -z "$(git status --porcelain | grep -vE "^\?\? ([^ ]*/)?node_modules")" ]'
 
 head_ '2. Revised baseline is the authoritative input'
@@ -78,6 +86,19 @@ if curl -fsS -o /dev/null --max-time 5 "$BASE/gateway-health" 2>/dev/null; then
   # issuer directory. The negative fixture is provisioned by the tests that need
   # it and retired again, so a clean stack advertises exactly one.
   check "exactly ONE credential is advertised to wallets" 'curl -s --max-time 8 $BASE/.well-known/openid-credential-issuer | python3 -c "import json,sys; raise SystemExit(0 if len(json.load(sys.stdin)[\"credential_configurations_supported\"])==1 else 1)"'
+  # Each Agriculture issuer must advertise ONLY its own credential. This is the
+  # check that keeps the demo requirement honest: an Age credential appearing in
+  # the Agriculture issuer directory is exactly what DEMO.md's quality gate
+  # forbids, and it is what happened before ADVERTISE_OWN_CREDENTIALS_ONLY.
+  for who in farmer land; do
+    check "the $who issuer advertises only its own credential" 'curl -s --max-time 8 "$BASE/'"$who"'/.well-known/openid-credential-issuer" | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+configs = d[\"credential_configurations_supported\"]
+names = [c[\"display\"][0][\"name\"] for c in configs.values()]
+want = {\"farmer\": \"Farmer Identity Credential\", \"land\": \"Land Ownership Credential\"}[\"'"$who"'\"]
+raise SystemExit(0 if names == [want] else 1)"'
+  done
 
   # The wallet's trust screen renders these. A trusted entity whose logo 404s
   # shows a placeholder, which reads as a half-configured issuer on a demo.
@@ -113,7 +134,31 @@ check "a refusal is distinguished from a verification failure" 'grep -q "decline
 check "the page renders a refusal without a failure verdict" 'grep -q "NO DATA SHARED" services/verifier-web/app.js && grep -q "decision.neutral" services/web-assets/styles.css'
 check "a cancelled check is enforced server-side, not just labelled" 'grep -q "sessions/:id/cancel\|abandoned" services/verifier/src/server.mjs && grep -q "cancel" services/verifier-mobile/App.js'
 check "the negative fixture is owned by the tests, not bootstrap" 'grep -q "ensureNegativeFixture" tests/e2e/lib/stack.mjs && ! grep -q "create_schema .Age Verification Credential (unlisted" scripts/bootstrap.sh'
-check "the installed mobile verifier exists and calls the shared service" '[ -f services/verifier-mobile/App.js ] && grep -q "api/verifier/sessions" services/verifier-mobile/App.js'
+# --- the approved-algorithm policy (REQUIREMENTS §8) -------------------------
+# Iteration 01 shipped this as a recorded deviation because `alg` was not
+# observable. It is enforced now, and these assert it stays enforced rather than
+# decaying back into a policy file nobody reads.
+check "the approved-algorithm policy is version-controlled" '[ -f config/policy/algorithms.json ] && python3 -c "import json;d=json.load(open(\"config/policy/algorithms.json\"));assert d[\"approved\"]==[\"ES256\"]"'
+check "the verifier enforces it, not just loads it" 'grep -q "algPolicy.check(status.algs)" services/verifier/src/server.mjs && grep -q "failedCheck: .algorithm." services/verifier/src/server.mjs'
+# The ORDER is the control, not just the presence of the check: an unapproved
+# algorithm has to be refused before the lending rule runs, or the rule has
+# already run on a presentation we do not accept. Compared by line number, which
+# is crude but readable — the previous attempt nested python inside an eval'd
+# single-quoted string and was wrong in a way that took a run to notice.
+check "it is checked before the domain decision" '[ "$(grep -n "algPolicy.check" services/verifier/src/server.mjs | head -1 | cut -d: -f1)" -lt "$(grep -n "decideFarmCredit({" services/verifier/src/server.mjs | head -1 | cut -d: -f1)" ]'
+gone  "no algorithm is silently defaulted in the verifier" 'grep -qE "algs \|\| \[.ES256.\]|alg \|\| .ES256." services/verifier/src/core/algorithms.mjs'
+check "positive and negative algorithm tests exist" '[ -f tests/unit/algorithm-policy.test.mjs ] && [ -f tests/e2e/algorithm-policy.test.mjs ]'
+
+check "the installed mobile verifier exists and calls the shared service" '[ -f services/verifier-mobile/App.js ] && grep -q "/api/verifier" services/verifier-mobile/App.js'
+# The charter's constraint on that app: it "displays results; it does not
+# independently trust claims or make cryptographic decisions". The way that
+# breaks is a well-meaning change that reaches a protocol endpoint directly, so
+# assert the absence rather than trusting the comment at the top of the file.
+gone  "the mobile verifier never touches the protocol endpoints" 'grep -qE "\\\$\\{?BASE\\}?/(vp|oid4vc)/|/vp/response|/oid4vc/credential" services/verifier-mobile/App.js'
+# An Agriculture build must not put an Age option in front of a farmer, so the
+# use case is baked in at build time and there is no on-screen picker.
+check "the mobile verifier's use case is a build-time choice" 'grep -q "VERIFIER_USE_CASE" services/verifier-mobile/app.config.js && grep -q "extra?.useCase" services/verifier-mobile/App.js'
+gone  "the mobile verifier offers no on-screen use-case picker" 'grep -qE "setUseCaseName|styles.picker" services/verifier-mobile/App.js'
 gone "the mobile verifier does not verify anything itself" 'grep -qiE "jose|sd-jwt|verifyJwt|createHash" services/verifier-mobile/App.js'
 
 head_ '8. Data model matches the approved design'
@@ -131,8 +176,17 @@ if [ -d "$FORK/.git" ]; then
   # Exact count on purpose: the port is meant to stay narrow, so an unexplained
   # extra commit should show up here rather than in review. Raise it deliberately
   # when the port legitimately grows.
-  check "port branch is 4 commits off v2.1.0 (port, alg, narrowing, issuer display)" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "4" ]'
-  check "ported image is built" 'docker images -q sunbird-rc-oid4vc-service:v2.1.0-authcode.4889fbdb | grep -q .'
+  # Raised from 4 to 5 deliberately, per the note above. The fifth commit lets an
+  # issuer advertise only the credentials it authored: credential-schema's
+  # /oid4vci-configs is deployment-wide and takes no filter, so with two Agriculture
+  # registries sharing one schema service every issuer advertised all three
+  # published credentials. No configuration could scope it. Recorded as a
+  # compatibility finding with a removal path.
+  check "port branch is 5 commits off v2.1.0 (port, alg, narrowing, issuer display, own credentials)" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "5" ]'
+  # The tag compose asks for, whatever it currently is: reading it from compose
+  # rather than repeating it here is what stops this check drifting into
+  # asserting a build nothing uses.
+  check "the image compose pins is actually built" 'docker images -q "$(python3 -c "import re,sys; print(re.search(r\"sunbird-rc-oid4vc-service:v2\\.1\\.0-authcode\\.[0-9a-f]+\", open(\"deploy/docker-compose.yml\").read()).group(0))")" | grep -q .'
   check "the ported build is pinned by source commit in its tag" 'grep -qE "sunbird-rc-oid4vc-service:v2.1.0-authcode\.[0-9a-f]{7,}" deploy/docker-compose.yml'
 else
   skip "fork checks" "no checkout at $FORK — set SUNBIRD_RC_CORE_PATH"
@@ -218,7 +272,7 @@ if [ -d "$WFORK/.git" ]; then
   # check() later evals loses its \$3 to the shell, and awk then fails with a
   # syntax error the check reports as drift that does not exist.
   check "the vendored copy matches the fork, apart from the recorded adaptation" \
-    '[ -z "$(diff <(git -C "$WFORK" ls-tree -r --format="%(objectname) %(path)" cbe9407 | sort) <(git ls-tree -r --format="%(objectname) %(path)" "HEAD:$W" | sort) | grep -E "^[<>]" | grep -vE "($ADAPTED)$")" ]'
+    '[ -z "$(diff <(git -C "$WFORK" ls-tree -r --format="%(objectname) %(path)" 6dc0a3c | sort) <(git ls-tree -r --format="%(objectname) %(path)" "HEAD:$W" | sort) | grep -E "^[<>]" | grep -vE "($ADAPTED)$")" ]'
 else
   skip "wallet drift vs the fork" "no checkout at $WFORK - set WALLET_FORK_PATH"
 fi

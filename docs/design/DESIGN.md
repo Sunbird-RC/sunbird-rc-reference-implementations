@@ -34,8 +34,8 @@ The architecture must maximise reuse without hiding use-case differences or over
 │             ↓ OpenID4VCI / SD-JWT VC                │
 └─────────────────────┬───────────────────────────────┘
                       ↓
-          Compatible mobile VC wallets
-      Inji + other open-source wallet(s)
+          Compatible mobile VC wallet
+        Customized Paradym-based wallet
                       ↓ OpenID4VP
           ┌───────────┴───────────┐
           ↓                       ↓
@@ -75,8 +75,8 @@ It must not become a second registry, duplicate domain data, or contain domain b
 
 ### Wallets
 
-- Inji must complete at least one full use-case lifecycle.
-- Kartheek may select Inji or another suitable open-source VC-compliant mobile wallet for each use case.
+- The current demos use the established customized Paradym-based wallet.
+- Inji compatibility and interoperability are outside the demo programme scope.
 - Wallet selection should consider protocol and credential-format support, consent, holder binding, selective disclosure, multi-credential presentation, and implementation effort.
 - Exact wallet releases and compatibility modes are engineering decisions and must be recorded with the implementation evidence.
 - Wallet-specific behaviour remains outside generic issuer and verifier logic.
@@ -263,7 +263,7 @@ Add the third domain, credential filtering/discovery, and final regression cover
 ## 13. Architecture Decisions
 
 1. **Sunbird RC boundary:** baseline Sunbird RC `v2.1.0` and its native `oid4vc-service`; introduce a thin standards adapter only for a demonstrated gap that configuration cannot resolve.
-2. **Wallet policy:** Kartheek selects suitable open-source wallets per use case; Inji must complete at least one full use case.
+2. **Wallet policy:** use the established customized Paradym-based wallet for the current demos; Inji interoperability is out of scope.
 3. **Trust model:** use a repository-controlled issuer allowlist for the demo; do not build a trust registry.
 4. **Data model:** use one PostgreSQL database with separate use-case tables/entities. The same synthetic person is represented independently per use case; tables and domain data do not overlap.
 5. **Delivery order:** Age (including web and mobile verification), Agriculture, then Education.
@@ -274,8 +274,6 @@ Add the third domain, credential filtering/discovery, and final regression cover
 
 - [Sunbird RC overview](https://docs.sunbirdrc.dev/learn/readme-1)
 - [Sunbird RC credential issuance APIs](https://rc.sunbird.org/api-reference/credentialling-apis/credential-issuance-apis)
-- [Inji OpenID4VP integration](https://docs.inji.io/inji-wallet/inji-mobile/technical-overview/integration-guide/openid4vp)
-- [Inji end-user credential presentation flows](https://docs.inji.io/end-user-guide)
 - [EUDI Reference Implementation repositories](https://docs.eudi.dev/latest/reference-implementation/repositories-list/)
 - [OpenID4VCI 1.0 Final](https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0-final.html)
 - [OpenID4VP 1.0 Final](https://openid.net/specs/openid-4-verifiable-presentations-1_0-final.html)

@@ -2,7 +2,7 @@
 
 This directory is a copy of [`animo/paradym-wallet`](https://github.com/animo/paradym-wallet)
 at commit `2d68168`, taken from the fork `pallakartheekreddy/paradym-wallet`
-(branch `v1.0.3`), plus seven commits of showcase changes. Apache-2.0; see
+(branch `v1.0.3`), plus eight commits of showcase changes. Apache-2.0; see
 [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 It is here because the showcase depends on changes inside the wallet, and a
@@ -20,13 +20,18 @@ git log --oneline -- vendor/paradym-wallet          # the base, then seven chang
 git log -p -- vendor/paradym-wallet                 # the changes themselves
 ```
 
-The vendored tree at the seventh commit is **byte-identical to the fork** — the
-importer asserts it by comparing git tree hashes, not by inspection:
+The vendored tree at the replay tip is **byte-identical to the fork**, and the
+importer asserts it by comparing git tree hashes rather than by inspection:
 
 ```
-fork      cbe9407^{tree}  = c26e413c5625918b768ffe10865d9f3298615f46
-vendored  HEAD:vendor/…   = c26e413c5625918b768ffe10865d9f3298615f46
+fork  6dc0a3c^{tree}  = dab71fab5e4a7e2a33977a6b756ff4d74aab1c9a
 ```
+
+`HEAD:vendor/paradym-wallet` then differs from that by exactly the files the
+adaptation commit changed — `NOTICE`, this file, `app.config.js`,
+`base.app.config.js` and `eas.json` — and by nothing else. That is not a claim to
+take on trust: `scripts/verify.sh` compares the two trees blob by blob, filters
+out those five paths, and fails if anything is left over.
 
 | # | Source commit | Author | Date | Scope |
 |---|---|---|---|---|
@@ -37,7 +42,8 @@ vendored  HEAD:vendor/…   = c26e413c5625918b768ffe10865d9f3298615f46
 | 5 | `ac45de4` fix(trust): a bare `did:` client_id could never match a trusted entity | Kartheek Palla | 27 Aug 2026 | `packages/sdk/src/trust/handlers/did.ts`. An upstream defect: the OpenID4VP trust lookup compared the client id against a `decentralized_identifier:`-prefixed string, so a verifier using the bare `did:web:` form of OpenID4VP before draft 26 could never match any configured entity. Now normalises and prefix-matches, as the OpenID4VCI path in the same file already did |
 | 6 | `7b5cae9` feat(wallet): recognise the Sunbird RC Age showcase issuer and verifier | Kartheek Palla | 27 Aug 2026 | `apps/wallet/src/constants.ts`. The showcase's issuer and age-restricted service as trusted entities, both `demo: true` |
 | 7 | `cbe9407` feat(openid4vc): tell the verifier when the holder declines | Kartheek Palla | 27 Aug 2026 | `packages/sdk/src/openid4vc/func/declineCredentialRequest.ts`. Declining was purely local, so a verifier could not tell a refusal from a request the holder ignored. Now posts an OpenID4VP Authorization Error Response (`error=access_denied`) for `direct_post` |
-| 8 | *(this repository)* remove Animo's release identity | Kartheek Palla | 27 Aug 2026 | Not from the fork — made when the code was vendored, so it sits **after** the tree-hash proof above rather than inside it. See below |
+| 8 | `6dc0a3c` feat(showcase): trust entries for the Agriculture registries and the bank | Kartheek Palla | 31 Aug 2026 | `apps/wallet/src/constants.ts`. Two OID4VCI issuer entities (Farmer Registry, Land Registry), path-scoped so they survive a re-bootstrap, and one trusted DID entity for Gramin Bank, which signs presentation requests with its own DID. Also reorders both lists: they are matched by PREFIX with the first hit winning, so a host-scoped entry is a prefix of every DID and issuer URL on that host — the fallback was named "Age Check" and would have claimed the bank and both registries. It now names the deployment rather than a party |
+| 9 | *(this repository)* remove Animo's release identity | Kartheek Palla | 27 Aug 2026 | Not from the fork — made when the code was vendored, so it sits **after** the tree-hash proof above rather than inside it. See below |
 
 **Commits 5 and 7 are upstream-shaped fixes**, not showcase-specific glue. Both are
 worth reporting upstream, and both are recorded with a removal path in
@@ -103,7 +109,7 @@ here resolves a path into it: the build and every check operate on this director
 unconditionally, and only the importer accepts `--source`.
 
 ```bash
-# in the sibling: fetch upstream, then rebase the seven commits onto the new point
+# in the sibling: fetch upstream, then rebase the eight commits onto the new point
 git fetch upstream && git rebase upstream/main
 
 # in this repository, on a branch:
@@ -120,7 +126,7 @@ never merged into this repository. Please do not "fix" that.
 
 ## Animo's release identity, removed
 
-One deliberate divergence from upstream, in the eighth commit. The fork carried
+One deliberate divergence from upstream, in the ninth commit. The fork carried
 the credentials of Animo's *release channel* — not secrets, but enough that
 someone running `eas build` here would be building and submitting against another
 organisation's Expo project and App Store listing:
