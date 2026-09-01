@@ -1,0 +1,125 @@
+# Captured run — verify.txt
+#
+# Command      ./scripts/verify.sh --no-tests
+# Environment  the demo deployment over HTTPS. --no-tests because ssh to the operator port dropped after the three suites above were captured; those results are in their own files and all passed on this commit
+# Branch       iteration/education-03-employment
+# Commit       1ae7e50fbbf5ebb14161c44e4ebfdaba4dbae523   (clean working tree)
+# Node         v22.16.0
+# oid4vc image sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b
+# Wallet fork  vendored at tip 82b1def
+# Captured     2026-09-01 16:03 UTC
+
+=== output ===
+Iteration 01 verification — 2026-09-01 15:47 UTC
+repo: /Users/kartheek/Documents/Workspace/Sunbird/Sunbird_RC/Fork/sunbird-rc-reference-implementations
+fork: /Users/kartheek/Documents/Workspace/Sunbird/Sunbird_RC/Fork/sunbird-rc-reference-implementations/../sunbird-rc-core
+
+1. Branch and working tree
+  PASS  on an iteration branch, not main (iteration/education-03-employment)
+  PASS  working tree clean (ignoring node_modules)
+
+2. Revised baseline is the authoritative input
+  PASS  CLAUDE.md carries the scripted-client rule
+  PASS  CLAUDE.md forbids substituting a QR/issuer page
+  PASS  charter is the revised, three-journey one
+  PASS  review feedback is on the branch
+
+3. Branch hygiene (review item)
+  PASS  docs/start/CLAUDE-START.md removed
+  PASS  docs/start/KARTHEEK-START.md removed
+  PASS  no handshake files tracked by git
+  PASS  README has no dangling handshake links
+
+4. Rejected work removed (review item)
+  PASS  services/issuer-web deleted
+  PASS  compose no longer mounts it
+  PASS  nginx no longer routes /issuer/
+  PASS  age-issuer dropped the QR dependency
+  PASS  verifier page no longer prints wallet.sh
+
+5. Escalation and plan
+  PASS  escalation raised for the Flow 1 gap
+  PASS  escalation records the Age-database deviation
+  PASS  implementation plan reflects Anand's answers
+  PASS  his answers are on the branch
+  PASS  escalation is marked resolved
+
+6. Running stack reflects the removals
+  PASS  /issuer/ is gone (404)
+  PASS  /api/issuer/citizens is gone (404)
+  PASS  /verifier/ still serves (200)
+  PASS  issuer response carries no rendered QR
+  PASS  oid4vc-service runs the PINNED ported build
+  PASS  every other Sunbird service still runs an official ghcr image
+  PASS  Keycloak is serving the age realm
+  PASS  issuer advertises Keycloak first, itself second
+  PASS  issuer names itself, so a wallet issuer list is readable
+  PASS  exactly ONE credential is advertised to wallets
+  PASS  the farmer issuer advertises only its own credential
+  PASS  the land issuer advertises only its own credential
+  PASS  the school issuer advertises only its own credential
+  PASS  the college issuer advertises only its own credential
+  PASS  the university issuer advertises only its own credential
+  PASS  both Education portals publish a policy
+  PASS  the job portal does not request the school or college percentage
+  PASS  the committed Education thresholds are the ones served
+  PASS  one trusted issuer per Education role
+  PASS  the two Education portals sign as two different parties
+  PASS  both Education portal pages are served
+  PASS  the two Education pages share one front end
+  PASS  the wallet trust logos are served
+  PASS  no unlisted-issuer credential in the directory
+
+7. Gateway exposure (public deployment)
+  PASS  routes are split by audience
+  PASS  the public listeners serve citizen routes plus refusals
+  PASS  operator routes are served ONLY on the loopback listener
+  PASS  the operator listener is published on 127.0.0.1 only
+  PASS  operator-only: /api/issuer/
+  PASS  operator-only: /api/v1
+  PASS  operator-only: /registry/
+  PASS  operator-only: /credential-schema
+  PASS  operator-only: /credentials
+  PASS  operator-only: /did
+  PASS  operator-only: /utils
+  PASS  operator-only: /auth/admin
+  PASS  refused on public listeners: /oid4vc/offer
+  PASS  refused on public listeners: /vp/request
+  PASS  refused on public listeners: /vp/status
+  PASS  refused on public listeners: /auth/admin
+  PASS  the TLS overlay exists and mounts the certificate read-only
+  PASS  setup scripts use the operator listener, not the public origin
+  PASS  the suites know where operator endpoints live
+  PASS  Keycloak brute-force protection is on in the realm
+  PASS  the realm does not interrupt first sign-in with a profile form
+  PASS  bootstrap rotates Keycloak's default admin password
+  PASS  schemas store the vct as a slug, so type metadata resolves
+  PASS  a DID from another origin is never reused
+  PASS  enabling https is a script, not a runbook
+  PASS  a refusal is distinguished from a verification failure
+  PASS  the page renders a refusal without a failure verdict
+  PASS  a cancelled check is enforced server-side, not just labelled
+  PASS  the negative fixture is owned by the tests, not bootstrap
+  PASS  the approved-algorithm policy is version-controlled
+  PASS  the verifier enforces it, not just loads it
+  PASS  it is checked before the domain decision
+  PASS  no algorithm is silently defaulted in the verifier
+  PASS  positive and negative algorithm tests exist
+  PASS  the installed mobile verifier exists and calls the shared service
+  PASS  the mobile verifier never touches the protocol endpoints
+  PASS  the mobile verifier's use case is a build-time choice
+  PASS  the mobile verifier offers no on-screen use-case picker
+  PASS  the mobile verifier does not verify anything itself
+
+8. Data model matches the approved design
+  PASS  deploy/.env points the registry at the shared database
+  PASS  no per-use-case database remains
+
+9. Fork: the prepared oid4vc-service port
+  PASS  fork main is untouched (== origin/main)
+  PASS  fork main sits on the v2.1.0 tag
+  PASS  port branch is 5 commits off v2.1.0 (port, alg, narrowing, issuer display, own credentials)
+  PASS  the image compose pins is actually built
+  PASS  the ported build is pinned by source commit in its tag
+
+10. Committed secrets

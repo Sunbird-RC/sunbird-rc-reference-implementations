@@ -68,7 +68,7 @@ worth checking if three separate authorities asserted it.
 |---|---|---|
 | Unit | **167 passed, 0 failed** (62 Education) | [`runs/test-unit.txt`](runs/test-unit.txt) |
 | End-to-end, against the deployment | **145 passed, 0 failed** (48 Education) | [`runs/test-e2e.txt`](runs/test-e2e.txt) |
-| `verify.sh`, against the deployment | **109 passed, 0 skipped** | [`runs/verify.txt`](runs/verify.txt) |
+| `verify.sh --no-tests`, against the deployment | **108 passed, 0 failed** | [`runs/verify.txt`](runs/verify.txt) |
 | Age + Agriculture regression, same deployment | **97 passed, 0 failed** | [`runs/regression-01-02.txt`](runs/regression-01-02.txt) |
 
 `verify.sh` also runs the `sunbird-rc-core` fork's own jest suite.
@@ -86,7 +86,7 @@ type — needs a decision, because the fix changes a security guarantee.
 | `oid4vc-service` | `sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b` — the ported build, pinned by source commit in its tag |
 | Fork branch | `oid4vc-keycloak-as-v2.1.0`, 5 commits off `v2.1.0` |
 | Keycloak | `quay.io/keycloak/keycloak:26.0`, `start-dev`, three realms imported |
-| Wallet | vendored at `vendor/paradym-wallet`, upstream `2d68168` + showcase commits, tip `6dc0a3c` |
+| Wallet | vendored at `vendor/paradym-wallet`, upstream `2d68168` + nine showcase commits, tip `82b1def` |
 | Wallet APK | `id.paradym.wallet.preview` 1.20.3, arm64-v8a, issuer directory limited to the three institutions |
 | Mobile verifier APK | `id.sunbird.ageverifier` 1.0.0, `VERIFIER_USE_CASE=education-masters` → "Master's Admissions" |
 | Device | Samsung SM-A055F, Android 15 |

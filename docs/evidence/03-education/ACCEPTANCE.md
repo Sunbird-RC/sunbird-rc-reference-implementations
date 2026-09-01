@@ -10,7 +10,7 @@ in its own order, against the evidence that closes it.
 | **V** — the demonstration video, by part | [`Education-Employment-Showcase-01Sep.mp4`](Education-Employment-Showcase-01Sep.mp4) |
 | **U** — unit suite, 167 passed | [`runs/test-unit.txt`](runs/test-unit.txt) |
 | **E** — end-to-end suite, 145 passed, against the deployment | [`runs/test-e2e.txt`](runs/test-e2e.txt) |
-| **C** — `verify.sh`, 109 passed / 0 skipped | [`runs/verify.txt`](runs/verify.txt) |
+| **C** — `verify.sh --no-tests`, 108 passed / 0 failed | [`runs/verify.txt`](runs/verify.txt) |
 | **R** — Age + Agriculture regression, 97 e2e | [`runs/regression-01-02.txt`](runs/regression-01-02.txt) |
 | **cfg** — version-controlled configuration | paths given inline |
 
