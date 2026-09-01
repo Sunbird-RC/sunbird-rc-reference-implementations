@@ -11,8 +11,17 @@
 // on the idle screen does exactly that. One app, one channel, chosen at build
 // time:
 //
-//   VERIFIER_USE_CASE=age          ./build   -> "Age Check",   /api/verifier
-//   VERIFIER_USE_CASE=agriculture  ./build   -> "Farm Credit", /api/verifier/agriculture
+//   VERIFIER_USE_CASE=age                ->  "Age Check"              /api/verifier
+//   VERIFIER_USE_CASE=agriculture        ->  "Farm Credit"            /api/verifier/agriculture
+//   VERIFIER_USE_CASE=education-masters  ->  "Master's Admissions"    /api/verifier/education/masters
+//   VERIFIER_USE_CASE=education-job      ->  "Interview Shortlisting" /api/verifier/education/job
+//
+// Iteration 03 adds TWO channels rather than one "Education Verifier", because it
+// has two relying parties, not one: a university admissions office and an
+// employer are as different from each other as either is from the bank, and they
+// sign with different DIDs. One app named for both would be the same mislabelling
+// this build-time channel exists to prevent — and it is what put "Farm Credit" on
+// the home screen during an Education demo.
 //
 // The PACKAGE deliberately does not change. PRODUCT.md lists an
 // "Agriculture-specific mobile verifier application" as out of scope, so this
@@ -20,9 +29,16 @@
 // which is also why the two builds replace each other on a device, as the wallet
 // builds do.
 const USE_CASE = process.env.VERIFIER_USE_CASE ?? 'age';
-const NAMES = { age: 'Age Check', agriculture: 'Farm Credit' };
+const NAMES = {
+  age: 'Age Check',
+  agriculture: 'Farm Credit',
+  'education-masters': "Master's Admissions",
+  'education-job': 'Interview Shortlisting',
+};
 if (!NAMES[USE_CASE]) {
-  throw new Error(`VERIFIER_USE_CASE must be 'age' or 'agriculture', got '${USE_CASE}'`);
+  throw new Error(
+    `VERIFIER_USE_CASE must be one of ${Object.keys(NAMES).join(', ')}, got '${USE_CASE}'`,
+  );
 }
 
 export default {

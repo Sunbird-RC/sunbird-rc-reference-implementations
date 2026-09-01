@@ -156,7 +156,18 @@ describe('the vendored wallet names the right verifier', () => {
     // It cannot be one. Several parties are minted under this host, so any party
     // name on a host-scoped entry is right for at most one of them and silently
     // wrong for the rest after a re-bootstrap.
-    const parties = ['Age Check', 'Gramin Bank', 'National Identity Authority', 'Farmer Registry', 'Land Registry'];
+    const parties = [
+      'Age Check',
+      'Gramin Bank',
+      'National Identity Authority',
+      'Farmer Registry',
+      'Land Registry',
+      'State School Board',
+      'Regional Polytechnic College',
+      'State University',
+      'University Admissions',
+      'Employer',
+    ];
     for (const entity of showcaseEntities()) {
       const did = entity.match(/^\s*did: '([^']+)'/m)?.[1] || '';
       if (did.split(':').length > 3) continue; // pinned to one deployment: a party name is correct
@@ -166,6 +177,19 @@ describe('the vendored wallet names the right verifier', () => {
         false,
         `the host-scoped entry '${did}' is named '${name}', so it will claim every other party minted on that host`,
       );
+    }
+  });
+
+  test('each Education relying party presents as itself', () => {
+    guard();
+    // DEMO.md §2 and §3: the learner presents to the university and then to the
+    // employer in one sitting. Whichever entry matched first would name both, so
+    // a missing entry here does not fail — it silently mislabels one of them.
+    const names = showcaseEntities()
+      .map((e) => e.match(/^\s*name: '([^']+)'/m)?.[1])
+      .filter(Boolean);
+    for (const party of ['University Admissions', 'Employer']) {
+      assert.ok(names.includes(party), `no trusted DID entity names '${party}'`);
     }
   });
 
@@ -255,6 +279,66 @@ describe('the vendored wallet trusts both Agriculture registries', () => {
     assert.ok(entities.length > 0, 'expected to find the showcase issuer entities');
     for (const { issuer, block } of entities) {
       assert.match(block, /demo: true/, `showcase issuer ${issuer} is not marked demo: true`);
+    }
+  });
+});
+
+
+// The issuance side for Iteration 03. A learner holds THREE credentials from
+// three institutions that have never heard of each other, and the trust screen
+// they read before accepting each one is drawn entirely from these entries.
+//
+// This list has one more way to go wrong than Agriculture's did, and it is the
+// reason the correlation check is worth anything: if the three institutions were
+// not three distinct issuers to the wallet, "three independent authorities named
+// the same learner" would be a claim about one issuer talking to itself.
+describe('the vendored wallet trusts all three Education institutions', () => {
+  test('each institution the deployment runs is a trusted issuer entity', () => {
+    guard();
+    const issuers = trustedIssuers().map((e) => e.issuer);
+    for (const path of ['/school', '/college', '/university']) {
+      assert.ok(
+        issuers.some((issuer) => issuer.includes('sslip.io') && issuer.endsWith(path)),
+        `no trusted issuer entity ends in ${path}: the wallet would call that institution unknown`,
+      );
+    }
+  });
+
+  test('the three institutions are named distinctly, and none as the Age issuer', () => {
+    guard();
+    for (const path of ['/school', '/college', '/university']) {
+      const entity = showcaseIssuers().find((e) => e.issuer.endsWith(path));
+      assert.ok(entity, `no showcase issuer entity for ${path}`);
+      const name = entity.block.match(/^\s*name: '([^']+)'/m)?.[1];
+      assert.doesNotMatch(
+        name ?? '',
+        /Identity Authority|Registry/,
+        `${path} is presented as another iteration's issuer ('${name}')`,
+      );
+    }
+    // Distinctness across ALL showcase issuers, not just these three: five
+    // issuers now share one host, and two entries carrying one name would pass
+    // every other check here while failing the thing the demo has to show.
+    const names = showcaseIssuers()
+      .map((e) => e.block.match(/^\s*name: '([^']+)'/m)?.[1])
+      .filter(Boolean);
+    assert.equal(new Set(names).size, names.length, `showcase issuers share a name: ${names.join(', ')}`);
+  });
+
+  test('the three institutions are more specific than the host-scoped fallback', () => {
+    guard();
+    // The generic shadowing test above proves no entry is shadowed by ANY earlier
+    // prefix. This one states the specific consequence for Education, so a future
+    // reordering fails with the reason rather than only the rule: matching is
+    // `issuer.startsWith(e.issuer)` resolved by the first hit, so the host-scoped
+    // Age entry claims all three if it is listed first, and a learner collecting a
+    // degree is told the National Identity Authority issued it.
+    const entities = trustedIssuers();
+    const hostOnly = entities.findIndex((e) => /sslip\.io\/?$/.test(e.issuer));
+    assert.notEqual(hostOnly, -1, 'expected a host-scoped showcase fallback');
+    for (const path of ['/school', '/college', '/university']) {
+      const at = entities.findIndex((e) => e.issuer.endsWith(path));
+      assert.ok(at !== -1 && at < hostOnly, `${path} must be listed before the host-scoped fallback`);
     }
   });
 });
