@@ -48,6 +48,20 @@ cadastres or customary-tenure records. India's
 and [DILRMP](https://dolr.gov.in/en/programmes-schemes/dilrmp-2/) are concrete
 examples of these broader registry categories.
 
+```mermaid
+flowchart LR
+  F[Farmer] -->|Authenticates| IDP[Identity provider]
+  IDP --> FR[Farmer Registry]
+  IDP --> LR[Land Registry]
+  FR -->|Farmer credential| W[Farmer wallet]
+  LR -->|Land credential| W
+  B[Bank or lender] -->|Requests both credentials| W
+  W -->|Consent and selected claims| B
+  B --> V[Verify trust, holder and Farmer ID]
+  V --> P[Apply crop and acreage policy]
+  P --> O[Eligibility and maximum amount]
+```
+
 ## The application
 
 The application allows each authority to remain responsible for its own records
@@ -114,6 +128,13 @@ The bank requests both credentials in one transaction. Verification confirms:
 - disclosure of only the required claims.
 
 The lending rule runs only after these checks succeed.
+
+## Watch the rural-credit application
+
+> **Demonstration video placeholder** — Show Farmer and Land credential
+> issuance, both cards surviving a wallet restart, bank QR verification,
+> minimum disclosure, the loan calculation, ineligible and mismatched-record
+> outcomes, and consent refusal. Replace this block with the public video URL.
 
 ## Experience demonstrated
 

@@ -41,6 +41,18 @@ not imply participation in or endorsement of this demonstration. For reference,
 [UIDAI operates India's Aadhaar identity ecosystem](https://www.uidai.gov.in/en/about-uidai/unique-identification-authority-of-india.html),
 while [Singpass is Singapore's national digital identity provider](https://docs.developer.singpass.gov.sg/docs/introduction/overview-of-singpass).
 
+```mermaid
+flowchart LR
+  C[Citizen] -->|Authenticates| IDP[Identity provider]
+  IDP --> IA[Identity authority and registry]
+  IA -->|Issues age credential| W[Citizen wallet]
+  S[Age-restricted service] -->|Requests age condition| W
+  W -->|Consent and selective proof| S
+  S --> D{Age rule}
+  D -->|Satisfied| A[Access approved]
+  D -->|Not satisfied| N[Access denied]
+```
+
 ## The application
 
 The application turns an authoritative identity record into a reusable,
@@ -83,6 +95,13 @@ the required assertion while withholding other claims.
 
 The verifier checks the credential signature, trusted issuer, holder binding,
 audience, nonce and transaction state before applying the age-access rule.
+
+## Watch the age-verification application
+
+> **Demonstration video placeholder** — Show direct wallet issuance, web QR
+> verification, same-device deep-link verification, the consent screen, minimum
+> disclosure, and both approved and denied outcomes. Replace this block with the
+> public video URL when available.
 
 ## Experience demonstrated
 

@@ -8,6 +8,23 @@ service or decision.
 These applications show how the same Registry and Credential foundation can be
 adapted to very different sectors.
 
+```mermaid
+flowchart LR
+  A[Age and identity] --> R[Sunbird RC Registry and Credentials]
+  G[Agriculture and land] --> R
+  E[Education and employment] --> R
+  R --> W[Standards-compatible wallets]
+  W --> V[Web and mobile services]
+  V --> O[Trusted decisions with minimum disclosure]
+```
+
+## Watch: Sunbird RC across sectors
+
+> **Overview video placeholder** — A short visual introduction should show the
+> three sector problems, the common Registry → Credential → Wallet → Verifier
+> pattern, and the working applications. Replace this block with the public
+> YouTube, Vimeo or other GitBook-compatible video URL.
+
 ## Explore the applications
 
 ### Privacy-preserving age verification
@@ -87,3 +104,6 @@ Sunbird RC resources to examine schemas, configuration, APIs and working code.
 > These applications use synthetic data and simplified policies to demonstrate
 > capabilities. They are reference patterns, not production deployments or
 > sector-policy recommendations.
+
+See the [visual and video plan](media-plan.md) for the assets required before
+publication.

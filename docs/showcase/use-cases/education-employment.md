@@ -54,6 +54,22 @@ and employment use, while India's
 [DigiLocker National Academic Depository](https://nad.digilocker.gov.in/about)
 provides another model for authentic digital academic awards.
 
+```mermaid
+flowchart LR
+  L[Learner] --> S[School issuer]
+  L --> C[College issuer]
+  L --> U[University issuer]
+  S -->|School credential| W[Learner wallet]
+  C -->|College credential| W
+  U -->|University credential| W
+  M[Master's institution] -->|Requests three credentials| W
+  J[Employer] -->|Requests three credentials| W
+  W -->|Consented presentation| M
+  W -->|Consented presentation| J
+  M --> MA[Admission-pool eligibility]
+  J --> JA[Interview-round eligibility]
+```
+
 ## The application
 
 The application creates a connected learner journey while preserving the
@@ -118,6 +134,14 @@ not need to be disclosed.
 The wallet can present the same credentials to different verifiers. Verification
 of signatures, issuers, holder and correlation is reusable; the Master's and job
 rules remain separate application policies.
+
+## Watch the education application
+
+> **Video placeholder — in development** — The final video should show all three
+> credentials being issued and stored, followed by a Master's application and a
+> job application using the same credentials. It should include eligible,
+> ineligible, verification-rejection and refusal outcomes. Replace this block
+> only after the working application is accepted.
 
 ## Intended experience
 
