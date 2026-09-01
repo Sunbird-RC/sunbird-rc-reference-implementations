@@ -28,6 +28,13 @@ import {
   LAND_CLAIMS,
 } from './domains/agriculture/index.mjs';
 import { formatIndianRupees } from './domains/agriculture/money.mjs';
+import {
+  educationCredentialRequests,
+  decideEducation,
+  POLICIES as EDUCATION_POLICIES,
+  ACCEPTED_FIELDS,
+  NEVER_REQUESTED,
+} from './domains/education/index.mjs';
 import QRCode from 'qrcode-svg';
 
 const PORT = Number(process.env.PORT || 4300);
@@ -35,6 +42,9 @@ const PUBLIC_URL = (process.env.PUBLIC_URL || 'http://localhost').replace(/\/+$/
 const AGE_VCT = process.env.AGE_VCT || `${PUBLIC_URL}/vct/age-verification-credential`;
 const FARMER_VCT = process.env.FARMER_VCT || `${PUBLIC_URL}/vct/farmer-identity-credential`;
 const LAND_VCT = process.env.LAND_VCT || `${PUBLIC_URL}/vct/land-ownership-credential`;
+const SCHOOL_VCT = process.env.SCHOOL_VCT || `${PUBLIC_URL}/vct/school-record-credential`;
+const COLLEGE_VCT = process.env.COLLEGE_VCT || `${PUBLIC_URL}/vct/college-record-credential`;
+const UNIVERSITY_VCT = process.env.UNIVERSITY_VCT || `${PUBLIC_URL}/vct/university-record-credential`;
 const TRUST_POLICY_FILE = process.env.TRUST_POLICY_FILE || '/app/config/trust/issuers.json';
 const CROP_POLICY_FILE = process.env.CROP_POLICY_FILE || '/app/config/policy/crop-rates.json';
 const ALG_POLICY_FILE = process.env.ALG_POLICY_FILE || '/app/config/policy/algorithms.json';
@@ -61,6 +71,20 @@ const signers = {
   bank: oid4vcClient({
     baseUrl:
       process.env.OID4VC_BANK_BASE_URL || process.env.OID4VC_BASE_URL || 'http://oid4vc-service:3400',
+  }),
+  // Iteration 03's two relying parties. A university admissions office and an
+  // employer are as different from each other as either is from the bank, and
+  // the learner presents to both from the same wallet in the same demo — so if
+  // they shared a key, the second consent screen would name the first party.
+  universityAdmissions: oid4vcClient({
+    baseUrl:
+      process.env.OID4VC_UNIVERSITY_VP_BASE_URL ||
+      process.env.OID4VC_BASE_URL ||
+      'http://oid4vc-service:3400',
+  }),
+  employer: oid4vcClient({
+    baseUrl:
+      process.env.OID4VC_EMPLOYER_VP_BASE_URL || process.env.OID4VC_BASE_URL || 'http://oid4vc-service:3400',
   }),
 };
 // Health and readiness stay the age instance's: it is the one every deployment
@@ -97,6 +121,101 @@ function sanitiseDiagnostic(message) {
 }
 
 /**
+ * Strips the protocol-level issuer claim from a disclosed claim set.
+ *
+ * `iss` arrives with every credential and is consumed by the trust check; it is
+ * not something the holder chose to disclose, so listing it under "shared with
+ * us" would overstate what the learner gave away.
+ */
+function holderDisclosed(claims) {
+  const { [ISSUER_CLAIM]: _issuer, ...rest } = claims;
+  return rest;
+}
+
+/**
+ * One Education use case, from a policy id and a signing identity.
+ *
+ * Both portals ask the same three issuers for the same three credential types.
+ * Everything that differs — which claims are requested, which thresholds apply,
+ * what the eligible wording is — comes out of POLICIES, so the two use cases
+ * cannot drift apart in behaviour that PRODUCT says is shared, and cannot
+ * accidentally converge on behaviour PRODUCT says differs.
+ */
+function educationUseCase(policyId, signer) {
+  const policy = EDUCATION_POLICIES[policyId];
+  if (!policy) throw new Error(`unknown education policy ${policyId}`);
+  const requests = () =>
+    educationCredentialRequests({
+      policy: policyId,
+      schoolVct: SCHOOL_VCT,
+      collegeVct: COLLEGE_VCT,
+      universityVct: UNIVERSITY_VCT,
+    });
+
+  return {
+    signer,
+    requests,
+    describe: () => `requesting the school, college and university credentials for ${policy.purpose}`,
+    requestedClaims: () => policy.claims,
+    decide: (verified) => decideEducation(verified, policyId),
+    respond: (outcome, { status, issuer, verified }) => ({
+      state: 'decided',
+      decision: outcome.outcome,
+      reason: outcome.reason,
+      checks: status.checks,
+      issuer,
+      policy: policy.id,
+      purpose: policy.purpose,
+      // The exact wording PRODUCT specifies, from the policy rather than from
+      // this file: 'eligible to apply' is not admission and 'round one' is not
+      // employment, and a paraphrase written at the response layer is how that
+      // distinction gets lost.
+      headline: outcome.headline,
+      detail: outcome.detail,
+      learnerId: outcome.learnerId,
+      thresholds: outcome.thresholds ?? policy.thresholds,
+      // The percentages the decision compared, already formatted, and the one
+      // that fell short. Published so a page never formats a percentage itself:
+      // the module that owns the arithmetic owns how it reads, exactly as the
+      // bank's money is formatted in one place.
+      verified: outcome.verified,
+      shortfall: outcome.shortfall,
+      // Everything the learner disclosed, per credential, with the protocol
+      // issuer claim removed. Kept per credential rather than merged: learnerId
+      // appearing three times is the correlation the verifier checked, and
+      // flattening it would hide the one fact the screen most needs to show.
+      disclosed: {
+        school: holderDisclosed(verified.school),
+        college: holderDisclosed(verified.college),
+        university: holderDisclosed(verified.university),
+      },
+    }),
+    policy: () => ({
+      policy: policy.id,
+      purpose: policy.purpose,
+      credentialTypes: { school: SCHOOL_VCT, college: COLLEGE_VCT, university: UNIVERSITY_VCT },
+      requestedClaims: policy.claims,
+      protocolClaims: [ISSUER_CLAIM],
+      thresholds: policy.thresholds,
+      acceptedFieldsOfStudy: ACCEPTED_FIELDS,
+      // Published so a reader can see that the job portal does not ask for the
+      // school or college percentage, rather than taking the page's word for it.
+      notRequested: Object.fromEntries(
+        Object.entries(EDUCATION_POLICIES.masters.claims).map(([role, all]) => [
+          role,
+          all.filter((claim) => !policy.claims[role].includes(claim)),
+        ]),
+      ),
+      // What NEITHER portal asks for. Served rather than written into the page,
+      // so a privacy claim on screen cannot outrun the request behind it.
+      neverRequested: NEVER_REQUESTED,
+      trustedIssuers: trust.issuers.map((i) => ({ name: i.name, roles: i.roles })),
+      approvedAlgorithms: algPolicy.approved,
+    }),
+  };
+}
+
+/**
  * The use cases this verifier serves.
  *
  * A use case declares which credentials it asks for and what the verified
@@ -109,6 +228,25 @@ const USE_CASES = {
     signer: 'age',
     requests: () => [ageCredentialRequest({ vct: AGE_VCT })],
     describe: () => `requesting ${AGE_CLAIM} only`,
+    requestedClaims: () => [AGE_CLAIM],
+    decide: (verified, session) => decideAge(verified[session.requests[0].id]),
+    respond: (outcome, { status, issuer, verified, session }) => ({
+      state: 'decided',
+      decision: outcome.decision,
+      reason: outcome.reason,
+      checks: status.checks,
+      issuer,
+      // The claim the holder chose to disclose, and nothing else. holderDid is
+      // available upstream and deliberately not surfaced or logged.
+      disclosed: { [AGE_CLAIM]: verified[session.requests[0].id][AGE_CLAIM] },
+    }),
+    policy: () => ({
+      credentialType: AGE_VCT,
+      requestedClaims: [AGE_CLAIM],
+      protocolClaims: [ISSUER_CLAIM],
+      trustedIssuers: trust.issuers.map((i) => i.name),
+      approvedAlgorithms: algPolicy.approved,
+    }),
   },
   agriculture: {
     // The bank is a different party from the age-restricted service, so it signs
@@ -116,7 +254,72 @@ const USE_CASES = {
     signer: 'bank',
     requests: () => agricultureCredentialRequests({ farmerVct: FARMER_VCT, landVct: LAND_VCT }),
     describe: () => 'requesting the farmer and land credentials',
+    requestedClaims: () => ({ farmer: FARMER_CLAIMS, land: LAND_CLAIMS }),
+    decide: (verified) => decideFarmCredit({ farmer: verified.farmer, land: verified.land }, cropPolicy),
+    respond: (outcome, { status, issuer, verified }) => ({
+      state: 'decided',
+      decision: outcome.outcome,
+      reason: outcome.reason,
+      checks: status.checks,
+      issuer,
+      // EVERYTHING the farmer disclosed, not merely the inputs the policy
+      // happened to use. The page prints this under "Shared with us" next to
+      // the list of claims that were withheld, so a short list here does not
+      // read as brevity — it reads as a stronger privacy guarantee than the
+      // request actually made. It listed three claims of the five distinct
+      // ones that arrived until this was fixed.
+      //
+      // farmerId is taken from the FARMER credential specifically, and the
+      // land credential's copy is not spread over it: when the two disagree
+      // the decision is CORRELATION_FAILED, and a merge would quietly display
+      // one farmer id for a presentation that carried two.
+      disclosed: {
+        farmerId: verified.farmer.farmerId,
+        registeredFarmer: verified.farmer.registeredFarmer,
+        ...(verified.land
+          ? {
+              ownershipStatus: verified.land.ownershipStatus,
+              cropType: verified.land.cropType,
+              cultivatedAreaAcres: verified.land.cultivatedAreaAcres,
+            }
+          : {}),
+      },
+      loan:
+        outcome.outcome === 'ELIGIBLE'
+          ? {
+              ratePerAcre: outcome.ratePerAcre,
+              // Formatted here as well as the total, because the mobile
+              // verifier runs on Hermes, where Intl is not guaranteed and
+              // Number.toLocaleString('en-IN') silently falls back to plain
+              // grouping — so the phone would print a different figure from the
+              // web page for the same decision. Money is formatted in one
+              // place, by the service that owns the policy.
+              ratePerAcreFormatted: formatIndianRupees(outcome.ratePerAcre),
+              maximumLoan: outcome.maximumLoan,
+              maximumLoanFormatted: formatIndianRupees(outcome.maximumLoan),
+              currency: cropPolicy.currency,
+            }
+          : undefined,
+    }),
+    policy: () => ({
+      credentialTypes: { farmer: FARMER_VCT, land: LAND_VCT },
+      requestedClaims: { farmer: FARMER_CLAIMS, land: LAND_CLAIMS },
+      protocolClaims: [ISSUER_CLAIM],
+      cropRates: Object.fromEntries(cropPolicy.crops.map((crop) => [crop, cropPolicy.rate(crop)])),
+      maxRatePerAcre: cropPolicy.maxRatePerAcre,
+      currency: cropPolicy.currency,
+      trustedIssuers: trust.issuers.map((i) => ({ name: i.name, roles: i.roles })),
+      approvedAlgorithms: algPolicy.approved,
+    }),
   },
+  // Iteration 03. Two use cases over the SAME three credentials, which is the
+  // whole argument: one learner, one wallet, two relying parties, two different
+  // requests and two different answers. They are built from one factory because
+  // nothing distinguishes them but the policy id — if they needed separate code
+  // paths, the claim that disclosure follows purpose would be a coincidence of
+  // two implementations rather than a property of one.
+  'education/masters': educationUseCase('masters', 'universityAdmissions'),
+  'education/job': educationUseCase('job', 'employer'),
 };
 
 /**
@@ -161,8 +364,7 @@ async function createSession(useCaseName = 'age') {
 
   console.log(`[verifier] session ${session.id} created (${useCaseName}); ${useCase.describe()}`);
 
-  const requestedClaims =
-    useCaseName === 'age' ? [AGE_CLAIM] : { farmer: FARMER_CLAIMS, land: LAND_CLAIMS };
+  const requestedClaims = useCase.requestedClaims();
 
   return {
     status: 201,
@@ -311,18 +513,19 @@ async function readSession(sessionId) {
     issuerNames.push(trusted.issuer.name);
   }
 
-  // 4. Business rule, on verified claims only.
+  // 4. Business rule, on verified claims only. Which rule, and how its answer is
+  //    shaped for a client, are the use case's own business — steps 1-3 above are
+  //    identical for all four, which is the reusability claim made good.
   //
   //    Holder binding across the whole presentation is proven upstream and
   //    asserted in step 1: oid4vc-service checks the Key Binding JWT for the
-  //    presentation, so two credentials arriving in one VP token are held by one
-  //    wallet key. That is what lets the Agriculture module treat matching
-  //    farmerId as correlation rather than coincidence.
+  //    presentation, so two or three credentials arriving in one VP token are
+  //    held by one wallet key. That is what lets a domain module treat a matching
+  //    farmerId or learnerId as correlation rather than coincidence.
+  const useCase = USE_CASES[session.useCase] || USE_CASES.age;
   let outcome;
   try {
-    outcome = session.useCase === 'agriculture'
-      ? decideFarmCredit({ farmer: verified.farmer, land: verified.land }, cropPolicy)
-      : decideAge(verified[session.requests[0].id]);
+    outcome = useCase.decide(verified, session);
   } catch (err) {
     // A malformed claim or broken correlation is a verification problem, not a
     // business answer. PRODUCT is explicit that it must not be presented as
@@ -332,74 +535,14 @@ async function readSession(sessionId) {
   }
 
   const issuer = issuerNames.length === 1 ? issuerNames[0] : issuerNames;
+  const body = useCase.respond(outcome, { status, issuer, verified, session });
 
-  if (session.useCase === 'agriculture') {
-    console.log(`[verifier] session ${sessionId} ${outcome.outcome} (issuers ${issuerNames.join(', ')})`);
-    return {
-      status: 200,
-      body: {
-        state: 'decided',
-        decision: outcome.outcome,
-        reason: outcome.reason,
-        checks: status.checks,
-        issuer,
-        // EVERYTHING the farmer disclosed, not merely the inputs the policy
-        // happened to use. The page prints this under "Shared with us" next to
-        // the list of claims that were withheld, so a short list here does not
-        // read as brevity — it reads as a stronger privacy guarantee than the
-        // request actually made. It listed three claims of the five distinct
-        // ones that arrived until this was fixed.
-        //
-        // farmerId is taken from the FARMER credential specifically, and the
-        // land credential's copy is not spread over it: when the two disagree
-        // the decision is CORRELATION_FAILED, and a merge would quietly display
-        // one farmer id for a presentation that carried two.
-        disclosed: {
-          farmerId: verified.farmer.farmerId,
-          registeredFarmer: verified.farmer.registeredFarmer,
-          ...(verified.land
-            ? {
-                ownershipStatus: verified.land.ownershipStatus,
-                cropType: verified.land.cropType,
-                cultivatedAreaAcres: verified.land.cultivatedAreaAcres,
-              }
-            : {}),
-        },
-        loan:
-          outcome.outcome === 'ELIGIBLE'
-            ? {
-                ratePerAcre: outcome.ratePerAcre,
-                // Formatted here as well as the total, because the mobile
-                // verifier runs on Hermes, where Intl is not guaranteed and
-                // Number.toLocaleString('en-IN') silently falls back to plain
-                // grouping — so the phone would print a different figure from the
-                // web page for the same decision. Money is formatted in one
-                // place, by the service that owns the policy.
-                ratePerAcreFormatted: formatIndianRupees(outcome.ratePerAcre),
-                maximumLoan: outcome.maximumLoan,
-                maximumLoanFormatted: formatIndianRupees(outcome.maximumLoan),
-                currency: cropPolicy.currency,
-              }
-            : undefined,
-      },
-    };
-  }
+  console.log(
+    `[verifier] session ${sessionId} ${body.decision} ` +
+      `(issuer${issuerNames.length === 1 ? '' : 's'} ${issuerNames.join(', ')})`,
+  );
 
-  console.log(`[verifier] session ${sessionId} ${outcome.decision} (issuer ${issuer})`);
-
-  return {
-    status: 200,
-    body: {
-      state: 'decided',
-      decision: outcome.decision,
-      reason: outcome.reason,
-      checks: status.checks,
-      issuer,
-      // The claim the holder chose to disclose, and nothing else. holderDid is
-      // available upstream and deliberately not surfaced or logged.
-      disclosed: { [AGE_CLAIM]: verified[session.requests[0].id][AGE_CLAIM] },
-    },
-  };
+  return { status: 200, body };
 }
 
 const server = createServer(async (req, res) => {
@@ -424,39 +567,28 @@ const server = createServer(async (req, res) => {
       await oid4vc.health();
       return send(200, { status: 'UP', oid4vc: 'UP' });
     }
-    if (req.method === 'GET' && path === '/policy') {
-      // What this verifier asks for, so the demo can show the request is
-      // minimal without taking the UI's word for it.
-      return send(200, {
-        credentialType: AGE_VCT,
-        requestedClaims: [AGE_CLAIM],
-        protocolClaims: [ISSUER_CLAIM],
-        trustedIssuers: trust.issuers.map((i) => i.name),
-        approvedAlgorithms: algPolicy.approved,
-      });
+    // Every use case publishes what it asks for and the policy behind the answer
+    // it will give, so a demo can prove the request is minimal and the rule fixed
+    // rather than taking a page's word for it. `/policy` without a prefix stays
+    // the Age one: it is a published surface Iteration 01 was accepted on.
+    if (req.method === 'GET' && (path === '/policy' || path === '/age/policy')) {
+      return send(200, USE_CASES.age.policy());
     }
-    if (req.method === 'GET' && path === '/agriculture/policy') {
-      // The bank's request and the lending policy behind the figure it will
-      // show, published so the demo can prove both are minimal and fixed rather
-      // than asserted by the page.
-      return send(200, {
-        credentialTypes: { farmer: FARMER_VCT, land: LAND_VCT },
-        requestedClaims: { farmer: FARMER_CLAIMS, land: LAND_CLAIMS },
-        protocolClaims: [ISSUER_CLAIM],
-        cropRates: Object.fromEntries(cropPolicy.crops.map((crop) => [crop, cropPolicy.rate(crop)])),
-        maxRatePerAcre: cropPolicy.maxRatePerAcre,
-        currency: cropPolicy.currency,
-        trustedIssuers: trust.issuers.map((i) => ({ name: i.name, roles: i.roles })),
-        approvedAlgorithms: algPolicy.approved,
-      });
+    if (req.method === 'GET' && path.endsWith('/policy')) {
+      const useCase = USE_CASES[path.slice(1, -'/policy'.length)];
+      if (useCase) return send(200, useCase.policy());
     }
-    if (req.method === 'POST' && path === '/sessions') {
+    // POST /sessions stays the Age one, for the same reason.
+    if (req.method === 'POST' && (path === '/sessions' || path === '/age/sessions')) {
       const result = await createSession('age');
       return send(result.status, result.body);
     }
-    if (req.method === 'POST' && path === '/agriculture/sessions') {
-      const result = await createSession('agriculture');
-      return send(result.status, result.body);
+    if (req.method === 'POST' && path.endsWith('/sessions')) {
+      const name = path.slice(1, -'/sessions'.length);
+      if (USE_CASES[name]) {
+        const result = await createSession(name);
+        return send(result.status, result.body);
+      }
     }
     const cancelMatch = CANCEL_PATH.exec(path);
     if (req.method === 'POST' && cancelMatch) {
@@ -481,7 +613,9 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(
     `[verifier] listening on ${PORT}; trusting ${trust.issuers.length} issuer(s); ` +
+      `use cases ${Object.keys(USE_CASES).join(', ')}; ` +
       `age vct=${AGE_VCT}; agriculture vcts=${FARMER_VCT}, ${LAND_VCT}; ` +
+      `education vcts=${SCHOOL_VCT}, ${COLLEGE_VCT}, ${UNIVERSITY_VCT}; ` +
       `crops=${cropPolicy.crops.join(',')}`,
   );
 });
