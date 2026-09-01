@@ -225,11 +225,31 @@ export const trustedDidEntities = [
     url: 'https://135.235.192.9.sslip.io/verifier/',
     demo: true,
   },
+  // The BANK, a different party from the age-restricted service and therefore a
+  // different DID. Before the host-scoped fallback below: matching is a prefix
+  // match resolved by the first hit, so a fallback listed above this would claim
+  // the bank and a farmer applying for crop credit would be asked to trust
+  // "Age Check" — which is exactly the defect this entry and the separate
+  // BANK_VERIFIER_DID exist to fix.
+  {
+    entityId: 'did:web:135.235.192.9.sslip.io:bec7ef08-3914-4260-a7a5-195426258c82',
+    did: 'did:web:135.235.192.9.sslip.io:bec7ef08-3914-4260-a7a5-195426258c82',
+    logoUri: 'https://135.235.192.9.sslip.io/assets/logos/gramin-bank.png',
+    name: 'Gramin Bank',
+    url: 'https://135.235.192.9.sslip.io/bank/',
+    demo: true,
+  },
   {
     entityId: 'did:web:135.235.192.9.sslip.io',
     did: 'did:web:135.235.192.9.sslip.io',
     logoUri: 'https://135.235.192.9.sslip.io/assets/logos/age-check.png',
-    name: 'Age Check',
+    // Names the DEPLOYMENT, not a party. Two verifiers now sign from this host —
+    // the age-restricted service and the bank — so a party name here would be
+    // wrong for one of them, and it was: this entry read 'Age Check' and would
+    // have claimed the bank's re-minted DID after any re-bootstrap. The exact
+    // entries above are what name a party; this only keeps a re-provisioned
+    // deployment from reading "Organization not verified".
+    name: 'Sunbird RC showcase (demo deployment)',
     url: 'https://135.235.192.9.sslip.io/verifier/',
     demo: true,
   },
@@ -274,6 +294,34 @@ export const trustedOpenId4VciIssuerEntities = [
     logoUri: 'https://playground.paradym.id/logo.png',
     name: 'Paradym Playground',
     url: 'https://playground.paradym.id',
+    demo: true,
+  },
+  // Sunbird RC Agriculture showcase — the two registries a farmer's wallet lists.
+  //
+  // These MUST come before the Age entry below. Matching is
+  // `issuer.startsWith(e.issuer)` and the first match wins, so the host-scoped
+  // Age entry would otherwise claim both of these — a farmer would be told the
+  // National Identity Authority was offering them a land credential. More
+  // specific prefixes first is the rule; the paths make them specific.
+  //
+  // Each registry is its own credential issuer, published under its own path by
+  // its own oid4vc-service instance, and each advertises only the credential it
+  // authored. Path-scoped rather than DID-scoped, which is what makes these
+  // entries survive a re-bootstrap: the paths are stable, the minted DIDs are not.
+  {
+    entityId: 'https://135.235.192.9.sslip.io/farmer',
+    issuer: 'https://135.235.192.9.sslip.io/farmer',
+    logoUri: 'https://135.235.192.9.sslip.io/assets/logos/farmer-registry.png',
+    name: 'Farmer Registry',
+    url: 'https://135.235.192.9.sslip.io/farmer',
+    demo: true,
+  },
+  {
+    entityId: 'https://135.235.192.9.sslip.io/land',
+    issuer: 'https://135.235.192.9.sslip.io/land',
+    logoUri: 'https://135.235.192.9.sslip.io/assets/logos/land-registry.png',
+    name: 'Land Registry',
+    url: 'https://135.235.192.9.sslip.io/land',
     demo: true,
   },
   // Sunbird RC Age showcase — the Age credential issuer. Its issuer metadata is

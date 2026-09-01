@@ -4,7 +4,7 @@
 recorded. Every line item in the consolidated validation is closed — see
 [VALIDATION.md](VALIDATION.md). Two known deviations remain, both recorded below
 and neither presented as verified: revocation is a default rather than a check,
-and the algorithm allowlist is recorded rather than enforced.
+and the algorithm allowlist, recorded rather than enforced at the time, is enforced as of Iteration 02.
 **Branch:** `iteration/age-01-verification`
 **Charter:** [`../../../iterations/01-age/CHARTER.md`](../../../iterations/01-age/CHARTER.md)
 **Implementation log:** [`../../../iterations/01-age/IMPLEMENTATION.md`](../../../iterations/01-age/IMPLEMENTATION.md)
@@ -317,7 +317,7 @@ Against [`CHARTER.md`](../../../iterations/01-age/CHARTER.md). `[x]` means run;
 - [x] Wrong holder key rejected
 - [x] Incorrect nonce or audience rejected
 - [x] Expired and replayed presentations rejected
-- [ ] Unapproved algorithm rejected — **recorded as a deviation, not enforced** (limitation 3)
+- [x] Unapproved algorithm rejected — **enforced since 31 Aug 2026** (Iteration 02); was limitation 3
 - [x] Captured evidence proves undisclosed claims do not reach the verifier
 - [x] Automated tests cover decision logic, mapping, issuance authorisation, verification failures, privacy and regression
 
@@ -340,11 +340,18 @@ Against [`CHARTER.md`](../../../iterations/01-age/CHARTER.md). `[x]` means run;
    signature. `services/verifier` enforces the allowlist, as DESIGN §4 and §6
    require. Demonstrated by the untrusted-issuer test, which passes every
    cryptographic check and is still refused. Worth reporting upstream.
-3. **The algorithm allowlist is absent by decision.** A presentation's JWS `alg`
-   is not observable through `/vp/status`, so a policy field for it would be a
-   control that does nothing. The constraint holds by construction
-   (identity-service signs SD-JWT VCs with ES256) and is recorded here instead of
-   being faked in code.
+3. **The algorithm allowlist was absent by decision — and is now enforced.**
+   *Superseded on 31 August 2026; kept here because it was an accepted Iteration
+   01 limitation and the record should show how it closed.*
+
+   At the time, a presentation's JWS `alg` was not observable through
+   `/vp/status`, so a policy field for it would have been a control that did
+   nothing; the constraint held by construction and was recorded rather than
+   faked. `oid4vc-service` now reports the algorithms it observed as `algs`, and
+   Iteration 02 enforces an ES256-only allowlist against it — see
+   [`docs/evidence/02-agriculture/ACCEPTANCE.md`](../02-agriculture/ACCEPTANCE.md)
+   §8. The verifier is shared, so **Age presentations are now algorithm-checked
+   too**, which the Age regression run confirms.
 4. **`revocation: OK` is a default, not a check** (`STATUS_LIST_ENABLED=false`).
    Out of scope per PRODUCT; must not be presented as verified revocation.
 5. **One database, separated by entity tables.** Per Anand's answer 10: the

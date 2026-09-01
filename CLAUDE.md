@@ -12,7 +12,8 @@ Read these before making changes, in this order:
 
 1. [`docs/project/PRODUCT.md`](docs/project/PRODUCT.md)
 2. [`docs/design/DESIGN.md`](docs/design/DESIGN.md)
-3. The active iteration charter under [`iterations/`](iterations/)
+3. The active iteration charter and its Product, Requirements, Design, and Demo
+   files under [`iterations/`](iterations/)
 4. Any active review feedback under [`docs/reviews/`](docs/reviews/)
 5. [`docs/project/WORKING-ENGAGEMENT-MODEL.md`](docs/project/WORKING-ENGAGEMENT-MODEL.md)
 6. [`docs/project/GIT-WORKING-MODEL.md`](docs/project/GIT-WORKING-MODEL.md)
@@ -51,6 +52,23 @@ Do not begin Iteration 03 implementation until Iteration 02 is accepted and
 merged, this branch is synchronized with the resulting `main`, and the Iteration
 03 Product and Design inputs are approved. Keep all questions, decisions,
 implementation, review feedback, and evidence on the same iteration branch.
+
+**Wallet, programme-wide.** Use the established customized Paradym-based wallet.
+Inji is outside the scope of the demo programme — see
+[`docs/reviews/DECISION-03-wallet-scope.md`](docs/reviews/DECISION-03-wallet-scope.md) —
+and must not be introduced as an Iteration 03 requirement, a deferred item, or a
+risk assigned to Education.
+
+### Iteration 02 — Agriculture (complete)
+
+Accepted and merged into `main` on 31 August 2026
+([`docs/reviews/ITERATION-02-SIGNOFF.md`](docs/reviews/ITERATION-02-SIGNOFF.md)).
+Its inputs remain the reference for anything that touches Agriculture code:
+
+1. [`iterations/02-agriculture/PRODUCT.md`](iterations/02-agriculture/PRODUCT.md)
+2. [`iterations/02-agriculture/REQUIREMENTS.md`](iterations/02-agriculture/REQUIREMENTS.md)
+3. [`iterations/02-agriculture/DESIGN.md`](iterations/02-agriculture/DESIGN.md)
+4. [`iterations/02-agriculture/DEMO.md`](iterations/02-agriculture/DEMO.md)
 
 ## Engineering Rules
 

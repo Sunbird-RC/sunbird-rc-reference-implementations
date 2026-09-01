@@ -25,8 +25,8 @@ The showcase should prove that common credential capabilities can support indepe
 
 ## Wallet Requirements
 
-- **Inji Wallet must complete at least one end-to-end use case.**
-- Other use cases may use Inji or suitable open-source, VC-compliant mobile wallets.
+- The demos use the established customized Paradym-based open-source wallet.
+- Inji interoperability is removed from the scope of all current demo iterations.
 - Across the showcase, wallets must support issuance/receipt, storage, credential selection, user consent, presentation, and the required web-to-mobile or mobile-to-mobile flows.
 - One wallet implementation is not required for every use case; multiple compliant wallets may be used to demonstrate interoperability.
 - For the revised Age iteration, the wallet must authenticate the citizen through Keycloak, show available issuers, let the citizen select the National Identity Authority, and request/fetch the credential directly from that issuer. Issuance must not use a QR code or an issuer-counter web page.
@@ -99,7 +99,7 @@ The wallet identifies credentials relevant to the verifier request without expos
 The showcase is accepted when:
 
 - All three use cases complete the end-to-end credential lifecycle.
-- Inji Wallet completes at least one full use case.
+- The selected wallet completes every required lifecycle and interaction pattern.
 - Web QR-based cross-device verification works.
 - A mobile verifier experience works.
 - Selective disclosure reveals only requested claims and requires consent.

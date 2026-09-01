@@ -17,6 +17,7 @@ services:
       - ./nginx/routes-ops.conf:/etc/nginx/routes-ops.conf:ro
       - ./nginx/routes-denied.conf:/etc/nginx/routes-denied.conf:ro
       - ../services/verifier-web:/usr/share/nginx/html/verifier:ro
+      - ../services/bank-web:/usr/share/nginx/html/bank:ro
       - ../services/web-assets:/usr/share/nginx/html/assets:ro
       # Read-only: nginx serves the certificate, certbot owns it.
       - /etc/letsencrypt:/etc/letsencrypt:ro

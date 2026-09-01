@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "FarmerRecord": {
+      "$ref": "#/definitions/FarmerRecord"
+    }
+  },
+  "required": ["FarmerRecord"],
+  "title": "FarmerRecord",
+  "definitions": {
+    "FarmerRecord": {
+      "$id": "#/properties/FarmerRecord",
+      "type": "object",
+      "title": "FarmerRecord",
+      "description": "Authoritative source record held by the Farmer Registry, and the ONLY source of a FarmerIdentityCredential's claims. services/farmer-issuer resolves the AUTHENTICATED national id to exactly one record here; neither a wallet nor a caller may supply or select farmerId. Synthetic data only: see scripts/seed-agriculture.sh. This entity belongs to the Agriculture use case alone — DESIGN forbids a shared cross-domain person table, so it must not read or extend AgeCitizen, and the Land Registry must not read it.",
+      "required": ["farmerId", "nationalId", "registeredFarmer"],
+      "properties": {
+        "farmerId": {
+          "type": "string",
+          "title": "Farmer ID",
+          "description": "The Agriculture correlation identifier, e.g. FRM-KA-0041. This is the value a bank correlates across the two credentials. Deliberately a different namespace and sequence from nationalId and landId: PRODUCT forbids treating any of the three as interchangeable."
+        },
+        "nationalId": {
+          "type": "string",
+          "title": "National ID",
+          "description": "Issuer-side lookup only, e.g. NAT-90018472. Matched against the authenticated Keycloak account's nationalId claim to decide whose credential may be issued. NEVER issued as a credential claim and never disclosed to the bank."
+        },
+        "registeredFarmer": {
+          "type": "boolean",
+          "title": "Registered farmer",
+          "description": "Whether the registry recognises this person as a registered farmer. A required input to the loan rule, and the reason a valid credential can still produce NOT ELIGIBLE."
+        },
+        "farmerCategory": {
+          "type": "string",
+          "title": "Farmer category",
+          "description": "Landholding category. Issued as a disclosable claim but never requested by the bank, which is what makes selective disclosure demonstrable rather than assumed.",
+          "enum": ["Marginal", "Small", "SemiMedium", "Medium", "Large"]
+        },
+        "district": {
+          "type": "string",
+          "title": "District",
+          "description": "Issued as a disclosable claim. Not requested by the bank."
+        },
+        "state": {
+          "type": "string",
+          "title": "State"
+        }
+      }
+    }
+  },
+  "_osConfig": {
+    "uniqueIndexFields": ["farmerId", "nationalId"],
+    "indexFields": ["district", "state"],
+    "ownershipAttributes": [],
+    "roles": [],
+    "inviteRoles": ["anonymous"],
+    "enableLogin": false,
+    "credentialTemplate": {}
+  }
+}

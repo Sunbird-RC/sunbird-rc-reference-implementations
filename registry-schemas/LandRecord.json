@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "LandRecord": {
+      "$ref": "#/definitions/LandRecord"
+    }
+  },
+  "required": ["LandRecord"],
+  "title": "LandRecord",
+  "definitions": {
+    "LandRecord": {
+      "$id": "#/properties/LandRecord",
+      "type": "object",
+      "title": "LandRecord",
+      "description": "Authoritative source record held by the Land Registry, and the ONLY source of a LandOwnershipCredential's claims. services/land-issuer resolves the AUTHENTICATED national id to its own farmerId mapping and then to exactly one owned land record; a caller may not select farmerId or landId. The Land Registry keeps its own nationalId mapping on purpose (DESIGN section 4): one issuer must not depend on another issuer's unsigned client state. Synthetic data only: see scripts/seed-agriculture.sh.",
+      "required": ["landId", "nationalId", "farmerId", "ownershipStatus", "landAreaAcres", "cropType", "cultivatedAreaAcres"],
+      "properties": {
+        "landId": {
+          "type": "string",
+          "title": "Land ID",
+          "description": "Identifies the owned land record, e.g. LAND-MYS-820137. A different namespace and sequence from nationalId and farmerId. Issued as a disclosable claim but never requested by the bank."
+        },
+        "nationalId": {
+          "type": "string",
+          "title": "National ID",
+          "description": "Issuer-side authentication lookup only, e.g. NAT-90018472. Matched against the authenticated account's nationalId claim. NEVER issued as a credential claim and never disclosed to the bank."
+        },
+        "farmerId": {
+          "type": "string",
+          "title": "Farmer ID",
+          "description": "The Agriculture relationship, e.g. FRM-KA-0041. Issued in this credential so that a bank can correlate it against the Farmer credential's farmerId. Correlation is checked only AFTER both credentials verify and are proven bound to the same holder — matching values alone are not sufficient."
+        },
+        "ownershipStatus": {
+          "type": "string",
+          "title": "Ownership status",
+          "description": "ACTIVE is required for eligibility. Any other value is a verified business answer, NOT a verification failure.",
+          "enum": ["ACTIVE", "INACTIVE", "DISPUTED", "TRANSFERRED"]
+        },
+        "landAreaAcres": {
+          "type": "number",
+          "title": "Total land area, acres",
+          "description": "The registry's total for the parcel. Issued as a disclosable claim but never requested by the bank: the loan uses cultivated area only, so total holding size stays with the farmer.",
+          "minimum": 0
+        },
+        "cropType": {
+          "type": "string",
+          "title": "Crop type",
+          "description": "Controlled demo vocabulary. The loan rate is looked up from version-controlled policy, so a crop outside the policy produces NOT ELIGIBLE rather than an error.",
+          "enum": ["PADDY", "WHEAT", "MAIZE", "COTTON", "SUGARCANE", "MILLET"]
+        },
+        "cultivatedAreaAcres": {
+          "type": "number",
+          "title": "Cultivated area, acres",
+          "description": "The authoritative input to the loan calculation. Must satisfy 0 <= cultivatedAreaAcres <= landAreaAcres; scripts/seed-agriculture.sh refuses to seed a record that breaks it, because the registry cannot express the cross-field rule itself.",
+          "minimum": 0
+        },
+        "district": {
+          "type": "string",
+          "title": "District",
+          "description": "Issued as a disclosable claim. Not requested by the bank."
+        },
+        "state": {
+          "type": "string",
+          "title": "State"
+        }
+      }
+    }
+  },
+  "_osConfig": {
+    "uniqueIndexFields": ["landId", "nationalId"],
+    "indexFields": ["farmerId", "district", "state"],
+    "ownershipAttributes": [],
+    "roles": [],
+    "inviteRoles": ["anonymous"],
+    "enableLogin": false,
+    "credentialTemplate": {}
+  }
+}

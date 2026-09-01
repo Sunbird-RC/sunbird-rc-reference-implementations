@@ -1,0 +1,24 @@
+{
+  "_comment": [
+    "Approved signature algorithms (REQUIREMENTS §8: 'validate credential",
+    "signatures and approved algorithms'). Anand's Option A: enforce the policy,",
+    "do not merely record it.",
+    "",
+    "Only what is listed here is accepted. An unapproved algorithm, an absent one,",
+    "or an unparseable one is a REJECTION, not a business answer — the same",
+    "treatment as an untrusted issuer.",
+    "",
+    "What makes this enforceable: oid4vc-service reports the algorithms it",
+    "observed on each presentation in /vp/status as `algs` (fork commit 1583b7bd).",
+    "`alg` lives in a JWS protected header and never reaches the claim set, so",
+    "before that change a relying party could not see it, and Iteration 01",
+    "recorded the allowlist as a deviation rather than shipping a control that",
+    "did nothing. That reporting exists now, so the control is real.",
+    "",
+    "ES256 only, because that is what identity-service signs SD-JWT VCs with and",
+    "what the wallet's holder keys use. Widening this list is a security decision",
+    "and belongs in review, which is why it is a version-controlled file and not",
+    "an environment variable."
+  ],
+  "approved": ["ES256"]
+}

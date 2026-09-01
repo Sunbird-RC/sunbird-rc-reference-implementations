@@ -1,0 +1,257 @@
+{
+  "realm": "agriculture",
+  "displayName": "Agriculture / Rural Credit (synthetic demo)",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "loginWithEmailAllowed": false,
+  "duplicateEmailsAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "failureFactor": 20,
+  "permanentLockout": false,
+  "maxDeltaTimeSeconds": 3600,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "waitIncrementSeconds": 30,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "requiredActions": [
+    {
+      "alias": "VERIFY_PROFILE",
+      "name": "Verify Profile",
+      "providerId": "VERIFY_PROFILE",
+      "enabled": false,
+      "defaultAction": false,
+      "priority": 90,
+      "config": {}
+    },
+    {
+      "alias": "UPDATE_PASSWORD",
+      "name": "Update Password",
+      "providerId": "UPDATE_PASSWORD",
+      "enabled": false,
+      "defaultAction": false,
+      "priority": 30,
+      "config": {}
+    }
+  ],
+  "defaultDefaultClientScopes": [
+    "farmer-record"
+  ],
+  "clientScopes": [
+    {
+      "name": "farmer-record",
+      "description": "Carries the nationalId claim both Agriculture issuers resolve to their own authoritative record. Each issuer looks it up in ITS OWN registry entity, so neither depends on the other's client state.",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "nationalId",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "protocol": "openid-connect",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "nationalId",
+            "claim.name": "nationalId",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "farmer-identity-credential",
+      "description": "OID4VCI scope for the Farmer Identity Credential, as advertised in the Farmer Registry's issuer metadata",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": []
+    },
+    {
+      "name": "land-ownership-credential",
+      "description": "OID4VCI scope for the Land Ownership Credential, as advertised in the Land Registry's issuer metadata",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": []
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "id.animo.paradym",
+      "name": "Sunbird Wallet",
+      "description": "The holder's wallet. Same public client id as the Age realm because it is the same installed application; the realms differ so that each use case's subject claim (nationalId here, citizenId there) belongs to exactly one purpose.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      },
+      "webOrigins": [
+        "+"
+      ],
+      "redirectUris": [
+        "https://98.70.36.106.sslip.io/wallet/redirect",
+        "https://paradym.id/invitation/redirect",
+        "https://paradymwallet.app/oauth2/redirect",
+        "id.animo.paradym:///wallet/redirect",
+        "http://135.235.192.9/wallet/redirect",
+        "https://135.235.192.9.sslip.io/wallet/redirect",
+        "http://localhost/wallet/redirect",
+        "http://localhost:3000/wallet/redirect"
+      ],
+      "defaultClientScopes": [
+        "farmer-record",
+        "profile",
+        "openid"
+      ],
+      "optionalClientScopes": [
+        "farmer-identity-credential",
+        "land-ownership-credential"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "farmer.ravi",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Ravi",
+      "lastName": "Kumar",
+      "email": "farmer-ravi@farmers.invalid",
+      "realmRoles": [
+        "default-roles-agriculture"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-90018472"
+        ]
+      }
+    },
+    {
+      "username": "farmer.lakshmi",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Lakshmi",
+      "lastName": "Devi",
+      "email": "farmer-lakshmi@farmers.invalid",
+      "realmRoles": [
+        "default-roles-agriculture"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-90023815"
+        ]
+      }
+    },
+    {
+      "username": "farmer.suresh",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Suresh",
+      "lastName": "Patil",
+      "email": "farmer-suresh@farmers.invalid",
+      "realmRoles": [
+        "default-roles-agriculture"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-90031164"
+        ]
+      }
+    },
+    {
+      "username": "farmer.geeta",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Geeta",
+      "lastName": "Bhosale",
+      "email": "farmer-geeta@farmers.invalid",
+      "realmRoles": [
+        "default-roles-agriculture"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-90042093"
+        ]
+      }
+    },
+    {
+      "username": "farmer.unregistered",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Kavya",
+      "lastName": "Reddy",
+      "email": "farmer-unregistered@farmers.invalid",
+      "realmRoles": [
+        "default-roles-agriculture"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-90066021"
+        ]
+      }
+    },
+    {
+      "username": "farmer.noland",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Anil",
+      "lastName": "Shetty",
+      "email": "farmer-noland@farmers.invalid",
+      "realmRoles": [
+        "default-roles-agriculture"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-90055010"
+        ]
+      }
+    },
+    {
+      "username": "farmer.norecord",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Vikram",
+      "lastName": "Rao",
+      "email": "farmer-norecord@farmers.invalid",
+      "realmRoles": [
+        "default-roles-agriculture"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-90099999"
+        ]
+      }
+    },
+    {
+      "username": "farmer.unmapped",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Unmapped",
+      "lastName": "Account",
+      "email": "farmer-unmapped@farmers.invalid",
+      "realmRoles": [
+        "default-roles-agriculture"
+      ]
+    }
+  ]
+}
