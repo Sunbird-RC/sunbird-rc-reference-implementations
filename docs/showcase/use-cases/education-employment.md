@@ -136,6 +136,38 @@ The wallet can present the same credentials to different verifiers. Verification
 of signatures, issuers, holder and correlation is reusable; the Master's and job
 rules remain separate application policies.
 
+## Credential lifecycle and sample data
+
+> **Synthetic demonstration data:** The learner, identifiers, results and
+> qualifications below are fictional. They are not real education records or
+> production credential schemas.
+
+| Credential stored in wallet | Illustrative claims |
+| --- | --- |
+| School Certificate | `learnerId: LRN-31009`, `status: PASSED`, `percentage: 72` |
+| College Certificate | `learnerId: LRN-31009`, `status: PASSED`, `percentage: 68` |
+| University Degree | `learnerId: LRN-31009`, `degree: BSc Computer Science`, `status: COMPLETED`, `percentage: 74` |
+
+```text
+School + College + University issue independently
+                    │
+                    ▼
+       Three credentials in learner wallet
+                    │ learner reviews request and consents
+          ┌─────────┴─────────┐
+          ▼                   ▼
+ Master's application     Job application
+          │                   │
+          └──── verify trust, holder and matching Learner ID
+                              │
+                              ▼
+                 Apply purpose-specific eligibility rule
+```
+
+The same credentials can be presented to different verifiers, but each
+verifier requests and uses only the claims needed for its published purpose.
+Successful verification does not itself mean admission or employment.
+
 ## Watch the education application
 
 > **Video placeholder — in development** — The final video should show all three

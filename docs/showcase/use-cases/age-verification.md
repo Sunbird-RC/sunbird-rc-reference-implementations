@@ -97,6 +97,39 @@ the required assertion while withholding other claims.
 The verifier checks the credential signature, trusted issuer, holder binding,
 audience, nonce and transaction state before applying the age-access rule.
 
+## Credential lifecycle and sample data
+
+> **Synthetic demonstration data:** The identifiers and values below are
+> fictional. They are not real people, official records or a production
+> credential schema.
+
+```text
+Identity Authority issues                 Wallet stores
+Age Verification Credential ────────────► Holder-bound SD-JWT
+        │
+        ▼ citizen consents
+Presented: { "ageOver18": true }
+        │
+        ▼
+Verifier checks issuer, signature, algorithm, holder and transaction
+        │
+        ▼
+Age-restricted service applies APPROVED or DENIED rule
+```
+
+Sample credential held in the wallet:
+
+```json
+{
+  "credentialId": "AGE-VC-10027",
+  "ageOver18": true,
+  "issuedAt": "2026-08-20"
+}
+```
+
+Only `ageOver18` is presented. The exact date of birth, National ID, address and
+other identity attributes are not shared with the verifier.
+
 ## Watch the age-verification application
 
 > **Demonstration video placeholder** — Show direct wallet issuance, web QR

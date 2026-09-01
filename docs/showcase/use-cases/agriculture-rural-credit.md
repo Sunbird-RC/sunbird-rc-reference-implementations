@@ -130,6 +130,35 @@ The bank requests both credentials in one transaction. Verification confirms:
 
 The lending rule runs only after these checks succeed.
 
+## Credential lifecycle and sample data
+
+> **Synthetic demonstration data:** The identifiers and values below are
+> fictional. They are not real people, land records or production credential
+> schemas.
+
+| Credential stored in wallet | Illustrative claims |
+| --- | --- |
+| Farmer Identity Credential | `farmerId: FMR-20481`, `registrationStatus: ACTIVE` |
+| Land Ownership Credential | `landId: LAND-78432`, `farmerId: FMR-20481`, `ownershipStatus: ACTIVE`, `cultivatedAcres: 3.5`, `cropType: WHEAT` |
+
+```text
+Farmer Registry ──issues Farmer credential──┐
+                                            ├─► Farmer wallet
+Land Registry ─────issues Land credential───┘        │ consent
+                                                     ▼
+Bank receives selected farmer, ownership, crop and acreage claims
+                                                     │
+                                                     ▼
+Verify issuers + signatures + holder + matching Farmer ID
+                                                     │
+                                                     ▼
+Apply the bank's crop-and-acreage lending rule
+```
+
+National ID, name, address, date of birth and unrelated land information are
+not presented. Verification establishes trustworthy inputs; the lending policy
+then determines eligibility and maximum loan.
+
 ## Watch the rural-credit application
 
 > **Demonstration video placeholder** — Show Farmer and Land credential
