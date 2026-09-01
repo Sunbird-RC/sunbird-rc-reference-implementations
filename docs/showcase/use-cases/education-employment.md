@@ -34,16 +34,25 @@ institutional registries or disclosing the learner's complete education record.
 
 ## Ecosystem actors
 
-| Actor | Responsibility |
-|---|---|
-| Learner | Authenticates, obtains credentials and controls their presentation |
-| School | Maintains school-completion records and issues School Certificates |
-| College | Maintains college records and issues College Diplomas |
-| University | Maintains degree records and issues University Degrees |
-| Identity provider | Authenticates the learner and supports issuer-side record lookup |
-| Wallet | Stores the three credentials and presents selected information |
-| Master's institution | Verifies education history and evaluates admission-pool eligibility |
-| Job provider | Verifies education history and evaluates interview-round eligibility |
+| Actor | Responsibility | Illustrative global examples |
+|---|---|---|
+| Learner | Authenticates, obtains credentials and controls their presentation | A student moving between school, vocational education, university, postgraduate study and employment—within one country or across borders |
+| School or awarding body | Maintains school-completion records and issues School Certificates | A public or private school, national examination board, State/provincial board, Cambridge-style awarding body or ministry of education |
+| College or training provider | Maintains diploma, vocational or undergraduate records and issues credentials | A community college, vocational institute, polytechnic, autonomous college or university-affiliated college |
+| University | Maintains degree records and issues University Degrees | A recognized public, private, federal, national or international university |
+| Recognition or accreditation body | Establishes whether an institution, programme or qualification is recognized | A national qualifications authority, accreditation agency, UGC or professional council in India, ENIC-NARIC centre in Europe, or the relevant regulated-profession body |
+| Identity provider | Authenticates the learner and supports issuer-side record lookup | An institution account, national eID such as Singpass or Aadhaar where legally permitted, or another government identity service; Keycloak performs this role in the demonstration |
+| Wallet | Stores the three credentials and presents selected information | A standards-compatible learner wallet; Europass in Europe and DigiLocker/NAD in India are real-world examples of digital academic-credential services, with different technical profiles |
+| Postgraduate institution | Verifies education history and evaluates admission-pool eligibility | A university, graduate school or other recognized higher-education institution receiving Master's applications |
+| Employer | Verifies education history and evaluates interview-round eligibility | A private company, public-sector organization, international employer, nonprofit or government recruitment body |
+
+These examples illustrate role categories across jurisdictions and do not imply
+participation in the reference implementation. The
+[European Digital Credentials for Learning](https://europass.europa.eu/en/european-digital-credentials-learning)
+show how institutions can issue credentials to a learner wallet for education
+and employment use, while India's
+[DigiLocker National Academic Depository](https://nad.digilocker.gov.in/about)
+provides another model for authentic digital academic awards.
 
 ## The application
 

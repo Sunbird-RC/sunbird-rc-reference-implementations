@@ -27,13 +27,19 @@ identity information.
 
 ## Ecosystem actors
 
-| Actor | Responsibility |
-|---|---|
-| Citizen | Authenticates, obtains the credential and controls its presentation |
-| National Identity Authority | Maintains the authoritative citizen record and issues the credential |
-| Identity provider | Authenticates the citizen and connects the session to the correct record |
-| Wallet | Stores the credential, displays requests and obtains consent |
-| Age-restricted service | Requests the minimum age evidence and makes the access decision |
+| Actor | Responsibility | Illustrative global examples |
+|---|---|---|
+| Citizen or resident | Authenticates, obtains the credential and controls its presentation | A resident using a national eID, civil identity or another government-recognized identity account |
+| Identity authority | Maintains authoritative identity information and enables a trusted age assertion | UIDAI/Aadhaar in India, a national civil-registration or population-registry authority, or an identity authority participating in a national eID ecosystem |
+| Identity provider | Authenticates the person and connects the session to the correct source record | Singpass in Singapore, an eIDAS-notified national eID scheme in Europe, Aadhaar authentication where legally permitted, or another public identity provider; Keycloak performs this role in the demonstration |
+| Credential issuer | Converts the authoritative age fact into a signed, wallet-held credential | A national identity authority, civil-registration authority, licensing authority or another legally authorized issuer |
+| Wallet | Stores the credential, displays requests and obtains consent | A standards-compatible government, commercial or open-source digital credential wallet |
+| Age-restricted service | Requests the minimum age evidence and makes the access decision | A regulated-goods retailer, online platform, venue, gaming service, benefits programme or public service |
+
+The examples show how roles may be mapped in different jurisdictions; they do
+not imply participation in or endorsement of this demonstration. For reference,
+[UIDAI operates India's Aadhaar identity ecosystem](https://www.uidai.gov.in/en/about-uidai/unique-identification-authority-of-india.html),
+while [Singpass is Singapore's national digital identity provider](https://docs.developer.singpass.gov.sg/docs/introduction/overview-of-singpass).
 
 ## The application
 

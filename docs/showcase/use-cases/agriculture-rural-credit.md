@@ -30,14 +30,23 @@ consent and minimum disclosure.
 
 ## Ecosystem actors
 
-| Actor | Responsibility |
-|---|---|
-| Farmer | Authenticates, obtains both credentials and consents to presentation |
-| Farmer Registry | Maintains farmer records and issues Farmer Identity Credentials |
-| Land Registry | Maintains ownership, crop and acreage records and issues Land Ownership Credentials |
-| Identity provider | Authenticates the farmer using the National ID mapping |
-| Wallet | Stores both credentials and presents selected claims together |
-| Bank | Verifies both credentials, correlates the farmer and applies the farm-credit rule |
+| Actor | Responsibility | Illustrative global examples |
+|---|---|---|
+| Farmer | Authenticates, obtains both credentials and consents to presentation | A smallholder, tenant, cooperative member or commercial farmer applying for seasonal or investment credit |
+| Farmer Registry | Maintains farmer identity and registration records and issues Farmer Identity Credentials | A national or subnational farmer registry, agricultural-beneficiary registry, cooperative member registry or India's AgriStack Farmer Registry model |
+| Agriculture authority | Governs farmer registration and relevant crop information | A ministry of agriculture, provincial/state agriculture department, agricultural payments agency or authorized programme operator |
+| Land Registry | Maintains ownership, tenure, parcel and acreage records and issues Land Ownership Credentials | A national cadastral agency, deeds or titles registry, local land office, or State land-records department such as those operating under India's DILRMP |
+| Identity provider | Authenticates the farmer and connects the person to the applicable records | A national eID provider such as Singpass or Aadhaar where legally authorized, or a sector identity provider; Keycloak performs this role in the demonstration |
+| Wallet | Stores both credentials and presents selected claims together | A standards-compatible farmer, cooperative, bank, government or open-source credential wallet |
+| Lender | Verifies both credentials, correlates the farmer and applies its credit rule | A commercial or development bank, rural or agricultural bank, credit cooperative, microfinance provider or digital lender |
+
+The examples are jurisdiction-neutral role patterns, not a claim that any named
+programme participates in the demo. Farmer registries may be national,
+subnational or cooperative, while land administration may use deeds, titles,
+cadastres or customary-tenure records. India's
+[Farmer Registry guidance](https://agristack.gov.in/assets/registries/farmerRegistry/farmer_registry_faqs.pdf)
+and [DILRMP](https://dolr.gov.in/en/programmes-schemes/dilrmp-2/) are concrete
+examples of these broader registry categories.
 
 ## The application
 
