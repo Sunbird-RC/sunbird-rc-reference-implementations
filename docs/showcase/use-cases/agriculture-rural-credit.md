@@ -2,13 +2,31 @@
 
 ## The problem
 
-A bank evaluating farm credit may need evidence from several authoritative
-sources. Farmer registration can be maintained by one authority and land
-ownership by another. The bank must know that both records refer to the same
-farmer and must calculate eligibility using trusted crop and acreage data.
+Farmers often need seasonal or working-capital credit to purchase seed,
+fertilizer, equipment and other inputs. A lender assessing that application may
+need to establish several facts: that the applicant is a registered farmer, that
+the applicant owns or controls agricultural land, what crop is cultivated, and
+how much land is under cultivation.
 
-Paper documents and disconnected databases make this slow, difficult to verify
-and prone to inconsistent or excessive data sharing.
+Those facts rarely come from one system. A Farmer Registry may be maintained by
+an agriculture authority, while ownership and land metadata are maintained by a
+land-administration authority. Each uses its own identifiers, records and
+operational processes. The lender must determine whether the records are valid,
+current, issued by the right authority and related to the same applicant.
+
+In a document-based process, farmers may collect certificates or extracts from
+multiple offices and submit copies to every lender. Banks must inspect the
+documents, reconcile names or identifiers and manually enter crop and acreage
+information. This increases processing time, creates opportunities for altered
+or mismatched records, and may require farmers to disclose identity and land
+details that are not needed for the credit decision.
+
+Direct integration between every bank and every source registry is another
+possible approach, but it creates tightly coupled point-to-point connections and
+requires authoritative systems to be online for every loan application. The
+real-world need is a trusted and portable way for farmers to bring verified
+facts from independent authorities into a lender's digital journey, with clear
+consent and minimum disclosure.
 
 ## Ecosystem actors
 
@@ -23,14 +41,37 @@ and prone to inconsistent or excessive data sharing.
 
 ## The application
 
-The farmer obtains a **Farmer Identity Credential** from the Farmer Registry and
-a **Land Ownership Credential** from the Land Registry. Each issuer has its own
-authoritative records, identity and signing boundary.
+The application allows each authority to remain responsible for its own records
+while giving the farmer a portable form of evidence. After authentication, the
+Farmer Registry resolves the farmer's record and issues a **Farmer Identity
+Credential**. The Land Registry independently resolves the corresponding land
+record and issues a **Land Ownership Credential**. Each credential is signed by
+its own issuer and stored in the farmer's wallet.
 
-During a farm-credit application, the wallet presents selected claims from both
-credentials. The bank verifies them, confirms that the Farmer ID matches, and
-uses verified ownership, crop and cultivated acreage to determine eligibility
-and calculate the maximum demonstration loan.
+The credentials have complementary roles. The Farmer credential establishes
+registered-farmer status. The Land credential establishes ownership status and
+provides the crop and cultivated acreage used by the demonstration policy. A
+common Farmer ID makes it possible to establish that the two credentials refer
+to the same farmer without exposing the National ID used for authentication.
+
+When the farmer applies for credit, the bank requests only the facts required
+for that application. The wallet shows the request and presents selected claims
+from both credentials only after consent. The bank verifies the issuing
+authority for each credential, confirms that both credentials are controlled by
+the same holder, checks the Farmer ID correlation and rejects any invalid or
+mismatched combination before evaluating eligibility.
+
+Once the evidence is trusted, a separate lending-policy component determines
+the outcome. In the demonstration, active ownership and a supported crop are
+required, and the maximum amount is calculated from verified cultivated acreage
+and the configured crop rate. This illustrates how authoritative evidence can
+feed a transparent service rule without placing lending logic inside the
+registries or wallet.
+
+For farmers, the result is reusable evidence under their control. For source
+authorities, it preserves clear data and issuer boundaries. For banks, it
+provides verifiable inputs that can reduce manual document handling while still
+allowing each lender to define its own governed credit policy.
 
 ## How Sunbird RC enables it
 

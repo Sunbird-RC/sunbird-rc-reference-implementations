@@ -2,12 +2,28 @@
 
 ## The problem
 
-Many services need to establish that a person is above a permitted age. The
-usual approach asks for an identity document containing the person's name, date
-of birth, address and other information that the service does not need.
+Age checks are required across many everyday services: access to age-restricted
+content or venues, purchase of regulated goods, enrollment in age-bound
+programmes, and eligibility for benefits or services. In most of these cases,
+the service needs a simple answer—whether the person is above or below a defined
+age—not the person's complete identity.
 
-This creates unnecessary collection of personal data and leaves the verifier to
-interpret an identity document rather than verify a purpose-specific fact.
+The common approach is to ask the person to upload, photocopy or display a
+government identity document. That document usually reveals far more than the
+transaction requires, including the person's full name, exact date of birth,
+address, photograph and identity number. The service may then retain a copy,
+creating an avoidable store of sensitive personal data.
+
+The approach is also difficult to use consistently in digital journeys. A
+verifier may have to inspect a document image, calculate age, detect tampering
+and decide whether the issuing authority can be trusted. Citizens repeatedly
+share the same sensitive document with unrelated services, while issuing
+authorities have little control over how copies are interpreted or retained.
+
+The real-world need is therefore for a reusable digital proof that answers the
+specific age question, can be verified as originating from an authoritative
+source, remains under the citizen's control and does not expose unnecessary
+identity information.
 
 ## Ecosystem actors
 
@@ -21,14 +37,27 @@ interpret an identity document rather than verify a purpose-specific fact.
 
 ## The application
 
-The National Identity Authority derives an age condition from its authoritative
-citizen record and issues an **Age Verification Credential**. The citizen stores
-it in a wallet.
+The application turns an authoritative identity record into a reusable,
+purpose-specific digital credential. After authenticating the citizen, the
+National Identity Authority locates the correct record and derives an age
+condition such as “over 18.” It issues an **Age Verification Credential**
+directly to a wallet controlled by the citizen.
 
-When a service needs age verification, it requests only the age assertion. The
-citizen reviews the request and consents. The service verifies the credential and
-returns an access decision without receiving the citizen's date of birth or full
-identity record.
+The wallet becomes the citizen's point of control. It stores the credential and
+can use it with different services without asking the identity authority to
+participate in every transaction. The citizen can see who is requesting
+information, understand what is being requested and decide whether to share it.
+
+When an age-restricted service initiates a request, it asks for the required age
+condition rather than an identity document. With the citizen's consent, the
+wallet creates a selective presentation. The service cryptographically verifies
+the issuer, credential, holder and transaction before applying its access rule.
+
+The result is a simpler experience for the service and the citizen: the service
+receives a trustworthy answer, the authority remains the source of the fact, and
+the citizen avoids disclosing an exact date of birth or complete identity
+record. The same model works across a website using a QR code and a mobile
+application using a deep link.
 
 ## How Sunbird RC enables it
 

@@ -5,13 +5,32 @@
 
 ## The problem
 
-Learners repeatedly submit certificates and marks to universities and employers.
-Each receiving organization must establish whether the records are authentic,
-whether they belong to the same applicant and whether the applicant satisfies a
-specific rule.
+Education records are created over many years and by different institutions. A
+learner may complete school under one authority, a diploma at a college and a
+degree at a university. Later, the learner must assemble this history when
+applying for postgraduate study, employment, scholarships, professional
+registration or other opportunities.
 
-The same education history may be needed for different purposes, but each
-verifier should receive only the information required for its decision.
+Today, this often depends on paper certificates, scanned copies, institution
+portals and manual verification. Universities and employers must determine
+whether every document is genuine, whether the issuing institution is
+recognized, whether the records all belong to the same applicant and whether
+the qualifications satisfy a particular rule. Verification can involve emails,
+phone calls or separate connections to multiple institutions.
+
+This creates delays for applicants and receiving organizations. It can also
+encourage excessive data collection: a verifier may receive complete
+certificates, student identifiers and academic information even when it needs
+only completion status, qualification, field and a threshold result. Fraudulent
+or altered certificates are difficult to identify consistently, while genuine
+learners repeatedly prove the same history to different organizations.
+
+The same credentials also have different meanings in different contexts. A
+university may require higher academic thresholds to accept an application into
+an admission pool, while an employer may use a different threshold to select a
+candidate for the first interview round. The real-world need is trusted,
+portable education evidence that can be reused across purposes without merging
+institutional registries or disclosing the learner's complete education record.
 
 ## Ecosystem actors
 
@@ -28,13 +47,39 @@ verifier should receive only the information required for its decision.
 
 ## The application
 
-One learner obtains credentials independently from a School, College and
-University. The wallet stores all three.
+The application creates a connected learner journey while preserving the
+independence of the participating institutions. A School, College and University
+each maintain their own authoritative records and issue their own credential.
+The learner authenticates, requests each credential and stores all three in one
+wallet.
 
-The learner then reuses the credentials with two verifier applications. A
-Master's institution applies its academic threshold. A job provider applies a
-different employment-screening threshold. Both verify the same credentials, but
-each makes its own transparent decision for its own purpose.
+Each credential represents a different stage of the learner's history. The
+School Certificate records school completion and result. The College Diploma
+records qualification and specialization. The University Degree records degree
+level, field of study, completion and result. A common Learner ID allows the
+credentials to be correlated during verification, while the National ID and
+institution-specific Student IDs remain part of issuer-side processing rather
+than routine disclosure.
+
+For a Master's application, the institution requests the three relevant
+credentials and the minimum claims needed for its published rule. After the
+learner consents, the application verifies the credentials and checks the
+School, College and University thresholds. An eligible result means the
+application can enter the admission process and await the admission list; it
+does not mean that a place has been awarded.
+
+For a job application, the same credentials are reused with a different
+verifier and a different rule. The job provider verifies the education history,
+requires completed School and College credentials and applies the relevant
+University threshold. An eligible result advances the candidate to interview
+round one; it does not represent final selection or employment.
+
+This demonstrates an important ecosystem property: trusted credentials can be
+issued once by their authoritative institutions and reused many times by the
+learner. Verification capabilities remain common, while each receiving
+organization controls its own purpose, disclosure request and decision policy.
+Institutions do not have to share one database, and verifiers do not need
+permanent point-to-point access to every source system.
 
 ## How Sunbird RC enables it
 
