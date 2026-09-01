@@ -107,7 +107,7 @@ Answer 9 asked for the version and profile to be recorded after the spike:
 
 | | |
 |---|---|
-| Wallet | vendored in this repository at `vendor/paradym-wallet`: `animo/paradym-wallet` @ `2d68168` (Apache-2.0) plus seven showcase commits, app version 1.20.3. Previously recorded here as `@06394bd`, which named only the third of those seven |
+| Wallet | vendored in this repository at `vendor/paradym-wallet`: `animo/paradym-wallet` @ `2d68168` (Apache-2.0) plus **nine** showcase commits, fork tip `82b1def`, app version 1.20.3. Every one of them is listed in `vendor/paradym-wallet/SUNBIRD-CHANGES.md`. Previously recorded here as `@06394bd`, which named only the third of them, and later as seven, which stopped counting after Iteration 01 |
 | Build | Expo 56.0.12, React Native 0.85.3, `APP_VARIANT=preview`, arm64-v8a, package `id.paradym.wallet.preview` |
 | Protocol stack | `@credo-ts/core` and `@credo-ts/openid4vc` 0.7.1-alpha-20260707121432, `@openid4vc/openid4vci` 0.5.4, `@openid4vc/openid4vp` 0.4.6 |
 | Device | Samsung SM-A055F (Galaxy A05), Android 15 |

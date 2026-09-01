@@ -327,11 +327,19 @@ if [ -d "$WFORK/.git" ]; then
   # terminates verify.sh and every later check is silently skipped. Ask instead
   # whether the filtered difference is empty.
   ADAPTED="NOTICE|SUNBIRD-CHANGES\.md|apps/wallet/(app\.config\.js|base\.app\.config\.js|eas\.json)"
+  # The tip is READ FROM scripts/vendor-wallet.sh, which is the one place it is
+  # pinned. It used to be written out again here, so advancing the fork meant
+  # updating the same constant in two files — and the second one was missed: the
+  # Education trust entries were vendored and committed, the fork was committed,
+  # and this check still compared against the previous tip and reported drift that
+  # had already been closed.
+  WTIP="$(grep -oE '^TIP="[0-9a-f]+"' scripts/vendor-wallet.sh | head -1 | tr -d 'TIP="')"
+  check "the pinned wallet tip exists in the fork" 'git -C "$WFORK" cat-file -e "${WTIP}^{commit}"'
   # ls-tree --format rather than awk: an awk program written inside a string that
   # check() later evals loses its \$3 to the shell, and awk then fails with a
   # syntax error the check reports as drift that does not exist.
   check "the vendored copy matches the fork, apart from the recorded adaptation" \
-    '[ -z "$(diff <(git -C "$WFORK" ls-tree -r --format="%(objectname) %(path)" 6dc0a3c | sort) <(git ls-tree -r --format="%(objectname) %(path)" "HEAD:$W" | sort) | grep -E "^[<>]" | grep -vE "($ADAPTED)$")" ]'
+    '[ -z "$(diff <(git -C "$WFORK" ls-tree -r --format="%(objectname) %(path)" "$WTIP" | sort) <(git ls-tree -r --format="%(objectname) %(path)" "HEAD:$W" | sort) | grep -E "^[<>]" | grep -vE "($ADAPTED)$")" ]'
 else
   skip "wallet drift vs the fork" "no checkout at $WFORK - set WALLET_FORK_PATH"
 fi
