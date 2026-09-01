@@ -155,6 +155,3 @@ Sunbird RC resources to examine schemas, configuration, APIs and working code.
 > These applications use synthetic data and simplified policies to demonstrate
 > capabilities. They are reference patterns, not production deployments or
 > sector-policy recommendations.
-
-See the [visual and video plan](media-plan.md) for the assets required before
-publication.
