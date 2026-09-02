@@ -41,6 +41,22 @@ not imply participation in or endorsement of this demonstration. For reference,
 [UIDAI operates India's Aadhaar identity ecosystem](https://www.uidai.gov.in/en/about-uidai/unique-identification-authority-of-india.html),
 while [Singpass is Singapore's national digital identity provider](https://docs.developer.singpass.gov.sg/docs/introduction/overview-of-singpass).
 
+### Ecosystem coverage and boundaries
+
+The reference application implements the credential journey across the
+highlighted participants. It does not replace the governance, legal authority or
+operating systems that make an identity ecosystem authoritative.
+
+| Participant | Coverage in this reference implementation | Production responsibility or integration remaining |
+|---|---|---|
+| Citizen | **Demonstrated:** a synthetic citizen authenticates, receives the credential and controls both presentation channels | Real enrolment, account recovery, accessibility, support and lawful-consent arrangements |
+| Identity provider | **Represented:** Keycloak authenticates synthetic National ID accounts | Integration with the approved identity provider, required assurance level and account lifecycle |
+| Identity authority and Registry | **Represented:** Sunbird RC maintains synthetic citizen records and resolves the authenticated user | Authoritative data onboarding, corrections, stewardship, retention and lawful-use controls |
+| Credential issuer | **Demonstrated:** derives and signs a holder-bound SD-JWT age credential | Issuer accreditation, production keys, revocation, expiry and audit operations |
+| Wallet provider | **Demonstrated:** the customized open-source wallet stores the credential and obtains consent | Wallet assurance, device security, recovery and interoperability acceptance |
+| Age-restricted service | **Demonstrated:** web QR and mobile deep-link verifiers return approved or denied outcomes | Integration with the actual service, applicable age policy, exceptions and retention rules |
+| Trust and regulatory bodies | **Not integrated:** a configured allowlist represents ecosystem trust | Legislation, accreditation, trust-list operation, dispute resolution and oversight |
+
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'fontFamily':'Inter, system-ui, Arial','primaryColor':'#E0EEFF','primaryTextColor':'#1C1D1F','primaryBorderColor':'#346DDB','lineColor':'#79859B','secondaryColor':'#F6F7FA','tertiaryColor':'#FFFFFF'}}}%%
 flowchart LR

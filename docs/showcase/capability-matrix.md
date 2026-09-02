@@ -11,7 +11,7 @@ configured using Sunbird RC.
 | Registry schemas | One citizen model | Separate Farmer and Land models | Separate education-institution models |
 | Credential issuers | Identity authority | Farmer Registry and Land Registry | School, College and University |
 | Credentials used together | One | Two | Three |
-| Wallet-driven issuance | Yes | Yes | Planned |
+| Wallet-driven issuance | Yes | Yes | Yes |
 | Selective disclosure | Age condition | Farmer, ownership, crop and acreage facts | Qualification and result facts |
 | Cross-credential correlation | Not required | Farmer ID | Learner ID |
 | Verifier applications | Age-restricted web and mobile services | Bank farm-credit application | Master's and job applications |

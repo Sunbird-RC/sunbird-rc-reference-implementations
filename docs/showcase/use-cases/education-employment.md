@@ -54,6 +54,23 @@ and employment use, while India's
 [DigiLocker National Academic Depository](https://nad.digilocker.gov.in/about)
 provides another model for authentic digital academic awards.
 
+### Ecosystem coverage and boundaries
+
+The reference application makes three independently issued qualifications
+reusable for two decisions. It does not implement the complete institutional,
+accreditation, admissions or recruitment lifecycle.
+
+| Participant | Coverage in this reference implementation | Production responsibility or integration remaining |
+|---|---|---|
+| Learner | **Demonstrated:** synthetic learners obtain, store and present three credentials | Real enrolment identity, corrections, recovery, accessibility and learner support |
+| School or awarding body | **Represented and issued:** an independent synthetic record and issuer provide the School credential | Connection to the student system, authorized issuance and correction process |
+| College or training provider | **Represented and issued:** a second independent record and issuer provide the College credential | Institutional integration, programme governance and production key custody |
+| University | **Represented and issued:** a third issuer provides the degree and a separate Master’s verifier | Student-system integration, recognition checks, application management and admission-list process |
+| Recognition or accreditation body | **Not integrated:** configured issuer trust represents recognition | Authoritative recognition registry, status changes, appeals and cross-border rules |
+| Wallet provider | **Demonstrated:** the same wallet and credentials serve both applications | Production assurance, recovery, device security and standards-profile acceptance |
+| Postgraduate institution | **Demonstrated:** verifies all three credentials and applies the 60/60/70 eligibility rule | Intake, ranking, quotas, fees, exceptions, final selection and enrolment |
+| Employer | **Demonstrated:** requests fewer marks and applies the University 60% interview rule | Applicant tracking, skills and experience checks, interviews, background checks and employment |
+
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'fontFamily':'Inter, system-ui, Arial','primaryColor':'#E0EEFF','primaryTextColor':'#1C1D1F','primaryBorderColor':'#346DDB','lineColor':'#79859B','secondaryColor':'#F6F7FA','tertiaryColor':'#FFFFFF'}}}%%
 flowchart LR

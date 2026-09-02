@@ -9,6 +9,13 @@ better outcome is required.
 
 ## Ecosystem actors
 
+After identifying the actors, add an **Ecosystem coverage and boundaries** table
+with one row per relevant participant. State whether each role is demonstrated,
+represented using synthetic data or configuration, an external integration
+boundary, or outside the reference application's scope. Clearly separate what
+the reference implementation solves from the production responsibilities left
+to institutions, governance bodies and service operators.
+
 | Actor | Responsibility |
 |---|---|
 | Record authority | Maintains the authoritative data |

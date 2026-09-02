@@ -48,6 +48,23 @@ cadastres or customary-tenure records. India's
 and [DILRMP](https://dolr.gov.in/en/programmes-schemes/dilrmp-2/) are concrete
 examples of these broader registry categories.
 
+### Ecosystem coverage and boundaries
+
+The reference application connects trusted farmer and land evidence to a sample
+lending decision. It demonstrates the credential inputs, not an entire
+agricultural-finance operating model.
+
+| Participant | Coverage in this reference implementation | Production responsibility or integration remaining |
+|---|---|---|
+| Farmer | **Demonstrated:** synthetic farmers authenticate, hold two credentials and consent to presentation | Real enrolment, assisted access, corrections, recovery and grievance support |
+| Identity provider | **Represented:** Keycloak maps synthetic National IDs to the correct records | Approved national or sector identity integration, assurance and account lifecycle |
+| Farmer Registry and agriculture authority | **Represented:** a separate Sunbird RC entity supplies the Farmer credential | Authoritative onboarding, stewardship, current crop-data sources and corrections |
+| Land Registry | **Represented:** a separate entity and issuer supply one ownership record per farmer | Cadastral/title integration, tenure complexity, leases, disputes, encumbrances and change events |
+| Farmer and Land issuers | **Demonstrated:** independent identities issue role-specific credentials | Issuer onboarding, production keys, revocation, expiry and trust-registry operation |
+| Wallet provider | **Demonstrated:** both credentials are stored and selectively presented together | Production wallet assurance, recovery, device security and interoperability testing |
+| Bank or lender | **Demonstrated:** a mock bank verifies the evidence and calculates a maximum amount | KYC/AML, credit risk, pricing, underwriting, sanction, disbursement, repayment and servicing |
+| Agricultural and financial governance | **Not integrated:** static configuration represents trust and crop-rate policy | Governed rates, regulation, audit, appeals, liability and ecosystem operations |
+
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'fontFamily':'Inter, system-ui, Arial','primaryColor':'#E0EEFF','primaryTextColor':'#1C1D1F','primaryBorderColor':'#346DDB','lineColor':'#79859B','secondaryColor':'#F6F7FA','tertiaryColor':'#FFFFFF'}}}%%
 flowchart LR
