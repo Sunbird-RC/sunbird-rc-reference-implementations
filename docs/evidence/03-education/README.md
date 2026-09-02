@@ -134,7 +134,7 @@ evidence can be trusted again. That is a decision, not a tidy-up.
 |---|---|
 | Sunbird RC services | `v2.1.0` (official ghcr images) |
 | `oid4vc-service` | `sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27` — the ported build, pinned by source commit in its tag |
-| Fork branch | `oid4vc-keycloak-as-v2.1.0`, 7 commits off `v2.1.0` |
+| Fork branch | `oid4vc-keycloak-as-v2.1.0`, 7 commits off `v2.1.0` — **local only**, see below |
 | Keycloak | `quay.io/keycloak/keycloak:26.0`, `start-dev`, three realms imported |
 | Wallet | vendored at `vendor/paradym-wallet`, upstream `2d68168` + nine showcase commits, tip `82b1def` |
 | Wallet APK | `id.paradym.wallet.preview` 1.20.3, arm64-v8a, issuer directory limited to the three institutions |
@@ -147,6 +147,26 @@ evidence can be trusted again. That is a decision, not a tidy-up.
 
 The two Education verifier DIDs are pinned in the wallet, so `verify.sh`'s
 trust-pinning check runs and passes against this deployment rather than skipping.
+
+## The fork commits are not published, deliberately
+
+Two of those seven commits are the ones that close review items 2 and 4, and the
+pinned `v2.1.0-authcode.c8beec27` image is built from them. They live only in the
+working checkout at `../sunbird-rc-core`.
+
+That checkout's single remote is `https://github.com/Sunbird-RC/sunbird-rc-core.git`
+— **upstream Sunbird-RC itself, not a fork of ours** — so pushing the branch would
+put showcase commits into the upstream project, and merging it would alter the
+released `v2.1.0` baseline this programme treats as a controlled input. Neither is
+ours to do. `verify.sh` already guards half of it by asserting `fork main` still
+equals `origin/main` and sits on the `v2.1.0` tag.
+
+Stated plainly rather than left to be discovered: **a reviewer cannot rebuild that
+image from a clean checkout today.** What they can verify without it is the tag
+pinned in `deploy/docker-compose.yml`, the fork's own 154-test suite in
+[`runs/test-fork.txt`](runs/test-fork.txt), and the repo-side end-to-end tests that
+exercise both fixes through the running stack. Publishing the two commits — under a
+remote of our own, or as patches committed here — is a decision still open.
 
 ## Reproducing it
 
