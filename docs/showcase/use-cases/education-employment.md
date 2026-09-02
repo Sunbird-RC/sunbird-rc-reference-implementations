@@ -67,6 +67,18 @@ flowchart LR
   J --> JA[Interview-round eligibility]
 ```
 
+## How this reference application uses Sunbird RC
+
+| Sunbird RC capability | Use in this application |
+|---|---|
+| **Registry — source records** | `EducationLearner`, `SchoolRecord`, `CollegeRecord` and `UniversityRecord` entities contain synthetic learner and qualification data. National ID resolves to a common Learner ID while each institution retains its own record boundary. |
+| **Credential — VC issuers** | Three independently configured issuers create the **School Certificate**, **College Certificate** and **University Degree Credential** from their corresponding institutional Registry records. |
+| **Compatible wallet** | Stores all three issued credentials and presents selected information for admission or employment with consent. It does not replace institutional student systems. |
+
+> All learners, identifiers, institutions and qualification records used here
+> are synthetic. Production deployment requires integration with the responsible
+> institutions and their governed student or award-management systems.
+
 ## The application
 
 The application creates a connected learner journey while preserving the

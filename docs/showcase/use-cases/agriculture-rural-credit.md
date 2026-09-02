@@ -60,6 +60,18 @@ flowchart LR
   P --> O[Eligibility and maximum amount]
 ```
 
+## How this reference application uses Sunbird RC
+
+| Sunbird RC capability | Use in this application |
+|---|---|
+| **Registry — source records** | Separate Farmer and Land Registry entities contain synthetic farmer, ownership, acreage and crop records. National ID mapping connects the authenticated person to the correct Farmer ID and Land ID. |
+| **Credential — VC issuers** | Independently configured Farmer and Land issuers create the **Farmer Identity Credential** and **Land Ownership Credential** from their respective Registry records. |
+| **Compatible wallet** | Stores both credentials and presents selected claims together with consent. It does not merge or become authoritative for the two source registries. |
+
+> All farmer, land and identity records used here are synthetic. Production
+> deployment requires integration with the responsible farmer and land
+> authorities, their governed source systems and operating processes.
+
 ## The application
 
 The application allows each authority to remain responsible for its own records

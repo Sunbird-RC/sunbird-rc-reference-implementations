@@ -54,6 +54,18 @@ flowchart LR
   D -->|Not satisfied| N[Access denied]
 ```
 
+## How this reference application uses Sunbird RC
+
+| Sunbird RC capability | Use in this application |
+|---|---|
+| **Registry — source records** | The Citizen Registry contains synthetic citizen records, including date of birth and the National ID mapping resolved after Keycloak authentication. It is the source from which the age condition is derived. |
+| **Credential — VC issuer** | The configured identity issuer creates and signs the **Age Verification Credential** from the corresponding Citizen Registry record. |
+| **Compatible wallet** | Stores the issued credential and presents the selected age condition with consent. The wallet does not store or replace the complete authoritative Registry record. |
+
+> All citizen records, identifiers and values used here are synthetic. Production
+> deployment requires integration with the responsible identity authority's
+> governed records, policies and operations.
+
 ## The application
 
 The application turns an authoritative identity record into a reusable,
