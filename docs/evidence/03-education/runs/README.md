@@ -15,6 +15,40 @@ headers.
 | [`verify.txt`](verify.txt) | `./scripts/verify.sh --no-tests` | local stack, HTTP | **109 passed, 0 failed, 2 skipped** |
 | [`test-fork.txt`](test-fork.txt) | `npx jest` in the fork's `oid4vc-service` | checkout only | **154 passed, 0 failed** |
 
+Against the **public deployment**, after it was moved to `c8beec27`:
+
+| File | Command | Result |
+|---|---|---|
+| [`test-unit-deployment.txt`](test-unit-deployment.txt) | `npm run test:unit` | **175 passed, 0 failed** |
+| [`test-e2e-deployment.txt`](test-e2e-deployment.txt) | `npm run test:e2e` | **150 passed, 0 failed** |
+
+The end-to-end run is the one that matters for this round: it exercises both
+review fixes against the public origin over its real certificate, including the
+three over-disclosure tests and the three cross-issuer tests listed above.
+
+**Two deployment captures are not yet committed** — the Age/Agriculture
+regression subset and `verify.sh`. Both were run against the deployment and both
+hit the artefacts described below rather than defects: the regression subset
+tripped Keycloak's brute-force lockout on its Flow 1 login, and `verify.sh`
+reported its own *working tree clean* check as failed because documentation was
+uncommitted at the time. Re-running them needs ssh, which stopped answering
+again. The local-stack captures for both are committed and green, and the
+one-command way to redo them against the deployment is:
+
+```bash
+DEMO_HOST=user@host DEMO_SSH_KEY=~/.ssh/key.pem \
+DEMO_DIR=/path/age-demo DEMO_ORIGIN=https://host.sslip.io \
+  ./scripts/capture-demo-runs.sh --expect-image c8beec27
+```
+
+[`scripts/capture-demo-runs.sh`](../../../../scripts/capture-demo-runs.sh) exists
+because this sequence has been needed three times and was fumbled twice — once by
+passing `OPS_URL` to a script that reads `BASE`, so the local stack was re-seeded
+while the remote was believed to be; and once by the remote `.env` overriding the
+image tag. It checks the running image against `--expect-image`, spaces the suites
+so brute-force protection does not trip, reads secrets into its own environment
+without writing them anywhere, and hardcodes nothing about the host.
+
 Of the 175 unit tests, **54 are in the three Education files** — 30 decision, 12
 percentage, 12 fixtures — with further Education cases inside the shared DCQL,
 trust and verification-gate suites. Of the 150 end-to-end tests **52 are
