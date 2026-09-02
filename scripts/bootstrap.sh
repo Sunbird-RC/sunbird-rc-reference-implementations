@@ -106,6 +106,7 @@ wait_for "keycloak"          "$BASE/auth/realms/age/.well-known/openid-configura
 # agriculture realm did not import" into a named failure here instead of a
 # confusing 404 during the first wallet sign-in.
 wait_for "keycloak (agriculture)" "$BASE/auth/realms/agriculture/.well-known/openid-configuration" 60
+wait_for "keycloak (education)"   "$BASE/auth/realms/education/.well-known/openid-configuration" 60
 wait_for "oid4vc-service"    "$BASE/health"
 # The Java registry takes minutes under amd64 emulation. That is not a hang.
 wait_for "registry"          "$BASE/registry-health" 90
@@ -192,6 +193,22 @@ LAND_ISSUER_DID="$(mint_did   LAND_ISSUER_DID    'Land Registry')"
 # credit. Separate parties, separate keys — the same reason the issuer and the
 # verifier above do not share one.
 BANK_VERIFIER_DID="$(mint_did BANK_VERIFIER_DID  'Gramin Bank (farm credit verifier)')"
+# Iteration 03. Five more keys, and every one of them earns its place.
+#
+# Three issuers, because the verifier has to pin a DIFFERENT trusted issuer to
+# each of the school, college and university slots — REQUIREMENTS §8's
+# "wrong-role credential" case is only refusable if the three roles have three
+# keys. Sharing one would make a College diploma presented as a degree
+# indistinguishable from the real thing.
+SCHOOL_ISSUER_DID="$(mint_did     SCHOOL_ISSUER_DID     'State School Board')"
+COLLEGE_ISSUER_DID="$(mint_did    COLLEGE_ISSUER_DID    'Regional Polytechnic College')"
+UNIVERSITY_ISSUER_DID="$(mint_did UNIVERSITY_ISSUER_DID 'State University')"
+# Two verifiers, because they are two unrelated relying parties asking for
+# different things, and the wallet names the requesting party from the key that
+# signed the request object. One key would make the employer's consent screen
+# read "University Admissions" — the same defect Iteration 02 hit with the bank.
+UNIVERSITY_VERIFIER_DID="$(mint_did UNIVERSITY_VERIFIER_DID "University Admissions (master's verifier)")"
+EMPLOYER_VERIFIER_DID="$(mint_did   EMPLOYER_VERIFIER_DID   'Employer (interview shortlisting verifier)')"
 
 set_env AGE_ISSUER_DID      "$AGE_ISSUER_DID"
 set_env VERIFIER_DID        "$VERIFIER_DID"
@@ -199,6 +216,11 @@ set_env UNTRUSTED_ISSUER_DID "$UNTRUSTED_DID"
 set_env FARMER_ISSUER_DID   "$FARMER_ISSUER_DID"
 set_env LAND_ISSUER_DID     "$LAND_ISSUER_DID"
 set_env BANK_VERIFIER_DID   "$BANK_VERIFIER_DID"
+set_env SCHOOL_ISSUER_DID     "$SCHOOL_ISSUER_DID"
+set_env COLLEGE_ISSUER_DID    "$COLLEGE_ISSUER_DID"
+set_env UNIVERSITY_ISSUER_DID "$UNIVERSITY_ISSUER_DID"
+set_env UNIVERSITY_VERIFIER_DID "$UNIVERSITY_VERIFIER_DID"
+set_env EMPLOYER_VERIFIER_DID   "$EMPLOYER_VERIFIER_DID"
 green "DIDs recorded in deploy/.env"
 
 # --- 4. credential schemas ---------------------------------------------------
@@ -313,6 +335,14 @@ create_schema "$(python3 "$SPECS" age "$AGE_ISSUER_DID" "$VCT_SLUG")"
 create_schema "$(python3 "$SPECS" farmer "$FARMER_ISSUER_DID" 'farmer-identity-credential')"
 create_schema "$(python3 "$SPECS" land   "$LAND_ISSUER_DID"   'land-ownership-credential')"
 
+# Iteration 03. Three credentials, three authors, three vct slugs — and the
+# authors are what make the roles pinnable: the schema `author` DID becomes the
+# credential's `iss`, so the verifier can require that the credential in the
+# University slot was signed by the University and nothing else.
+create_schema "$(python3 "$SPECS" school     "$SCHOOL_ISSUER_DID"     'school-record-credential')"
+create_schema "$(python3 "$SPECS" college    "$COLLEGE_ISSUER_DID"    'college-record-credential')"
+create_schema "$(python3 "$SPECS" university "$UNIVERSITY_ISSUER_DID" 'university-record-credential')"
+
 # The negative fixture — a valid credential from an issuer outside the trust
 # allowlist — is NOT created here. It used to be, and it showed up in the
 # wallet's issuer directory beside the real credential, because issuer metadata
@@ -401,12 +431,27 @@ for u in farmer.ravi farmer.lakshmi farmer.suresh farmer.geeta farmer.unregister
   fi
 done
 
+# Iteration 03's learners, in the education realm. Same generated password, same
+# reason as above.
+for u in learner.priya learner.rohan learner.fatima learner.rahul learner.divya \
+         learner.kiran learner.anita learner.vikram learner.mismatch \
+         learner.nouniversity learner.norecord learner.unmapped; do
+  if kcadm set-password -r education --username "$u" --new-password "$CITIZEN_PASSWORD" >/dev/null 2>&1; then
+    green "$u ready"
+  else
+    warn "could not set the password for $u"
+  fi
+done
+
 # --- 6. apply the new configuration -----------------------------------------
 say "6. Applying configuration"
 # oid4vc-service reads VERIFIER_DID/ISSUER_DID and the verifier reads
 # AGE_ISSUER_DID at boot, so both need recreating now that .env has them.
 "${COMPOSE[@]}" up -d --force-recreate --no-deps \
-  oid4vc-service oid4vc-farmer oid4vc-land oid4vc-bank verifier age-issuer >/dev/null 2>&1 \
+  oid4vc-service oid4vc-farmer oid4vc-land oid4vc-bank \
+  oid4vc-school oid4vc-college oid4vc-university \
+  oid4vc-university-vp oid4vc-employer-vp \
+  verifier age-issuer >/dev/null 2>&1 \
   || die "could not recreate the issuer and verifier services"
 wait_for "oid4vc-service (restarted)" "$BASE/health"
 wait_for "verifier"                   "$BASE/verifier-health"
@@ -417,6 +462,11 @@ cat <<SUMMARY
   Issuer   National Identity Authority   $AGE_ISSUER_DID
   Verifier Age-restricted service        $VERIFIER_DID
   Verifier Gramin Bank (farm credit)     $BANK_VERIFIER_DID
+  Issuer   State School Board            $SCHOOL_ISSUER_DID
+  Issuer   Regional Polytechnic College  $COLLEGE_ISSUER_DID
+  Issuer   State University              $UNIVERSITY_ISSUER_DID
+  Verifier University Admissions         $UNIVERSITY_VERIFIER_DID
+  Verifier Employer (shortlisting)       $EMPLOYER_VERIFIER_DID
   Unlisted negative-fixture issuer       $UNTRUSTED_DID
   Credential type                        $VCT
 

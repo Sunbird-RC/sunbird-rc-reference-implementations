@@ -1,0 +1,370 @@
+{
+  "realm": "education",
+  "displayName": "Education / Employment and Higher Study (synthetic demo)",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "loginWithEmailAllowed": false,
+  "duplicateEmailsAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "failureFactor": 20,
+  "permanentLockout": false,
+  "maxDeltaTimeSeconds": 3600,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "waitIncrementSeconds": 30,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "requiredActions": [
+    {
+      "alias": "VERIFY_PROFILE",
+      "name": "Verify Profile",
+      "providerId": "VERIFY_PROFILE",
+      "enabled": false,
+      "defaultAction": false,
+      "priority": 90,
+      "config": {}
+    },
+    {
+      "alias": "UPDATE_PASSWORD",
+      "name": "Update Password",
+      "providerId": "UPDATE_PASSWORD",
+      "enabled": false,
+      "defaultAction": false,
+      "priority": 30,
+      "config": {}
+    }
+  ],
+  "defaultDefaultClientScopes": [
+    "learner-record"
+  ],
+  "clientScopes": [
+    {
+      "name": "learner-record",
+      "description": "Carries the nationalId claim each Education issuer resolves in its own registry entity, so no institution depends on another's client state.",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "nationalId",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "protocol": "openid-connect",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "nationalId",
+            "claim.name": "nationalId",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "school-record-credential",
+      "description": "OID4VCI scope for the School Record Credential, as advertised in the State School Board's issuer metadata",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": []
+    },
+    {
+      "name": "college-record-credential",
+      "description": "OID4VCI scope for the College Record Credential, as advertised in the Regional Polytechnic College's issuer metadata",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": []
+    },
+    {
+      "name": "university-record-credential",
+      "description": "OID4VCI scope for the University Record Credential, as advertised in the State University's issuer metadata",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": []
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "id.animo.paradym",
+      "name": "Sunbird Wallet",
+      "description": "The holder's wallet: the same public client id as the age and agriculture realms because it is the same installed app. A separate realm so an Agriculture login cannot collect an Education credential.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      },
+      "webOrigins": [
+        "+"
+      ],
+      "redirectUris": [
+        "https://98.70.36.106.sslip.io/wallet/redirect",
+        "https://paradym.id/invitation/redirect",
+        "https://paradymwallet.app/oauth2/redirect",
+        "id.animo.paradym:///wallet/redirect",
+        "http://135.235.192.9/wallet/redirect",
+        "https://135.235.192.9.sslip.io/wallet/redirect",
+        "http://localhost/wallet/redirect",
+        "http://localhost:3000/wallet/redirect"
+      ],
+      "defaultClientScopes": [
+        "learner-record",
+        "profile",
+        "openid"
+      ],
+      "optionalClientScopes": [
+        "school-record-credential",
+        "college-record-credential",
+        "university-record-credential"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "learner.priya",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Priya",
+      "lastName": "Nair",
+      "email": "learner-priya@learners.invalid",
+      "realmRoles": [
+        "default-roles-education"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-70011234"
+        ],
+        "fixture": [
+          "meets both policies (EDU-L-004512)"
+        ]
+      }
+    },
+    {
+      "username": "learner.rohan",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Rohan",
+      "lastName": "Deshpande",
+      "email": "learner-rohan@learners.invalid",
+      "realmRoles": [
+        "default-roles-education"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-70022345"
+        ],
+        "fixture": [
+          "the two-answers learner: university 65% (EDU-L-006733)"
+        ]
+      }
+    },
+    {
+      "username": "learner.fatima",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Fatima",
+      "lastName": "Sheikh",
+      "email": "learner-fatima@learners.invalid",
+      "realmRoles": [
+        "default-roles-education"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-70033456"
+        ],
+        "fixture": [
+          "exactly on all three thresholds (EDU-L-007841)"
+        ]
+      }
+    },
+    {
+      "username": "learner.rahul",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Rahul",
+      "lastName": "Desai",
+      "email": "learner-rahul@learners.invalid",
+      "realmRoles": [
+        "default-roles-education"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-70044567"
+        ],
+        "fixture": [
+          "school 59.50% (EDU-L-008120)"
+        ]
+      }
+    },
+    {
+      "username": "learner.divya",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Divya",
+      "lastName": "Menon",
+      "email": "learner-divya@learners.invalid",
+      "realmRoles": [
+        "default-roles-education"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-70055678"
+        ],
+        "fixture": [
+          "college 58.90% (EDU-L-009002)"
+        ]
+      }
+    },
+    {
+      "username": "learner.kiran",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Kiran",
+      "lastName": "Bose",
+      "email": "learner-kiran@learners.invalid",
+      "realmRoles": [
+        "default-roles-education"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-70066789"
+        ],
+        "fixture": [
+          "university 55.25% (EDU-L-009315)"
+        ]
+      }
+    },
+    {
+      "username": "learner.anita",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Anita",
+      "lastName": "Shah",
+      "email": "learner-anita@learners.invalid",
+      "realmRoles": [
+        "default-roles-education"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-70077890"
+        ],
+        "fixture": [
+          "university IN_PROGRESS (EDU-L-010447)"
+        ]
+      }
+    },
+    {
+      "username": "learner.vikram",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Vikram",
+      "lastName": "Joshi",
+      "email": "learner-vikram@learners.invalid",
+      "realmRoles": [
+        "default-roles-education"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-70088901"
+        ],
+        "fixture": [
+          "university field MECHANICAL (EDU-L-011238)"
+        ]
+      }
+    },
+    {
+      "username": "learner.mismatch",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Sanjay",
+      "lastName": "Pillai",
+      "email": "learner-mismatch@learners.invalid",
+      "realmRoles": [
+        "default-roles-education"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-70099012"
+        ],
+        "fixture": [
+          "the college record names a different learner (EDU-L-012550 / 012551)"
+        ]
+      }
+    },
+    {
+      "username": "learner.nouniversity",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Farah",
+      "lastName": "Khan",
+      "email": "learner-nouniversity@learners.invalid",
+      "realmRoles": [
+        "default-roles-education"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-70100123"
+        ],
+        "fixture": [
+          "no university record at all (EDU-L-013001)"
+        ]
+      }
+    },
+    {
+      "username": "learner.norecord",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Deepak",
+      "lastName": "Verma",
+      "email": "learner-norecord@learners.invalid",
+      "realmRoles": [
+        "default-roles-education"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-70111234"
+        ],
+        "fixture": [
+          "a National ID with no record in any Education entity"
+        ]
+      }
+    },
+    {
+      "username": "learner.unmapped",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Neha",
+      "lastName": "Gupta",
+      "email": "learner-unmapped@learners.invalid",
+      "realmRoles": [
+        "default-roles-education"
+      ],
+      "attributes": {
+        "fixture": [
+          "no nationalId attribute: the account itself is unmapped"
+        ]
+      }
+    }
+  ]
+}

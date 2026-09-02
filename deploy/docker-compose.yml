@@ -211,6 +211,11 @@ services:
       # carrying two identity claims for two unrelated purposes. It also leaves
       # the accepted Age accounts untouched, which Age regression depends on.
       - ./keycloak/realm-agriculture.json:/opt/keycloak/data/import/realm-agriculture.json:ro
+      # And a third for Iteration 03, for the same reason. Education reuses
+      # Agriculture's nationalId claim NAME, which is exactly why it must not
+      # reuse its realm: an Agriculture login would otherwise satisfy an
+      # Education issuer's subject lookup. Separate realms make that structural.
+      - ./keycloak/realm-education.json:/opt/keycloak/data/import/realm-education.json:ro
     healthcheck:
       # A TCP connect, not an HTTP probe. The image ships no curl or wget, and
       # hand-rolling an HTTP request through bash's /dev/tcp means embedding CRLF
@@ -229,7 +234,7 @@ services:
   # The OpenID4VCI / OpenID4VP protocol façade. Native to v2.1.0 — this is why
   # the architecture needs no standards adapter.
   oid4vc-service:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -264,6 +269,12 @@ services:
       # Paradym requires a signed request object; signing requires a
       # wallet-resolvable DID. Both are written by scripts/bootstrap.sh.
       OID4VP_SIGN_REQUEST: ${OID4VP_SIGN_REQUEST:-true}
+      # Refuse a presentation that discloses more than the request asked for,
+      # rather than dropping the extra claim before the relying service sees it.
+      # Explicit although this is the build's default: it is a privacy guarantee
+      # the acceptance table asserts, and a reader should not have to know the
+      # default to see that it is on.
+      REJECT_UNREQUESTED_DISCLOSURES: 'true'
       VERIFIER_DID: ${VERIFIER_DID:-}
       # Final OpenID4VCI 1.0 shapes. Paradym speaks final; DRAFT13 is Inji's
       # idiom and belongs to the Agriculture iteration.
@@ -315,7 +326,7 @@ services:
   # could also issue would be a fifth issuer nobody asked for, and it would appear
   # in wallet issuer directories.
   oid4vc-bank:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
     restart: unless-stopped
     depends_on:
       identity:
@@ -338,6 +349,12 @@ services:
       REDIS_URL: redis://redis:6379
       SESSION_STORE: redis
       OID4VP_SIGN_REQUEST: ${OID4VP_SIGN_REQUEST:-true}
+      # Refuse a presentation that discloses more than the request asked for,
+      # rather than dropping the extra claim before the relying service sees it.
+      # Explicit although this is the build's default: it is a privacy guarantee
+      # the acceptance table asserts, and a reader should not have to know the
+      # default to see that it is on.
+      REJECT_UNREQUESTED_DISCLOSURES: 'true'
       VERIFIER_DID: ${BANK_VERIFIER_DID:-}
       # Advertise nothing. This instance authored no schema, so with the filter on
       # its issuer metadata is empty — which is the intent: it is not an issuer.
@@ -367,7 +384,7 @@ services:
   # read a land record (DESIGN §4).
 
   oid4vc-farmer:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -418,7 +435,7 @@ services:
       retries: 30
 
   oid4vc-land:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -461,6 +478,246 @@ services:
       REGISTRY_SUBJECT_ENTITY: LandRecord
       REGISTRY_SUBJECT_KEY: nationalId
       ISSUER_DISPLAY_NAME: Land Registry
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:3400/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # --- Iteration 03: the two Education relying parties ------------------------
+  #
+  # Two more OID4VP signers, for exactly the reason the bank needed its own: a
+  # wallet names the requesting party from the key that SIGNED the request
+  # object, so a shared signer makes two relying parties one party on the consent
+  # screen. Education is the first iteration where a holder presents to both
+  # parties in the same sitting, so getting this wrong would be visible in the
+  # demo itself — the employer's screen would read "University Admissions".
+  #
+  # Neither issues anything. Both are published under their own path prefix so
+  # the request_uri inside a QR resolves back to the instance that signed it.
+
+  oid4vc-university-vp:
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      identity:
+        condition: service_healthy
+      credential:
+        condition: service_healthy
+      credential-schema:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: '3400'
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/university-vp
+      INTERNAL_URL: http://oid4vc-university-vp:3400
+      CREDENTIAL_SERVICE_BASE_URL: http://credential:3000
+      IDENTITY_BASE_URL: http://identity:3332
+      SCHEMA_BASE_URL: http://credential-schema:3333
+      REDIS_URL: redis://redis:6379
+      SESSION_STORE: redis
+      OID4VP_SIGN_REQUEST: ${OID4VP_SIGN_REQUEST:-true}
+      # Refuse a presentation that discloses more than the request asked for,
+      # rather than dropping the extra claim before the relying service sees it.
+      # Explicit although this is the build's default: it is a privacy guarantee
+      # the acceptance table asserts, and a reader should not have to know the
+      # default to see that it is on.
+      REJECT_UNREQUESTED_DISCLOSURES: 'true'
+      VERIFIER_DID: ${UNIVERSITY_VERIFIER_DID:-}
+      # Advertise nothing: this instance authored no schema and is not an issuer.
+      ADVERTISE_OWN_CREDENTIALS_ONLY: 'true'
+      DRAFT13_COMPAT_MODE: 'false'
+      ENABLE_AUTH: 'false'
+      CORS_ALLOWED_ORIGINS: ${PUBLIC_URL:-http://localhost}
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:3400/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  oid4vc-employer-vp:
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      identity:
+        condition: service_healthy
+      credential:
+        condition: service_healthy
+      credential-schema:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: '3400'
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/employer-vp
+      INTERNAL_URL: http://oid4vc-employer-vp:3400
+      CREDENTIAL_SERVICE_BASE_URL: http://credential:3000
+      IDENTITY_BASE_URL: http://identity:3332
+      SCHEMA_BASE_URL: http://credential-schema:3333
+      REDIS_URL: redis://redis:6379
+      SESSION_STORE: redis
+      OID4VP_SIGN_REQUEST: ${OID4VP_SIGN_REQUEST:-true}
+      # Refuse a presentation that discloses more than the request asked for,
+      # rather than dropping the extra claim before the relying service sees it.
+      # Explicit although this is the build's default: it is a privacy guarantee
+      # the acceptance table asserts, and a reader should not have to know the
+      # default to see that it is on.
+      REJECT_UNREQUESTED_DISCLOSURES: 'true'
+      VERIFIER_DID: ${EMPLOYER_VERIFIER_DID:-}
+      # Advertise nothing: this instance authored no schema and is not an issuer.
+      ADVERTISE_OWN_CREDENTIALS_ONLY: 'true'
+      DRAFT13_COMPAT_MODE: 'false'
+      ENABLE_AUTH: 'false'
+      CORS_ALLOWED_ORIGINS: ${PUBLIC_URL:-http://localhost}
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:3400/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # --- Iteration 03: three independent Education issuers ----------------------
+  #
+  # Three instances, not one with three schemas. REQUIREMENTS §3 asks for three
+  # institutions that do not know about each other, and the reason is the rule the
+  # verifier has to enforce: a learner's three certificates come from three
+  # separate authorities, so "they all name the same learner" is a claim the
+  # verifier must establish, not an invariant one issuer can guarantee by
+  # construction. Sharing an instance would make the correlation check untestable —
+  # one issuer minting all three from one lookup can never disagree with itself.
+  #
+  # Each therefore has its own path (a distinct credential_issuer to a wallet), its
+  # own signing DID, and its own registry entity, and reads only the nationalId in
+  # the learner's own access token. None of them is handed a learnerId by anyone.
+
+  oid4vc-school:
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      credential:
+        condition: service_healthy
+      identity:
+        condition: service_healthy
+      credential-schema:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    environment:
+      PORT: '3400'
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/school
+      INTERNAL_URL: http://oid4vc-school:3400
+      CREDENTIAL_SERVICE_BASE_URL: http://credential:3000
+      IDENTITY_BASE_URL: http://identity:3332
+      SCHEMA_BASE_URL: http://credential-schema:3333
+      REDIS_URL: redis://redis:6379
+      SESSION_STORE: redis
+      ISSUER_DID: ${SCHOOL_ISSUER_DID:-}
+      ADVERTISE_OWN_CREDENTIALS_ONLY: 'true'
+      DRAFT13_COMPAT_MODE: 'false'
+      ENABLE_AUTH: 'false'
+      CORS_ALLOWED_ORIGINS: ${PUBLIC_URL:-http://localhost}
+      KEYCLOAK_PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/auth
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/auth
+      KEYCLOAK_REALM: education
+      KEYCLOAK_SUBJECT_CLAIM: nationalId
+      REGISTRY_BASE_URL: http://registry:8081
+      # SchoolRecord carries its own nationalId, so this issuer resolves the authenticated learner itself. DESIGN §7: no issuer relies on another's unsigned state.
+      REGISTRY_SUBJECT_ENTITY: SchoolRecord
+      REGISTRY_SUBJECT_KEY: nationalId
+      ISSUER_DISPLAY_NAME: State School Board
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:3400/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  oid4vc-college:
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      credential:
+        condition: service_healthy
+      identity:
+        condition: service_healthy
+      credential-schema:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    environment:
+      PORT: '3400'
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/college
+      INTERNAL_URL: http://oid4vc-college:3400
+      CREDENTIAL_SERVICE_BASE_URL: http://credential:3000
+      IDENTITY_BASE_URL: http://identity:3332
+      SCHEMA_BASE_URL: http://credential-schema:3333
+      REDIS_URL: redis://redis:6379
+      SESSION_STORE: redis
+      ISSUER_DID: ${COLLEGE_ISSUER_DID:-}
+      ADVERTISE_OWN_CREDENTIALS_ONLY: 'true'
+      DRAFT13_COMPAT_MODE: 'false'
+      ENABLE_AUTH: 'false'
+      CORS_ALLOWED_ORIGINS: ${PUBLIC_URL:-http://localhost}
+      KEYCLOAK_PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/auth
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/auth
+      KEYCLOAK_REALM: education
+      KEYCLOAK_SUBJECT_CLAIM: nationalId
+      REGISTRY_BASE_URL: http://registry:8081
+      # Its own entity and its own nationalId lookup: the college has never heard of the school.
+      REGISTRY_SUBJECT_ENTITY: CollegeRecord
+      REGISTRY_SUBJECT_KEY: nationalId
+      ISSUER_DISPLAY_NAME: Regional Polytechnic College
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:3400/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  oid4vc-university:
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      credential:
+        condition: service_healthy
+      identity:
+        condition: service_healthy
+      credential-schema:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    environment:
+      PORT: '3400'
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/university
+      INTERNAL_URL: http://oid4vc-university:3400
+      CREDENTIAL_SERVICE_BASE_URL: http://credential:3000
+      IDENTITY_BASE_URL: http://identity:3332
+      SCHEMA_BASE_URL: http://credential-schema:3333
+      REDIS_URL: redis://redis:6379
+      SESSION_STORE: redis
+      ISSUER_DID: ${UNIVERSITY_ISSUER_DID:-}
+      ADVERTISE_OWN_CREDENTIALS_ONLY: 'true'
+      DRAFT13_COMPAT_MODE: 'false'
+      ENABLE_AUTH: 'false'
+      CORS_ALLOWED_ORIGINS: ${PUBLIC_URL:-http://localhost}
+      KEYCLOAK_PUBLIC_URL: ${PUBLIC_URL:-http://localhost}/auth
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/auth
+      KEYCLOAK_REALM: education
+      KEYCLOAK_SUBJECT_CLAIM: nationalId
+      REGISTRY_BASE_URL: http://registry:8081
+      # The university likewise. It carries degreeLevel and fieldOfStudy, which only it is authoritative for.
+      REGISTRY_SUBJECT_ENTITY: UniversityRecord
+      REGISTRY_SUBJECT_KEY: nationalId
+      ISSUER_DISPLAY_NAME: State University
     healthcheck:
       test: ['CMD-SHELL', 'curl -f http://localhost:3400/health || exit 1']
       interval: 10s
@@ -533,21 +790,33 @@ services:
       SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-300}
       # Expanded into the trust policy at load time, so the committed policy
       # file stays stable across deployments while the pinned DID does not.
-      # All three are required once the policy names them: the loader treats an
+      # All six are required once the policy names them: the loader treats an
       # unset variable as a hard failure rather than a wildcard, so the verifier
       # refuses to start rather than trusting an issuer whose DID is the empty
       # string. scripts/bootstrap.sh writes all of them.
       AGE_ISSUER_DID: ${AGE_ISSUER_DID:-}
       FARMER_ISSUER_DID: ${FARMER_ISSUER_DID:-}
       LAND_ISSUER_DID: ${LAND_ISSUER_DID:-}
+      SCHOOL_ISSUER_DID: ${SCHOOL_ISSUER_DID:-}
+      COLLEGE_ISSUER_DID: ${COLLEGE_ISSUER_DID:-}
+      UNIVERSITY_ISSUER_DID: ${UNIVERSITY_ISSUER_DID:-}
       # Which signer the BANK's presentation requests come from. Age keeps the
       # instance it always used (OID4VC_BASE_URL below); agriculture requests are
       # signed by the bank's own identity, so the wallet's consent screen names
       # the bank rather than the age-restricted service.
       OID4VC_BANK_BASE_URL: http://oid4vc-bank:3400
+      OID4VC_UNIVERSITY_VP_BASE_URL: http://oid4vc-university-vp:3400
+      OID4VC_EMPLOYER_VP_BASE_URL: http://oid4vc-employer-vp:3400
       # The credential types the bank's request pins, one per issuer instance.
       FARMER_VCT: ${PUBLIC_URL:-http://localhost}/farmer/vct/farmer-identity-credential
       LAND_VCT: ${PUBLIC_URL:-http://localhost}/land/vct/land-ownership-credential
+      # And one per Education institution, each served by its own instance under
+      # its own prefix. The verifier PINS these: a credential whose vct is not the
+      # one this slot names is not the credential that was asked for, however
+      # valid its signature.
+      SCHOOL_VCT: ${PUBLIC_URL:-http://localhost}/school/vct/school-record-credential
+      COLLEGE_VCT: ${PUBLIC_URL:-http://localhost}/college/vct/college-record-credential
+      UNIVERSITY_VCT: ${PUBLIC_URL:-http://localhost}/university/vct/university-record-credential
     healthcheck:
       test: ['CMD-SHELL', 'wget -q -O- http://127.0.0.1:4300/healthz >/dev/null || exit 1']
       interval: 10s
@@ -586,6 +855,9 @@ services:
       # directly instead of a container existing to hold a handful of files.
       - ../services/verifier-web:/usr/share/nginx/html/verifier:ro
       - ../services/bank-web:/usr/share/nginx/html/bank:ro
+      # One directory, mounted once, serving both Education pages. See the
+      # /admissions/ and /employer/ locations in routes-citizen.conf.
+      - ../services/education-web:/usr/share/nginx/html/education:ro
       - ../services/web-assets:/usr/share/nginx/html/assets:ro
     ports:
       # Port 80 on purpose — see the header note about did:web and ports.

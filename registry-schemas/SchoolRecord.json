@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "SchoolRecord": {
+      "$ref": "#/definitions/SchoolRecord"
+    }
+  },
+  "required": [
+    "SchoolRecord"
+  ],
+  "title": "SchoolRecord",
+  "definitions": {
+    "SchoolRecord": {
+      "$id": "#/properties/SchoolRecord",
+      "type": "object",
+      "title": "SchoolRecord",
+      "description": "Authoritative source record held by the School issuer, and the ONLY source of a SchoolCertificate's claims. oid4vc-school resolves the AUTHENTICATED national id to exactly one record here; neither a wallet nor a caller may supply or select learnerId or schoolStudentId (REQUIREMENTS \u00a71.4). The College and University issuers must not read it.",
+      "required": [
+        "schoolStudentId",
+        "learnerId",
+        "nationalId",
+        "completionStatus"
+      ],
+      "properties": {
+        "schoolStudentId": {
+          "type": "string",
+          "title": "School student ID",
+          "description": "The School's own identifier, e.g. SCH-2019-0837. Issuer-side only: never a credential claim, so neither verifier learns which school roll a learner sat on."
+        },
+        "learnerId": {
+          "type": "string",
+          "title": "Learner ID",
+          "description": "The Education correlation identifier, e.g. EDU-L-004512. This is the value both verifiers correlate across the three credentials. A different namespace and sequence from nationalId and from every institution's student id, because PRODUCT forbids treating any of them as interchangeable."
+        },
+        "nationalId": {
+          "type": "string",
+          "title": "National ID",
+          "description": "Issuer-side lookup only, e.g. NAT-70011234. Matched against the authenticated Keycloak account's nationalId claim to decide whose credential may be issued. NEVER issued as a credential claim and never disclosed to either verifier (REQUIREMENTS \u00a72, \u00a77)."
+        },
+        "completionStatus": {
+          "type": "string",
+          "title": "Completion status",
+          "description": "Controlled vocabulary. Only COMPLETED satisfies either policy; the others exist so that a genuine, fully verified credential can still produce NOT ELIGIBLE.",
+          "enum": [
+            "COMPLETED",
+            "IN_PROGRESS",
+            "DISCONTINUED",
+            "FAILED"
+          ]
+        },
+        "completionYear": {
+          "type": "integer",
+          "title": "Completion year",
+          "minimum": 1950,
+          "maximum": 2100,
+          "description": "Year of completion. Disclosable, and requested by both verifiers so a demo can show the sequence is plausible, but never used as an eligibility threshold in this iteration."
+        },
+        "percentage": {
+          "type": "number",
+          "title": "Percentage",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage, 0 through 100, at most two decimal places. Compared against a threshold with integer arithmetic (services/verifier/src/domains/education/percentage.mjs) so that a boundary is exact: 60 must pass a >=60 rule and 59.99 must not, regardless of how the value survives JSON. A value with finer precision than the schema permits is a MALFORMED claim, not a business answer. The Master's rule requires >=60 here; the job rule does not use it at all, which is what makes the two policies visibly different over one credential."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

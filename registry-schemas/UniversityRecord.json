@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "UniversityRecord": {
+      "$ref": "#/definitions/UniversityRecord"
+    }
+  },
+  "required": [
+    "UniversityRecord"
+  ],
+  "title": "UniversityRecord",
+  "definitions": {
+    "UniversityRecord": {
+      "$id": "#/properties/UniversityRecord",
+      "type": "object",
+      "title": "UniversityRecord",
+      "description": "Authoritative source record held by the University issuer, and the ONLY source of a UniversityDegree's claims. oid4vc-university resolves the AUTHENTICATED national id to exactly one record here. The School and College issuers must not read it. This is the record both policies weigh most heavily, and the one where the two policies differ on threshold: 70 for the Master's, 60 for the job.",
+      "required": [
+        "universityStudentId",
+        "learnerId",
+        "nationalId",
+        "completionStatus"
+      ],
+      "properties": {
+        "universityStudentId": {
+          "type": "string",
+          "title": "University student ID",
+          "description": "The University's own identifier, e.g. UNI-2026-0031. Issuer-side only; never a credential claim."
+        },
+        "learnerId": {
+          "type": "string",
+          "title": "Learner ID",
+          "description": "The Education correlation identifier, e.g. EDU-L-004512. This is the value both verifiers correlate across the three credentials. A different namespace and sequence from nationalId and from every institution's student id, because PRODUCT forbids treating any of them as interchangeable."
+        },
+        "nationalId": {
+          "type": "string",
+          "title": "National ID",
+          "description": "Issuer-side lookup only, e.g. NAT-70011234. Matched against the authenticated Keycloak account's nationalId claim to decide whose credential may be issued. NEVER issued as a credential claim and never disclosed to either verifier (REQUIREMENTS \u00a72, \u00a77)."
+        },
+        "degreeLevel": {
+          "type": "string",
+          "title": "Degree level",
+          "description": "Controlled vocabulary. Both policies require BACHELOR; the others exist so a verified credential can fail the rule for a stated reason.",
+          "enum": [
+            "BACHELOR",
+            "MASTER",
+            "DOCTORATE",
+            "INTEGRATED"
+          ]
+        },
+        "fieldOfStudy": {
+          "type": "string",
+          "title": "Field of study",
+          "description": "Controlled vocabulary. Both policies accept COMPUTER_SCIENCE, INFORMATION_TECHNOLOGY and SOFTWARE_ENGINEERING; the rest are present precisely so an unsupported field is demonstrable.",
+          "enum": [
+            "COMPUTER_SCIENCE",
+            "INFORMATION_TECHNOLOGY",
+            "SOFTWARE_ENGINEERING",
+            "ELECTRONICS",
+            "MECHANICAL",
+            "CIVIL",
+            "COMMERCE",
+            "BIOTECHNOLOGY"
+          ]
+        },
+        "completionStatus": {
+          "type": "string",
+          "title": "Completion status",
+          "description": "Controlled vocabulary. Only COMPLETED satisfies either policy; the others exist so that a genuine, fully verified credential can still produce NOT ELIGIBLE.",
+          "enum": [
+            "COMPLETED",
+            "IN_PROGRESS",
+            "DISCONTINUED",
+            "FAILED"
+          ]
+        },
+        "graduationYear": {
+          "type": "integer",
+          "title": "Graduation year",
+          "minimum": 1950,
+          "maximum": 2100,
+          "description": "Year of graduation. Named graduationYear rather than completionYear because PRODUCT names it so, and the credential claim must match the product definition."
+        },
+        "percentage": {
+          "type": "number",
+          "title": "Percentage",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage, 0 through 100, at most two decimal places. Compared against a threshold with integer arithmetic (services/verifier/src/domains/education/percentage.mjs) so that a boundary is exact: 60 must pass a >=60 rule and 59.99 must not, regardless of how the value survives JSON. A value with finer precision than the schema permits is a MALFORMED claim, not a business answer. The Master's rule requires >=70 and the job rule >=60. A learner between the two is the fixture that proves the same credentials produce different answers for different purposes."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

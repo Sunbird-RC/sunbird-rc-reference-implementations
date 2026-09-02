@@ -106,14 +106,22 @@ test('there is no shared cross-domain person table', async () => {
 test('use-case tables do not overlap', async () => {
   guard();
   // Age owns AgeCitizen. Agriculture owns FarmerRecord and LandRecord. Education
-  // owns nothing yet. No table may be claimed by two use cases.
+  // owns EducationLearner and the three institution records. No table may be
+  // claimed by two use cases.
   //
-  // This test's earlier form asserted that no Agriculture table existed at all,
-  // which was right for one iteration and is now exactly wrong. What replaces it
-  // is the check its own comment promised: that Agriculture's tables are its own.
+  // This test has now been wrong twice in the same way, and both times because a
+  // future iteration's names were GUESSED here before it landed. The first form
+  // asserted no Agriculture table existed at all. The second listed Education as
+  // 'qualification / schoolcertificate / collegediploma / universitydegree' —
+  // none of which is what Iteration 03 actually built, so 'no Education table
+  // exists yet' kept passing after Education landed, over four real tables it was
+  // simply looking in the wrong place for.
+  //
+  // So: no placeholder for Iteration 04. A use case is added to this list when it
+  // has tables, and the positive assertion below is what proves the list is real.
   const AGE = ['agecitizen'];
   const AGRICULTURE = ['farmerrecord', 'landrecord'];
-  const EDUCATION = ['qualification', 'schoolcertificate', 'collegediploma', 'universitydegree'];
+  const EDUCATION = ['educationlearner', 'schoolrecord', 'collegerecord', 'universityrecord'];
 
   const present = async (terms) =>
     (
@@ -127,23 +135,24 @@ test('use-case tables do not overlap', async () => {
 
   const ageTables = await present(AGE);
   const agriTables = await present(AGRICULTURE);
+  const eduTables = await present(EDUCATION);
   assert.ok(ageTables.length > 0, 'the Age entity table is missing');
   assert.ok(
     agriTables.length >= 2,
     `both Agriculture entity tables should exist, found:\n${agriTables.join('\n')}`,
   );
+  assert.ok(
+    eduTables.length >= 4,
+    `all four Education entity tables should exist, found:\n${eduTables.join('\n')}`,
+  );
 
   // No table name may belong to two use cases.
-  for (const table of [...ageTables, ...agriTables]) {
+  for (const table of [...ageTables, ...agriTables, ...eduTables]) {
     const matches = [AGE, AGRICULTURE, EDUCATION].filter((terms) =>
       terms.some((t) => table.toLowerCase().includes(t)),
     );
     assert.equal(matches.length, 1, `${table} looks like it serves more than one use case`);
   }
-
-  // Education has not landed, so its tables must not exist.
-  const education = await present(EDUCATION);
-  assert.deepEqual(education, [], `no Education table should exist yet, found:\n${education.join('\n')}`);
 
   // The rule in the form that actually bites: neither domain's table carries the
   // other's identifiers. A FarmerRecord with a citizenId column, or an AgeCitizen
@@ -170,6 +179,39 @@ test('use-case tables do not overlap', async () => {
     for (const foreign of ['citizenid', 'dateofbirth', 'ageover18', 'ageover21']) {
       assert.equal(cols.includes(foreign), false, `${table} carries the Age column ${foreign}`);
     }
+    for (const foreign of ['learnerid', 'completionstatus', 'degreelevel', 'fieldofstudy']) {
+      assert.equal(cols.includes(foreign), false, `${table} carries the Education column ${foreign}`);
+    }
+  }
+  for (const table of eduTables) {
+    const cols = await columnsOf(table);
+    for (const foreign of ['citizenid', 'dateofbirth', 'ageover18', 'ageover21']) {
+      assert.equal(cols.includes(foreign), false, `${table} carries the Age column ${foreign}`);
+    }
+    for (const foreign of ['farmerid', 'landid', 'croptype', 'cultivatedareaacres']) {
+      assert.equal(cols.includes(foreign), false, `${table} carries the Agriculture column ${foreign}`);
+    }
+  }
+});
+
+test('each Education institution keeps its own national-id mapping', async () => {
+  guard();
+  // The same DESIGN §7 rule the two Agriculture registries are held to, and it
+  // matters more here: THREE issuers, and each must resolve the authenticated
+  // learner from its own record rather than being handed a learnerId. If any one
+  // of these lost its nationalId column, that issuer could only work by trusting
+  // something it was told, and the correlation check downstream would be checking
+  // agreement between an authority and a claim rather than between three
+  // authorities.
+  for (const table of ['schoolrecord', 'collegerecord', 'universityrecord']) {
+    const cols = await psql(
+      "select lower(column_name) from information_schema.columns where lower(table_name) like '%" +
+        table +
+        "%' order by 1",
+    );
+    const names = cols.split('\n');
+    assert.ok(names.includes('nationalid'), `${table} must carry its own nationalId, found:\n${cols}`);
+    assert.ok(names.includes('learnerid'), `${table} must carry the correlation identifier, found:\n${cols}`);
   }
 });
 

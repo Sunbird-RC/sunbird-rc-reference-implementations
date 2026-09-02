@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Credential schema specs for scripts/bootstrap.sh.
 
-A file rather than heredocs inside bootstrap.sh: three credentials with real
-claim descriptions is more text than a shell script can carry legibly, and
+A file rather than heredocs inside bootstrap.sh: six credentials with real
+claim descriptions is far more text than a shell script can carry legibly, and
 bash 3.2 (still the default on macOS) cannot parse a heredoc inside $(...) in a
 function body at all.
 
-Usage: credential-specs.py <age|farmer|land> <author-did> <vct-slug>
+Usage: credential-specs.py <age|farmer|land|school|college|university> <author-did> <vct-slug>
 Prints one JSON spec for scripts/bootstrap.sh's create_schema.
 """
 import json
@@ -85,6 +85,108 @@ SPECS = {
             "district": {"type": "string"},
         },
         "required": ["landId", "farmerId", "ownershipStatus", "cropType", "cultivatedAreaAcres"],
+    },
+    # --- Iteration 03 -------------------------------------------------------
+    #
+    # Three credentials from three authorities that have never heard of each
+    # other. Every one of them carries `learnerId` and NOT `nationalId`: the
+    # National ID is each issuer's own lookup key and must never reach a verifier
+    # (REQUIREMENTS §7), while learnerId is the only thing the three have in
+    # common and therefore the only thing correlation can be built on.
+    #
+    # `percentage` is present on all three because the Master's rule needs all
+    # three. The job rule needs only the University one, and the job portal simply
+    # does not ask for the other two — disclosure is decided per request, not by
+    # issuing two versions of a certificate.
+    "school": {
+        "name": "School Record Credential",
+        "id": "SchoolRecordCredential",
+        "tags": ["education"],
+        "description": (
+            "School completion, from the State School Board's authoritative record. learnerId is "
+            "the Education correlation identifier the verifier matches across all three "
+            "credentials. nationalId and schoolStudentId are deliberately ABSENT: the first is "
+            "the issuer's lookup key, the second identifies the learner to this institution and "
+            "no verifier needs it. completionYear travels as a selectively-disclosable claim "
+            "neither policy requests."
+        ),
+        "properties": {
+            "learnerId": {
+                "type": "string",
+                "description": "Education correlation identifier, e.g. EDU-L-004512.",
+            },
+            "completionStatus": {
+                "type": "string",
+                "description": "COMPLETED, IN_PROGRESS, DISCONTINUED or FAILED. Only COMPLETED satisfies a policy.",
+            },
+            "percentage": {
+                "type": "number",
+                "description": "Aggregate percentage, 0-100, at most two decimals. Requested only by the Master's rule.",
+            },
+            "completionYear": {"type": "integer"},
+        },
+        "required": ["learnerId", "completionStatus"],
+    },
+    "college": {
+        "name": "College Record Credential",
+        "id": "CollegeRecordCredential",
+        "tags": ["education"],
+        "description": (
+            "College completion, from the Regional Polytechnic College's authoritative record. "
+            "Carries learnerId for correlation. nationalId and collegeStudentId are deliberately "
+            "ABSENT. qualification, specialization and completionYear travel as "
+            "selectively-disclosable claims: neither policy gates on the college specialization, "
+            "so it stays with the learner."
+        ),
+        "properties": {
+            "learnerId": {"type": "string", "description": "The same correlation identifier, for correlation."},
+            "completionStatus": {
+                "type": "string",
+                "description": "COMPLETED, IN_PROGRESS, DISCONTINUED or FAILED. Only COMPLETED satisfies a policy.",
+            },
+            "percentage": {
+                "type": "number",
+                "description": "Aggregate percentage, 0-100, at most two decimals. Requested only by the Master's rule.",
+            },
+            "qualification": {"type": "string", "description": "DIPLOMA, ADVANCED_DIPLOMA or CERTIFICATE."},
+            "specialization": {"type": "string"},
+            "completionYear": {"type": "integer"},
+        },
+        "required": ["learnerId", "completionStatus"],
+    },
+    "university": {
+        "name": "University Record Credential",
+        "id": "UniversityRecordCredential",
+        "tags": ["education"],
+        "description": (
+            "Degree award, from the State University's authoritative record. The only credential "
+            "authoritative for degreeLevel and fieldOfStudy, which both policies gate on, and the "
+            "only one whose percentage the job rule requests. Carries learnerId for correlation; "
+            "nationalId and universityStudentId are deliberately ABSENT. graduationYear travels as "
+            "a selectively-disclosable claim neither policy requests, so a graduation date cannot "
+            "be used to infer age."
+        ),
+        "properties": {
+            "learnerId": {"type": "string", "description": "The same correlation identifier, for correlation."},
+            "completionStatus": {
+                "type": "string",
+                "description": "COMPLETED, IN_PROGRESS, DISCONTINUED or FAILED. Only COMPLETED satisfies a policy.",
+            },
+            "degreeLevel": {
+                "type": "string",
+                "description": "BACHELOR, MASTER, DOCTORATE or INTEGRATED. Both policies require BACHELOR.",
+            },
+            "fieldOfStudy": {
+                "type": "string",
+                "description": "Controlled vocabulary; the accepted set is policy, not schema.",
+            },
+            "percentage": {
+                "type": "number",
+                "description": "Aggregate percentage, 0-100, at most two decimals. Both policies gate on it.",
+            },
+            "graduationYear": {"type": "integer"},
+        },
+        "required": ["learnerId", "completionStatus", "degreeLevel", "fieldOfStudy"],
     },
 }
 

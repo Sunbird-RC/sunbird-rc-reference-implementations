@@ -29,6 +29,20 @@ export function deployEnv() {
     // tests skip rather than guess.
     demoPassword: process.env.DEMO_CITIZEN_PASSWORD,
   };
+  // A HALF-SET environment is the trap here, and it cost two debugging rounds:
+  // exporting PUBLIC_URL (and OPS_URL) but not AGE_ISSUER_DID silently falls
+  // through to deploy/.env, so `base` becomes the LOCAL stack while operator
+  // calls go to the remote tunnel. Offers are then created on one deployment and
+  // redeemed against another, and the only symptom is
+  // `invalid_grant: bad or used code` — which reads like a protocol bug.
+  if (fromEnvironment.base && !fromEnvironment.ageIssuerDid) {
+    throw new Error(
+      'PUBLIC_URL is set but AGE_ISSUER_DID is not, so this would fall back to deploy/.env and ' +
+        'mix two deployments. Export both (and OPS_URL when the operator port is forwarded):\n' +
+        '  PUBLIC_URL=https://host OPS_URL=http://127.0.0.1:8088 \\\n' +
+        '  AGE_ISSUER_DID=$(ssh host "grep ^AGE_ISSUER_DID= /path/deploy/.env | cut -d= -f2-") npm run test:e2e',
+    );
+  }
   if (fromEnvironment.base && fromEnvironment.ageIssuerDid) {
     return {
       base: fromEnvironment.base.replace(/\/+$/, ''),
@@ -202,6 +216,57 @@ export const NEGATIVE_LAND_FIXTURE = {
 };
 
 /**
+ * And three more for Education, which REQUIREMENTS §9 asks for one of per role.
+ *
+ * The vct slug matters here for the same reason it does above, and one degree
+ * more: the Education request pins THREE types, so a wrong slug fails to match a
+ * DCQL credential query and the test would prove the query works rather than that
+ * the per-role trust pin works.
+ */
+export const NEGATIVE_SCHOOL_FIXTURE = {
+  name: 'School Record Credential (unlisted issuer)',
+  schemaId: 'SchoolRecordCredentialUnlisted',
+  vctSlug: 'school-record-credential',
+  properties: {
+    learnerId: { type: 'string' },
+    completionStatus: { type: 'string' },
+    percentage: { type: 'number' },
+    completionYear: { type: 'integer' },
+  },
+  required: ['learnerId'],
+};
+
+export const NEGATIVE_COLLEGE_FIXTURE = {
+  name: 'College Record Credential (unlisted issuer)',
+  schemaId: 'CollegeRecordCredentialUnlisted',
+  vctSlug: 'college-record-credential',
+  properties: {
+    learnerId: { type: 'string' },
+    completionStatus: { type: 'string' },
+    percentage: { type: 'number' },
+    qualification: { type: 'string' },
+    specialization: { type: 'string' },
+    completionYear: { type: 'integer' },
+  },
+  required: ['learnerId'],
+};
+
+export const NEGATIVE_UNIVERSITY_FIXTURE = {
+  name: 'University Record Credential (unlisted issuer)',
+  schemaId: 'UniversityRecordCredentialUnlisted',
+  vctSlug: 'university-record-credential',
+  properties: {
+    learnerId: { type: 'string' },
+    completionStatus: { type: 'string' },
+    degreeLevel: { type: 'string' },
+    fieldOfStudy: { type: 'string' },
+    percentage: { type: 'number' },
+    graduationYear: { type: 'integer' },
+  },
+  required: ['learnerId'],
+};
+
+/**
  * Creates the "valid credential from an untrusted issuer" fixture if it is not
  * already there, and returns its oid4vci config.
  *
@@ -360,6 +425,76 @@ export async function issueAgricultureCredential({ base, which, issuerDid, claim
     }),
   );
   return { ...offer, credentialOfferUri: offer.credential_offer_uri, vct: cfg.vct, issuerBase: `${base}/${which}` };
+}
+
+/**
+ * Creates a pre-authorised offer on ONE of the three Education issuers.
+ *
+ * Same shape and same reasoning as issueAgricultureCredential above: the offer is
+ * created on the institution's own instance, so the vct it mints is
+ * `<host>/<which>/vct/...` — exactly what the portal's DCQL query pins. Issued
+ * from the Age instance the slug would be `<host>/vct/...`, no query would match,
+ * and a trust test would silently become a query test.
+ *
+ * Pre-authorised, not wallet-driven: scripted protocol evidence only. The
+ * learner's journey is authenticated wallet-driven issuance, which the charter
+ * says a scripted client may never stand in for.
+ *
+ * @param {{base: string, which: 'school'|'college'|'university', issuerDid: string,
+ *          claims: object, credentialName?: string}} args
+ */
+export async function issueEducationCredential({ base, which, issuerDid, claims, credentialName }) {
+  const names = {
+    school: 'School Record Credential',
+    college: 'College Record Credential',
+    university: 'University Record Credential',
+  };
+  const name = credentialName || names[which];
+  if (!name) throw new Error(`unknown education issuer '${which}'`);
+  const configs = await ok('list oid4vci configs', json(`${opsBase()}/credential-schema/oid4vci-configs`));
+  const cfg = (configs || []).find((c) => c.name === name && c.author === issuerDid);
+  if (!cfg) throw new Error(`no ${name} schema authored by ${issuerDid} — run scripts/bootstrap.sh`);
+  const configurationId = (cfg.formats || []).length > 1 ? `${cfg.schemaId}_vc+sd-jwt` : cfg.schemaId;
+  const offer = await ok(
+    `create ${which} offer`,
+    json(`${opsBase()}/${which}/oid4vc/offer`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ credential_configuration_id: configurationId, format: 'vc+sd-jwt', claims }),
+    }),
+  );
+  return { ...offer, credentialOfferUri: offer.credential_offer_uri, vct: cfg.vct, issuerBase: `${base}/${which}` };
+}
+
+/**
+ * The two Education portals' sessions and published policies.
+ *
+ * `policy` is 'masters' or 'job' and selects the use case. Parameterised rather
+ * than duplicated, for the same reason services/education-web has one script for
+ * two pages: the two portals must differ because their policy differs.
+ *
+ * Read and cancel go through the SAME prefixed URLs the portal uses. Iteration 02
+ * learned that the hard way — the suite exercised only the Age read path, so a
+ * missing route under /agriculture went unnoticed while every API test passed and
+ * the bank page reported decided applications as expired.
+ */
+export function startEducationVerification(base, policy) {
+  return ok(
+    `start education ${policy} check`,
+    json(`${base}/api/verifier/education/${policy}/sessions`, { method: 'POST' }),
+  );
+}
+
+export function educationPolicy(base, policy) {
+  return ok(`education ${policy} policy`, json(`${base}/api/verifier/education/${policy}/policy`));
+}
+
+export function readEducationVerification(base, policy, sessionId) {
+  return json(`${base}/api/verifier/education/${policy}/sessions/${sessionId}`);
+}
+
+export function cancelEducationVerification(base, policy, sessionId) {
+  return json(`${base}/api/verifier/education/${policy}/sessions/${sessionId}/cancel`, { method: 'POST' });
 }
 
 /** Starts the bank's farm-credit session: the QR the farmer's wallet scans. */

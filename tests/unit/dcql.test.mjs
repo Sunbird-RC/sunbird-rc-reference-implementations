@@ -73,3 +73,56 @@ test('supports several credentials in one request, for later iterations', () => 
 test('expectedClaimNames matches what the query asks for', () => {
   assert.deepEqual(expectedClaimNames(ageRequest), ['ageOver18', ISSUER_CLAIM].sort());
 });
+
+// The request purpose. A wallet cannot show the holder why their data is wanted
+// unless the request says so, and OpenID4VP 1.0 puts that string on the
+// credential set. Both earlier iterations shipped with the wallet's "no
+// information was provided on the purpose of the data request" notice.
+
+const PURPOSE = "Master's admission eligibility (Computer Science)";
+
+test('carries the purpose where the wallet reads it', () => {
+  const query = buildDcqlQuery([ageRequest], { purpose: PURPOSE });
+  assert.equal(query.credential_sets.length, 1);
+  assert.equal(query.credential_sets[0].purpose, PURPOSE);
+});
+
+test('one set, required, listing every credential the request asks for', () => {
+  // Not one set per credential and not one option per credential: either would
+  // make a three-credential request satisfiable by fewer than three, which is a
+  // change to what the verifier asked for and not a change to how it explains
+  // itself.
+  const query = buildDcqlQuery(
+    [
+      { id: 'school_cred', vct: 'http://localhost/vct/school', claims: ['percentage'] },
+      { id: 'college_cred', vct: 'http://localhost/vct/college', claims: ['percentage'] },
+      { id: 'university_cred', vct: 'http://localhost/vct/university', claims: ['percentage'] },
+    ],
+    { purpose: PURPOSE },
+  );
+  assert.equal(query.credential_sets.length, 1);
+  assert.equal(query.credential_sets[0].required, true);
+  assert.deepEqual(query.credential_sets[0].options, [
+    ['school_cred', 'college_cred', 'university_cred'],
+  ]);
+});
+
+test('omits the credential set entirely when no purpose is given', () => {
+  // Age and Agriculture pass no purpose, so their requests are byte-identical to
+  // the accepted ones. An empty or absent set is not the same as a set with no
+  // purpose: the second is a query the wallet would read and find nothing in.
+  const query = buildDcqlQuery([ageRequest]);
+  assert.equal('credential_sets' in query, false);
+});
+
+test('refuses a purpose that would display as nothing', () => {
+  assert.throws(() => buildDcqlQuery([ageRequest], { purpose: '' }), /non-empty string/);
+  assert.throws(() => buildDcqlQuery([ageRequest], { purpose: '   ' }), /non-empty string/);
+  assert.throws(() => buildDcqlQuery([ageRequest], { purpose: 42 }), /non-empty string/);
+});
+
+test('the purpose does not disturb the claims the query asks for', () => {
+  const withPurpose = buildDcqlQuery([ageRequest], { purpose: PURPOSE });
+  const without = buildDcqlQuery([ageRequest]);
+  assert.deepEqual(withPurpose.credentials, without.credentials);
+});

@@ -39,8 +39,8 @@ cd deploy && cp env.example .env && docker compose up -d
 ../scripts/seed-age-citizens.sh  # deterministic synthetic citizens
 cd .. && npm install
 
-npm run test:unit                # 89 tests, no stack needed
-npm run test:e2e                 # 89 tests against the running stack (Age + Agriculture)
+npm run test:unit                # 158 tests, no stack needed
+npm run test:e2e                 # 121 tests against the running stack (Age + Agriculture + Education)
 ./scripts/demo.sh                # headless walkthrough: positive and negative cases
 ./scripts/verify.sh              # environment and regression checks
 
@@ -115,6 +115,72 @@ One APK cannot satisfy both demos: both builds share the package name, so
 installing one replaces the other. See
 [iterations/02-agriculture/IMPLEMENTATION.md](iterations/02-agriculture/IMPLEMENTATION.md).
 
+## Running the Education / employment showcase
+
+The same stack again: three more issuers, a third Keycloak realm, two more
+verifier signing identities, and two portals. It builds on the steps above rather
+than replacing them.
+
+```bash
+cd deploy && docker compose up -d          # brings up the three institutions and the two VP signers
+../scripts/bootstrap.sh                    # mints five more DIDs and publishes three more schemas
+../scripts/seed-education.sh               # ten learners, every decision branch
+cd .. && npm run test:e2e                  # includes 24 Education tests
+```
+
+Then open **either** portal and press Start:
+
+* `http://localhost/admissions/` — the university, which requires 60% school,
+  60% college and **70%** university.
+* `http://localhost/employer/` — the employer, which requires **60%** university
+  and does not ask for the school or college percentage at all.
+
+With no phone in the loop, answer from the same laptop. Collect once, present
+twice, and watch the same three cards produce two different answers:
+
+```bash
+./scripts/wallet-education.sh twoAnswers job     <sessionId>   # SELECTED FOR INTERVIEW — ROUND 1
+./scripts/wallet-education.sh twoAnswers masters <sessionId>   # NOT ELIGIBLE: university 65% < 70%
+```
+
+The session id is printed under the QR. Fixtures are named by the outcome —
+`bothPolicies`, `twoAnswers`, `onTheBoundary`, `schoolBelow`, `collegeBelow`,
+`universityBelow`, `notCompleted`, `wrongField`, `mismatch`, `noUniversity`. A
+mismatched SET, which both portals must refuse with REJECTED rather than
+NOT ELIGIBLE:
+
+```bash
+./scripts/wallet-education.sh mismatch masters <sessionId> --college EDU-L-012551
+```
+
+All three cards there are genuinely issued and genuinely held by one wallet key.
+Only the learner id disagrees: it is the combination that is wrong, not any card.
+
+**The Education wallet build must list only the three institutions**, the same
+quality gate Agriculture has:
+
+```bash
+./scripts/build-wallet.sh --issuer https://<host>/school,https://<host>/college,https://<host>/university
+```
+
+The installed mobile verifier is one app with a build-time channel, so an Education
+build is named for **its own relying party** and contains no Age or Agriculture
+option at all:
+
+```bash
+cd services/verifier-mobile
+VERIFIER_USE_CASE=education-masters VERIFIER_BASE_URL=https://<host> \
+  npx expo prebuild --platform android --no-install
+cd android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+```
+
+`education-masters` gives "Master's Admissions"; `education-job` gives "Interview
+Shortlisting". Two channels because Education has two relying parties — one app
+named for both would mislabel one of them. It is **not required** for acceptance:
+`DEMO.md` puts the verifier on a website. It exists because all four builds share a
+package name, so leaving the Agriculture build installed puts "Farm Credit" on the
+home screen during an Education demo.
+
 | I want to | Read |
 |---|---|
 | Review Iteration 01 against the validation table | [docs/evidence/01-age/VALIDATION.md](docs/evidence/01-age/VALIDATION.md) |
@@ -143,6 +209,14 @@ installing one replaces the other. See
 - [Iteration 02 — Agriculture Requirements](iterations/02-agriculture/REQUIREMENTS.md)
 - [Iteration 02 — Agriculture Design](iterations/02-agriculture/DESIGN.md)
 - [Iteration 02 — Final Demo Expectations](iterations/02-agriculture/DEMO.md)
+- [Iteration 03 — Education: Start Here](iterations/03-education/START.md)
+- [Iteration 03 — Product Definition](iterations/03-education/PRODUCT.md)
+- [Iteration 03 — Requirements](iterations/03-education/REQUIREMENTS.md)
+- [Iteration 03 — Architecture & Design](iterations/03-education/DESIGN.md)
+- [Iteration 03 — Final Demo Expectations](iterations/03-education/DEMO.md)
+- [Iteration 03 — Implementation Plan and Progress](iterations/03-education/PLAN.md)
+- [Iteration 03 — Implementation Log](iterations/03-education/IMPLEMENTATION.md)
+- [Iteration 03 — Recording the demo, end to end](iterations/03-education/IMPLEMENTATION.md#recording-the-demo-end-to-end)
 
 These documents are the authoritative project baseline. Architecture and implementation must remain aligned with them.
 

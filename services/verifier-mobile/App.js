@@ -62,6 +62,32 @@ const POLL_MS = 1500;
  */
 const USE_CASE_NAME = Constants.expoConfig?.extra?.useCase ?? 'age';
 
+/**
+ * What NEITHER Education portal ever asks for.
+ *
+ * This duplicates `NEVER_REQUESTED` in the verifier's Education domain module,
+ * which the two WEB portals fetch from /policy rather than hardcode. The
+ * duplication is deliberate and narrow: this app is supporting evidence, not the
+ * charter's channel (DEMO.md puts the verifier on a website), and a third network
+ * call at start-up buys less than it costs here. It is asserted against the served
+ * list by tests/unit/mobile-verifier.test.mjs so it cannot drift into claiming a
+ * privacy guarantee the request does not make.
+ */
+const EDUCATION_WITHHELD = [
+  'National ID',
+  'name',
+  'School Student ID',
+  'College Student ID',
+  'University Student ID',
+  'date of birth',
+  'address',
+  'contact details',
+  'subjects and individual marks',
+  'transcripts',
+  'college qualification and specialization',
+  'completion and graduation years',
+];
+
 const USE_CASES = {
   age: {
     api: `${BASE}/api/verifier`,
@@ -101,6 +127,62 @@ const USE_CASES = {
     // legible if the app names the absence.
     withheld: ['National ID', 'name', 'land ID', 'total land area', 'district', 'farmer category'],
   },
+  // Iteration 03. Two channels, because there are two relying parties — see
+  // app.config.js. They share everything except the policy behind them, exactly
+  // as the two web portals share one script.
+  //
+  // `nested: true` marks the response shape: Education returns `disclosed`
+  // keyed by credential (school / college / university) rather than flat,
+  // because `learnerId` arriving three times IS the correlation the verifier
+  // checked, and flattening it would hide the one fact the screen most needs to
+  // show. `rule: true` marks that the response carries thresholds to display.
+  //
+  // `headline: true` means the ELIGIBLE wording comes from the SERVICE. PRODUCT
+  // forbids ever saying ADMITTED or implying a job offer, so the words live in
+  // the module the tests assert against, never in this file.
+  'education-masters': {
+    api: `${BASE}/api/verifier/education/masters`,
+    eyebrow: "STATE UNIVERSITY — MASTER'S ADMISSIONS",
+    title: "Apply for a Computer Science Master's",
+    lede:
+      'This app asks your wallet for eleven things from three cards — your school, college and university records — enough to confirm all three belong to you and that each result meets the published bar. Not your National ID, not your name, not a single subject mark.',
+    startLabel: 'Start the application',
+    cancelLabel: 'Cancel this application',
+    againLabel: 'Run another application',
+    nothingLine: 'Nothing was disclosed and no decision was produced.',
+    cancelledLine: 'The application was cancelled. Nothing was disclosed and no decision was produced.',
+    expiredLine:
+      'No presentation arrived before the request expired. Nothing was disclosed and no decision was produced.',
+    approved: 'ELIGIBLE',
+    rejectedLabel: 'REJECTED / UNABLE TO VERIFY',
+    nested: true,
+    rule: true,
+    headline: true,
+    withheld: EDUCATION_WITHHELD,
+  },
+  'education-job': {
+    api: `${BASE}/api/verifier/education/job`,
+    eyebrow: 'EMPLOYER — SOFTWARE ENGINEER HIRING',
+    title: 'Apply for a Software Engineer role',
+    lede:
+      'This app asks your wallet for nine things from three cards — enough to confirm the three records belong to you, that each qualification is finished, and that your degree meets the bar. This role does not use your school or college percentage, so it is not requested at all.',
+    startLabel: 'Start the application',
+    cancelLabel: 'Cancel this application',
+    againLabel: 'Run another application',
+    nothingLine: 'Nothing was disclosed and no decision was produced.',
+    cancelledLine: 'The application was cancelled. Nothing was disclosed and no decision was produced.',
+    expiredLine:
+      'No presentation arrived before the request expired. Nothing was disclosed and no decision was produced.',
+    approved: 'ELIGIBLE',
+    rejectedLabel: 'REJECTED / UNABLE TO VERIFY',
+    nested: true,
+    rule: true,
+    headline: true,
+    // The job channel additionally never receives the school or college
+    // percentage — it does not request them. Listed first because that asymmetry
+    // between the two portals is the clearest privacy evidence in the iteration.
+    withheld: ['school percentage', 'college percentage', ...EDUCATION_WITHHELD],
+  },
 };
 
 const COLOURS = {
@@ -125,6 +207,37 @@ function Checks({ checks }) {
           {name} {checks[name] === 'OK' ? '✓' : '✗'}
         </Text>
       ))}
+    </View>
+  );
+}
+
+/**
+ * One threshold, against what was actually presented.
+ *
+ * Every value arrives ALREADY FORMATTED from the service — `verified[role].percentage`
+ * and `shortfall.actual` both carry their own '%'. This app must not be able to
+ * render a percentage differently from the service that decided on it, which is
+ * the same rule the bank's money follows.
+ */
+function Rule({ thresholds, verified, shortfall }) {
+  const roles = Object.keys(thresholds || {});
+  if (!roles.length) return null;
+  return (
+    <View style={styles.calc}>
+      {roles.map((role) => {
+        const short = shortfall?.role === role;
+        const met = verified?.[role]?.percentage;
+        return (
+          <View key={role} style={styles.calcLine}>
+            <Text style={styles.calcKey}>
+              {role} — requires {thresholds[role]}%
+            </Text>
+            <Text style={[styles.calcValue, short && { color: COLOURS.failed }]}>
+              {short ? `${shortfall.actual} — short` : met ? `${met} — met` : 'not reached'}
+            </Text>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -271,7 +384,12 @@ export default function App() {
   const decided = phase === 'decided' ? result?.decision : null;
   const verdict =
     phase === 'decided'
-      ? String(decided ?? '').replace(/_/g, ' ')
+      ? useCase.headline && decided === useCase.approved && result?.headline
+        ? // PRODUCT's exact words, from the service. 'ELIGIBLE' alone would be a
+          // paraphrase, and the distinction between eligibility and admission is
+          // the thing PRODUCT is most explicit about.
+          result.headline
+        : String(decided ?? '').replace(/_/g, ' ')
       : phase === 'nothing'
         ? 'NO DATA SHARED'
         : useCase.rejectedLabel;
@@ -348,15 +466,48 @@ export default function App() {
                 <Text style={styles.rowValue}>{issuers}</Text>
               </View>
             )}
+            {/* The rule, shown rather than asserted: every threshold this policy
+                declared against what was presented, so a NOT ELIGIBLE verdict
+                names the single number that fell short. */}
+            {!!useCase.rule && !!result?.thresholds && (
+              <Rule
+                thresholds={result.thresholds}
+                verified={result.verified}
+                shortfall={result.shortfall}
+              />
+            )}
+
+            {!!result?.learnerId && (
+              <View style={styles.row}>
+                <Text style={styles.rowKey}>LEARNER</Text>
+                <Text style={styles.rowValue}>
+                  {result.learnerId} — correlated across all three
+                </Text>
+              </View>
+            )}
+
             {!!result?.disclosed && (
               <View style={styles.row}>
                 <Text style={styles.rowKey}>SHARED WITH US</Text>
                 <View style={styles.pills}>
-                  {Object.entries(result.disclosed).map(([k, v]) => (
-                    <Text key={k} style={[styles.pill, styles.pillShared]}>
-                      {k} = {String(v)}
-                    </Text>
-                  ))}
+                  {/* Education returns `disclosed` keyed by credential, so it is
+                      rendered per credential. Flattening it would print
+                      '[object Object]' — and, worse, would hide that `learnerId`
+                      arrives three times, which is the correlation the verifier
+                      checked and the one fact this screen most needs to show. */}
+                  {useCase.nested
+                    ? Object.entries(result.disclosed).flatMap(([role, claims]) =>
+                        Object.entries(claims || {}).map(([k, v]) => (
+                          <Text key={`${role}.${k}`} style={[styles.pill, styles.pillShared]}>
+                            {role} {k} = {String(v)}
+                          </Text>
+                        )),
+                      )
+                    : Object.entries(result.disclosed).map(([k, v]) => (
+                        <Text key={k} style={[styles.pill, styles.pillShared]}>
+                          {k} = {String(v)}
+                        </Text>
+                      ))}
                   {/* What was deliberately NOT received. The privacy claim is
                       only legible if the absence is named. */}
                   {useCase.withheld.map((name) => (
@@ -398,7 +549,12 @@ export default function App() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLOURS.ivory },
-  scroll: { padding: 24, paddingTop: 64, gap: 12 },
+  // paddingBottom clears the system navigation bar. The Age and Agriculture
+  // results were short enough never to reach it; Education's is not — eleven
+  // disclosed claims, twelve withheld ones and eight verification pills — so the
+  // last pills and the reset button sat underneath it, reachable only by
+  // over-scrolling. Found by scrolling to the bottom on the device.
+  scroll: { padding: 24, paddingTop: 64, paddingBottom: 96, gap: 12 },
   brand: { color: COLOURS.terracotta, fontSize: 18, fontWeight: '700' },
   eyebrow: { color: COLOURS.muted, fontSize: 12, letterSpacing: 1.2, fontWeight: '700' },
   title: { color: COLOURS.ink, fontSize: 32, fontWeight: '800', marginTop: 4 },
