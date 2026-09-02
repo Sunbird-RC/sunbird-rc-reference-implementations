@@ -32,44 +32,23 @@ candidate for the first interview round. The real-world need is trusted,
 portable education evidence that can be reused across purposes without merging
 institutional registries or disclosing the learner's complete education record.
 
-## Ecosystem actors
-
-| Actor | Responsibility | Illustrative global examples |
-|---|---|---|
-| Learner | Authenticates, obtains credentials and controls their presentation | A student moving between school, vocational education, university, postgraduate study and employment—within one country or across borders |
-| School or awarding body | Maintains school-completion records and issues School Certificates | A public or private school, national examination board, State/provincial board, Cambridge-style awarding body or ministry of education |
-| College or training provider | Maintains diploma, vocational or undergraduate records and issues credentials | A community college, vocational institute, polytechnic, autonomous college or university-affiliated college |
-| University | Maintains degree records and issues University Degrees | A recognized public, private, federal, national or international university |
-| Recognition or accreditation body | Establishes whether an institution, programme or qualification is recognized | A national qualifications authority, accreditation agency, UGC or professional council in India, ENIC-NARIC centre in Europe, or the relevant regulated-profession body |
-| Identity provider | Authenticates the learner and supports issuer-side record lookup | An institution account, national eID such as Singpass or Aadhaar where legally permitted, or another government identity service; Keycloak performs this role in the demonstration |
-| Wallet | Stores the three credentials and presents selected information | A standards-compatible learner wallet; Europass in Europe and DigiLocker/NAD in India are real-world examples of digital academic-credential services, with different technical profiles |
-| Postgraduate institution | Verifies education history and evaluates admission-pool eligibility | A university, graduate school or other recognized higher-education institution receiving Master's applications |
-| Employer | Verifies education history and evaluates interview-round eligibility | A private company, public-sector organization, international employer, nonprofit or government recruitment body |
-
-These examples illustrate role categories across jurisdictions and do not imply
-participation in the reference implementation. The
-[European Digital Credentials for Learning](https://europass.europa.eu/en/european-digital-credentials-learning)
-show how institutions can issue credentials to a learner wallet for education
-and employment use, while India's
-[DigiLocker National Academic Depository](https://nad.digilocker.gov.in/about)
-provides another model for authentic digital academic awards.
-
-### Ecosystem coverage and boundaries
+## Ecosystem participants, coverage and boundaries
 
 The reference application makes three independently issued qualifications
 reusable for two decisions. It does not implement the complete institutional,
 accreditation, admissions or recruitment lifecycle.
 
-| Participant | Coverage in this reference implementation | Production responsibility or integration remaining |
-|---|---|---|
-| Learner | **Demonstrated:** synthetic learners obtain, store and present three credentials | Real enrolment identity, corrections, recovery, accessibility and learner support |
-| School or awarding body | **Represented and issued:** an independent synthetic record and issuer provide the School credential | Connection to the student system, authorized issuance and correction process |
-| College or training provider | **Represented and issued:** a second independent record and issuer provide the College credential | Institutional integration, programme governance and production key custody |
-| University | **Represented and issued:** a third issuer provides the degree and a separate Master’s verifier | Student-system integration, recognition checks, application management and admission-list process |
-| Recognition or accreditation body | **Not integrated:** configured issuer trust represents recognition | Authoritative recognition registry, status changes, appeals and cross-border rules |
-| Wallet provider | **Demonstrated:** the same wallet and credentials serve both applications | Production assurance, recovery, device security and standards-profile acceptance |
-| Postgraduate institution | **Demonstrated:** verifies all three credentials and applies the 60/60/70 eligibility rule | Intake, ranking, quotas, fees, exceptions, final selection and enrolment |
-| Employer | **Demonstrated:** requests fewer marks and applies the University 60% interview rule | Applicant tracking, skills and experience checks, interviews, background checks and employment |
+| Participant | Ecosystem responsibility and examples | Coverage in this reference implementation | Production responsibility or integration remaining |
+|---|---|---|---|
+| Learner | Obtains and controls qualifications across education and employment journeys | **Demonstrated:** synthetic learners store and present three credentials | Enrolment identity, corrections, recovery, accessibility and learner support |
+| School or awarding body | Maintains completion records and issues credentials; for example a school, examination board or ministry | **Represented and issued:** an independent synthetic record and issuer provide the School credential | Student-system connection, authorized issuance and corrections |
+| College or training provider | Maintains diploma, vocational or undergraduate records | **Represented and issued:** a second record and issuer provide the College credential | Institutional integration, programme governance and production key custody |
+| University | Maintains degree records, issues credentials and may receive postgraduate applications | **Represented and issued:** a third issuer and separate Master’s verifier are implemented | Student-system integration, recognition, application management and admission-list process |
+| Recognition or accreditation body | Determines recognized institutions and qualifications; for example a qualifications authority, accreditation agency or ENIC-NARIC centre | **Not integrated:** configured issuer trust represents recognition | Authoritative recognition registry, status changes, appeals and cross-border rules |
+| Identity provider | Authenticates the learner and supports issuer-side lookup | **Represented:** Keycloak authenticates synthetic learner accounts | Institution or national identity integration and assurance lifecycle |
+| Wallet provider | Stores three credentials and discloses information by purpose | **Demonstrated:** the same wallet serves both applications without reissuance | Production assurance, recovery, device security and standards-profile acceptance |
+| Postgraduate institution | Verifies education history and evaluates application eligibility | **Demonstrated:** applies the 60/60/70 rule and stops at admission-list consideration | Intake, ranking, quotas, fees, exceptions, final selection and enrolment |
+| Employer | Verifies qualifications and determines interview-round eligibility | **Demonstrated:** requests fewer marks and applies the University 60% rule | Applicant tracking, skills and experience checks, interviews, background checks and employment |
 
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'fontFamily':'Inter, system-ui, Arial','primaryColor':'#E0EEFF','primaryTextColor':'#1C1D1F','primaryBorderColor':'#346DDB','lineColor':'#79859B','secondaryColor':'#F6F7FA','tertiaryColor':'#FFFFFF'}}}%%

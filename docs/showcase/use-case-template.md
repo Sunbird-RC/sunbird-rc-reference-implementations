@@ -7,25 +7,24 @@ Use this structure to explain a new application of Sunbird RC.
 Describe the sector problem, why current approaches are difficult, and what
 better outcome is required.
 
-## Ecosystem actors
+## Ecosystem participants, coverage and boundaries
 
-After identifying the actors, add an **Ecosystem coverage and boundaries** table
-with one row per relevant participant. State whether each role is demonstrated,
-represented using synthetic data or configuration, an external integration
-boundary, or outside the reference application's scope. Clearly separate what
-the reference implementation solves from the production responsibilities left
-to institutions, governance bodies and service operators.
+Use one integrated table rather than separate actor and scope sections. Include
+every relevant participant, its real-world responsibility and examples, what the
+reference implementation demonstrates or represents, and the production work
+that remains. Mark each role as **Demonstrated**, **Represented with synthetic
+data/configuration**, an **Integration boundary**, or **Not addressed**.
 
-| Actor | Responsibility |
-|---|---|
-| Record authority | Maintains the authoritative data |
-| Credential issuer | Issues a credential from trusted records |
-| Holder | Obtains and controls the credential |
-| Wallet | Stores and presents credentials with consent |
-| Verifier | Verifies evidence and provides a service or decision |
+| Participant | Ecosystem responsibility and examples | Reference coverage | Production integration remaining |
+|---|---|---|---|
+| Record authority | Maintains authoritative data | Represented with synthetic records | Source-system integration and stewardship |
+| Credential issuer | Issues credentials from trusted records | State whether issuance is demonstrated | Accreditation, keys, revocation and operations |
+| Holder and wallet | Controls storage and consent | State which wallet journeys are demonstrated | Assurance, recovery, accessibility and support |
+| Verifier | Verifies evidence and provides a service | State the exact demonstrated decision | Service integration and complete business process |
+| Governance body | Defines trust and accountability | State any configuration used as a stand-in | Trust-list operation, policy, audit and appeals |
 
-Adapt the actors to the ecosystem. Do not combine distinct authorities merely to
-simplify the diagram.
+Do not combine distinct authorities merely to simplify the diagram, and do not
+present simulated institutions as completed production integrations.
 
 ## The application
 

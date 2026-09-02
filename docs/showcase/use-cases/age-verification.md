@@ -25,37 +25,21 @@ specific age question, can be verified as originating from an authoritative
 source, remains under the citizen's control and does not expose unnecessary
 identity information.
 
-## Ecosystem actors
-
-| Actor | Responsibility | Illustrative global examples |
-|---|---|---|
-| Citizen or resident | Authenticates, obtains the credential and controls its presentation | A resident using a national eID, civil identity or another government-recognized identity account |
-| Identity authority | Maintains authoritative identity information and enables a trusted age assertion | UIDAI/Aadhaar in India, a national civil-registration or population-registry authority, or an identity authority participating in a national eID ecosystem |
-| Identity provider | Authenticates the person and connects the session to the correct source record | Singpass in Singapore, an eIDAS-notified national eID scheme in Europe, Aadhaar authentication where legally permitted, or another public identity provider; Keycloak performs this role in the demonstration |
-| Credential issuer | Converts the authoritative age fact into a signed, wallet-held credential | A national identity authority, civil-registration authority, licensing authority or another legally authorized issuer |
-| Wallet | Stores the credential, displays requests and obtains consent | A standards-compatible government, commercial or open-source digital credential wallet |
-| Age-restricted service | Requests the minimum age evidence and makes the access decision | A regulated-goods retailer, online platform, venue, gaming service, benefits programme or public service |
-
-The examples show how roles may be mapped in different jurisdictions; they do
-not imply participation in or endorsement of this demonstration. For reference,
-[UIDAI operates India's Aadhaar identity ecosystem](https://www.uidai.gov.in/en/about-uidai/unique-identification-authority-of-india.html),
-while [Singpass is Singapore's national digital identity provider](https://docs.developer.singpass.gov.sg/docs/introduction/overview-of-singpass).
-
-### Ecosystem coverage and boundaries
+## Ecosystem participants, coverage and boundaries
 
 The reference application implements the credential journey across the
 highlighted participants. It does not replace the governance, legal authority or
 operating systems that make an identity ecosystem authoritative.
 
-| Participant | Coverage in this reference implementation | Production responsibility or integration remaining |
-|---|---|---|
-| Citizen | **Demonstrated:** a synthetic citizen authenticates, receives the credential and controls both presentation channels | Real enrolment, account recovery, accessibility, support and lawful-consent arrangements |
-| Identity provider | **Represented:** Keycloak authenticates synthetic National ID accounts | Integration with the approved identity provider, required assurance level and account lifecycle |
-| Identity authority and Registry | **Represented:** Sunbird RC maintains synthetic citizen records and resolves the authenticated user | Authoritative data onboarding, corrections, stewardship, retention and lawful-use controls |
-| Credential issuer | **Demonstrated:** derives and signs a holder-bound SD-JWT age credential | Issuer accreditation, production keys, revocation, expiry and audit operations |
-| Wallet provider | **Demonstrated:** the customized open-source wallet stores the credential and obtains consent | Wallet assurance, device security, recovery and interoperability acceptance |
-| Age-restricted service | **Demonstrated:** web QR and mobile deep-link verifiers return approved or denied outcomes | Integration with the actual service, applicable age policy, exceptions and retention rules |
-| Trust and regulatory bodies | **Not integrated:** a configured allowlist represents ecosystem trust | Legislation, accreditation, trust-list operation, dispute resolution and oversight |
+| Participant | Ecosystem responsibility and examples | Coverage in this reference implementation | Production responsibility or integration remaining |
+|---|---|---|---|
+| Citizen or resident | Obtains and controls an age proof; a resident using a national eID or civil identity | **Demonstrated:** a synthetic citizen authenticates, receives the credential and controls both presentation channels | Real enrolment, account recovery, accessibility, support and lawful-consent arrangements |
+| Identity provider | Authenticates and binds the session to the record; for example Singpass, an eIDAS-notified scheme or Aadhaar where lawful | **Represented:** Keycloak authenticates synthetic National ID accounts | Integration with the approved provider, required assurance and account lifecycle |
+| Identity authority and Registry | Maintains authoritative identity and birth records; for example a civil registry or national identity authority | **Represented:** Sunbird RC maintains synthetic records and resolves the authenticated user | Data onboarding, corrections, stewardship, retention and lawful-use controls |
+| Credential issuer | Derives and signs the age condition under the authority's mandate | **Demonstrated:** issues a holder-bound SD-JWT credential | Accreditation, production keys, revocation, expiry and audit operations |
+| Wallet provider | Protects the credential, displays requests and mediates consent | **Demonstrated:** the customized open-source wallet stores and presents it | Wallet assurance, device security, recovery and interoperability acceptance |
+| Age-restricted service | Requests minimum evidence and decides access; for example a retailer, platform, venue or public service | **Demonstrated:** web QR and mobile deep-link verifiers return outcomes | Integration with the actual service, applicable policy, exceptions and retention rules |
+| Trust and regulatory bodies | Define recognized issuers, purposes and accountability | **Not integrated:** a configured allowlist represents trust | Legislation, trust-list operation, dispute resolution and oversight |
 
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'fontFamily':'Inter, system-ui, Arial','primaryColor':'#E0EEFF','primaryTextColor':'#1C1D1F','primaryBorderColor':'#346DDB','lineColor':'#79859B','secondaryColor':'#F6F7FA','tertiaryColor':'#FFFFFF'}}}%%

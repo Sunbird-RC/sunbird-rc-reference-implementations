@@ -28,42 +28,22 @@ real-world need is a trusted and portable way for farmers to bring verified
 facts from independent authorities into a lender's digital journey, with clear
 consent and minimum disclosure.
 
-## Ecosystem actors
-
-| Actor | Responsibility | Illustrative global examples |
-|---|---|---|
-| Farmer | Authenticates, obtains both credentials and consents to presentation | A smallholder, tenant, cooperative member or commercial farmer applying for seasonal or investment credit |
-| Farmer Registry | Maintains farmer identity and registration records and issues Farmer Identity Credentials | A national or subnational farmer registry, agricultural-beneficiary registry, cooperative member registry or India's AgriStack Farmer Registry model |
-| Agriculture authority | Governs farmer registration and relevant crop information | A ministry of agriculture, provincial/state agriculture department, agricultural payments agency or authorized programme operator |
-| Land Registry | Maintains ownership, tenure, parcel and acreage records and issues Land Ownership Credentials | A national cadastral agency, deeds or titles registry, local land office, or State land-records department such as those operating under India's DILRMP |
-| Identity provider | Authenticates the farmer and connects the person to the applicable records | A national eID provider such as Singpass or Aadhaar where legally authorized, or a sector identity provider; Keycloak performs this role in the demonstration |
-| Wallet | Stores both credentials and presents selected claims together | A standards-compatible farmer, cooperative, bank, government or open-source credential wallet |
-| Lender | Verifies both credentials, correlates the farmer and applies its credit rule | A commercial or development bank, rural or agricultural bank, credit cooperative, microfinance provider or digital lender |
-
-The examples are jurisdiction-neutral role patterns, not a claim that any named
-programme participates in the demo. Farmer registries may be national,
-subnational or cooperative, while land administration may use deeds, titles,
-cadastres or customary-tenure records. India's
-[Farmer Registry guidance](https://agristack.gov.in/assets/registries/farmerRegistry/farmer_registry_faqs.pdf)
-and [DILRMP](https://dolr.gov.in/en/programmes-schemes/dilrmp-2/) are concrete
-examples of these broader registry categories.
-
-### Ecosystem coverage and boundaries
+## Ecosystem participants, coverage and boundaries
 
 The reference application connects trusted farmer and land evidence to a sample
 lending decision. It demonstrates the credential inputs, not an entire
 agricultural-finance operating model.
 
-| Participant | Coverage in this reference implementation | Production responsibility or integration remaining |
-|---|---|---|
-| Farmer | **Demonstrated:** synthetic farmers authenticate, hold two credentials and consent to presentation | Real enrolment, assisted access, corrections, recovery and grievance support |
-| Identity provider | **Represented:** Keycloak maps synthetic National IDs to the correct records | Approved national or sector identity integration, assurance and account lifecycle |
-| Farmer Registry and agriculture authority | **Represented:** a separate Sunbird RC entity supplies the Farmer credential | Authoritative onboarding, stewardship, current crop-data sources and corrections |
-| Land Registry | **Represented:** a separate entity and issuer supply one ownership record per farmer | Cadastral/title integration, tenure complexity, leases, disputes, encumbrances and change events |
-| Farmer and Land issuers | **Demonstrated:** independent identities issue role-specific credentials | Issuer onboarding, production keys, revocation, expiry and trust-registry operation |
-| Wallet provider | **Demonstrated:** both credentials are stored and selectively presented together | Production wallet assurance, recovery, device security and interoperability testing |
-| Bank or lender | **Demonstrated:** a mock bank verifies the evidence and calculates a maximum amount | KYC/AML, credit risk, pricing, underwriting, sanction, disbursement, repayment and servicing |
-| Agricultural and financial governance | **Not integrated:** static configuration represents trust and crop-rate policy | Governed rates, regulation, audit, appeals, liability and ecosystem operations |
+| Participant | Ecosystem responsibility and examples | Coverage in this reference implementation | Production responsibility or integration remaining |
+|---|---|---|---|
+| Farmer | Obtains and presents evidence; a smallholder, tenant, cooperative member or commercial farmer | **Demonstrated:** synthetic farmers hold two credentials and consent to presentation | Enrolment, assisted access, corrections, recovery and grievance support |
+| Identity provider | Authenticates National ID and connects the farmer to records | **Represented:** Keycloak performs deterministic synthetic mapping | Approved identity integration, assurance and account lifecycle |
+| Farmer Registry and agriculture authority | Maintain farmer registration and programme information; typically a ministry, agency or cooperative | **Represented:** a separate Sunbird RC entity supplies the Farmer credential | Authoritative onboarding, stewardship, crop-data sources and corrections |
+| Land Registry | Maintains land identity, ownership and acreage; typically a cadastral, deeds or titles authority | **Represented:** a separate entity and issuer supply one ownership record per farmer | Title integration, tenure complexity, leases, disputes and change events |
+| Farmer and Land issuers | Issue independently trusted, role-specific credentials | **Demonstrated:** separate identities and issuer-role trust are verified | Onboarding, production keys, revocation, expiry and trust-registry operation |
+| Wallet provider | Stores both credentials and presents selected claims together | **Demonstrated:** the wallet preserves issuer separation and consent | Production assurance, recovery, device security and interoperability testing |
+| Bank or lender | Verifies evidence and applies credit policy; for example a rural bank, cooperative or microfinance provider | **Demonstrated:** a mock bank calculates a maximum amount | KYC/AML, risk, pricing, underwriting, sanction, disbursement, repayment and servicing |
+| Agricultural and financial governance | Define recognized authorities, crop rates and regulated lending rules | **Not integrated:** static configuration represents trust and rates | Governed rates, regulation, audit, appeals, liability and operations |
 
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'fontFamily':'Inter, system-ui, Arial','primaryColor':'#E0EEFF','primaryTextColor':'#1C1D1F','primaryBorderColor':'#346DDB','lineColor':'#79859B','secondaryColor':'#F6F7FA','tertiaryColor':'#FFFFFF'}}}%%
