@@ -1,7 +1,9 @@
 # Education credentials for admission and employment
 
-> This application is being built. The page describes the intended solution and
-> will be updated with working evidence after the demonstration is accepted.
+> **Status: completed reference implementation, synchronized through Iteration
+> 03.** The three-credential admission and employment journeys use synthetic
+> education records. See the
+> [committed evidence](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/docs/sunbird-rc-showcase-v1/docs/evidence/03-education).
 
 ## The problem
 
@@ -178,13 +180,13 @@ Successful verification does not itself mean admission or employment.
 
 ## Watch the education application
 
-> **Video placeholder — in development** — The final video should show all three
-> credentials being issued and stored, followed by a Master's application and a
-> job application using the same credentials. It should include eligible,
-> ineligible, verification-rejection and refusal outcomes. Replace this block
-> only after the working application is accepted.
+The committed demonstration covers all three credentials being issued, retained
+and reused for Master's and job applications, including eligible, ineligible,
+verification-rejection and refusal outcomes.
 
-## Intended experience
+[Watch the committed Education demonstration](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/blob/docs/sunbird-rc-showcase-v1/docs/evidence/03-education/Education-Employment-Showcase-01Sep.mp4)
+
+## Experience demonstrated
 
 ### Obtain the credentials
 

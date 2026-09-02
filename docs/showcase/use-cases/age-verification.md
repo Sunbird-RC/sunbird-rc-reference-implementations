@@ -1,5 +1,9 @@
 # Privacy-preserving age verification
 
+> **Status: completed reference implementation.** The issuance, cross-device and
+> same-device journeys have been validated with synthetic data. See the
+> [committed evidence](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/docs/sunbird-rc-showcase-v1/docs/evidence/01-age).
+
 ## The problem
 
 Age checks are required across many everyday services: access to age-restricted
@@ -144,10 +148,11 @@ other identity attributes are not shared with the verifier.
 
 ## Watch the age-verification application
 
-> **Demonstration video placeholder** — Show direct wallet issuance, web QR
-> verification, same-device deep-link verification, the consent screen, minimum
-> disclosure, and both approved and denied outcomes. Replace this block with the
-> public video URL when available.
+The committed validation evidence covers direct wallet issuance, web QR and
+same-device deep-link verification, consent, minimum disclosure, and approved
+and denied outcomes.
+
+[Review the Age evidence and test results](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/docs/sunbird-rc-showcase-v1/docs/evidence/01-age)
 
 ## Experience demonstrated
 
