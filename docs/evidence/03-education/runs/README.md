@@ -21,19 +21,46 @@ Against the **public deployment**, after it was moved to `c8beec27`:
 |---|---|---|
 | [`test-unit-deployment.txt`](test-unit-deployment.txt) | `npm run test:unit` | **175 passed, 0 failed** |
 | [`test-e2e-deployment.txt`](test-e2e-deployment.txt) | `npm run test:e2e` | **150 passed, 0 failed** |
+| [`verify-deployment.txt`](verify-deployment.txt) | `./scripts/verify.sh --no-tests` | **116 passed, 0 failed, 1 skipped** |
+
+`verify-deployment.txt` is seven checks better than the local capture, and one of
+them matters: **the wallet trust-pinning check runs only when the wallet's built
+host matches the deployment**, so it is skipped in every local run and passes here.
+Its single skip is `--no-tests`, this file's own flag.
+
+That capture needed no ssh tunnel. `verify.sh` makes no live call to the operator
+port — its three references to `8088` are static assertions about `nginx.conf` and
+the compose files — and the `VERIFIER_DID` it wants was read from the deployment's
+own presentation request, since the `client_id` of a `did:web` verifier is public
+by construction.
 
 The end-to-end run is the one that matters for this round: it exercises both
 review fixes against the public origin over its real certificate, including the
 three over-disclosure tests and the three cross-issuer tests listed above.
 
-**Two deployment captures are not yet committed** — the Age/Agriculture
-regression subset and `verify.sh`. Both were run against the deployment and both
-hit the artefacts described below rather than defects: the regression subset
-tripped Keycloak's brute-force lockout on its Flow 1 login, and `verify.sh`
-reported its own *working tree clean* check as failed because documentation was
-uncommitted at the time. Re-running them needs ssh, which stopped answering
-again. The local-stack captures for both are committed and green, and the
-one-command way to redo them against the deployment is:
+### The Age and Agriculture regression, against the deployment
+
+There is no separate `regression-01-02-deployment.txt`, because there is nothing
+for it to add: **that subset is contained in the 150-test end-to-end capture
+above, and every one of its suites passed there.** `npm run test:e2e` runs all of
+it, and the split file elsewhere in this directory is a reporting convenience
+rather than extra coverage.
+
+The arithmetic closes exactly: 150 total − 52 Education (35 in
+`education.test.mjs`, 17 in `flow3-education-issuance.test.mjs`) = **98**, which is
+the regression subset's own count. And it is not only arithmetic —
+[`test-e2e-deployment.txt`](test-e2e-deployment.txt) lists all 49 top-level suites
+as `ok`, among them Age (suites 1–9), Agriculture (10–18), the untrusted-issuer
+set (19), the algorithm policy (20), data isolation (21–28), Flow 1 (38–42) and
+Flow 2 (43–45).
+
+Worth noting: suite **41**, *Flow 1 — the authorization server accepts what the
+issuer advertises*, passes in that capture. It is the one that failed when the
+subset was run separately minutes later, which confirms that failure was
+Keycloak's brute-force lockout rather than a defect.
+
+A separate subset run would need the ssh tunnel and the host's demo password.
+When ssh is reachable, the one-command way to produce it is:
 
 ```bash
 DEMO_HOST=user@host DEMO_SSH_KEY=~/.ssh/key.pem \
