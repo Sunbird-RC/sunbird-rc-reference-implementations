@@ -8,7 +8,7 @@ in its own order, against the evidence that closes it.
 | Source | Where |
 |---|---|
 | **V** — the demonstration video, by part | [`Education-Employment-Showcase-01Sep.mp4`](Education-Employment-Showcase-01Sep.mp4) |
-| **F** — the purpose follow-up segment, 26 s | [`Education-Purpose-Followup-02Sep.mp4`](Education-Purpose-Followup-02Sep.mp4) |
+| **F** — the purpose follow-up segment, 39 s | [`Education-Purpose-Followup-02Sep.mp4`](Education-Purpose-Followup-02Sep.mp4) |
 | **U** — unit suite, 175 passed | [`runs/test-unit.txt`](runs/test-unit.txt) |
 | **E** — end-to-end suite, 150 passed, against the local stack | [`runs/test-e2e.txt`](runs/test-e2e.txt) |
 | **C** — `verify.sh --no-tests`, 109 passed / 0 failed / 2 skipped | [`runs/verify.txt`](runs/verify.txt) |
@@ -86,7 +86,7 @@ here and in [Known deviations](#known-deviations) — or **NOT MET**, stated pla
 | Requirement | Evidence | Status |
 |---|---|---|
 | Starts a separate QR request for all three credentials | **V** part 5 | MET |
-| Uses its own purpose and disclosure policy | **V** part 5, "not requested at all" on the page · **C** "the job portal does not request the school or college percentage" | MET |
+| Uses its own purpose and disclosure policy | **V** part 5, "not requested at all" on the page · **F** the employer's own purpose, and its school card with no Percentage row, on the device · **C** "the job portal does not request the school or college percentage" | MET |
 | Requires passed School and College, completed Bachelor in an accepted field, University ≥ 60 | **V** parts 5 and 7 · **U** decision tests | MET |
 | Eligible means selected for interview round one | **V** part 5 — the service's exact words | MET |
 | It must not claim employment, an offer or final selection | **U** "must never say HIRED / JOB OFFER / APPOINTED / EMPLOYED" · **E** asserted on the wire · **V** part 5, the disclaimer line on screen | MET |
@@ -177,12 +177,14 @@ object** for both portals and asserts its purpose equals the published one, and
 reads. Recorded as **finding 18** in
 [`../../design/COMPATIBILITY.md`](../../design/COMPATIBILITY.md).
 
-**The employer screen is asserted but not filmed.** Its purpose differs —
-*"Software Engineer interview eligibility (round one)"* — and it is covered by
-the same `verify.sh` check and the same unit and end-to-end tests, but no device
-capture of it exists: the phone was disconnected before that run, and a
-same-device deep link to that portal cannot be used to get one because of
-**finding 19**.
+**Both portals are filmed.** The employer's screen states its own purpose,
+*"Software Engineer interview eligibility (round one)"*, and shows something the
+purpose alone does not: its school card has **no Percentage row**, because the
+job policy asks only for `learnerId` and `completionStatus` there. The two
+consent screens differ exactly as the two published policies differ, on the
+screen the holder reads rather than only in a test. Captured over the
+cross-device QR journey the charter specifies — a same-device deep link to that
+portal cannot be used at all, for the reason in deviation 5.
 
 **2. Over-disclosure was filtered upstream, not refused. CLOSED.** A wallet that
 revealed a claim the request did not ask for used to get a DECIDED answer: DCQL

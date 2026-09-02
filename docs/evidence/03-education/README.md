@@ -5,7 +5,7 @@ needed to run it if you want to.
 
 - **The line-by-line acceptance table:** [`ACCEPTANCE.md`](ACCEPTANCE.md)
 - **The demonstration video:** [`Education-Employment-Showcase-01Sep.mp4`](Education-Employment-Showcase-01Sep.mp4)
-- **The purpose follow-up segment, 26 s:** [`Education-Purpose-Followup-02Sep.mp4`](Education-Purpose-Followup-02Sep.mp4)
+- **The purpose follow-up segment, 39 s:** [`Education-Purpose-Followup-02Sep.mp4`](Education-Purpose-Followup-02Sep.mp4)
 - **Captured runs:** [`runs/`](runs/)
 - **Implementation log, with the reasoning:** [`../../../iterations/03-education/IMPLEMENTATION.md`](../../../iterations/03-education/IMPLEMENTATION.md)
 
@@ -89,7 +89,7 @@ five things. Four are closed here; the fifth is closed in the request and
 
 Item 3 changes what a holder sees, so it comes with the short replacement segment
 Anand asked for: [`Education-Purpose-Followup-02Sep.mp4`](Education-Purpose-Followup-02Sep.mp4),
-26 s, the same screen before and after from real captures. The 5:32 film is **not**
+39 s, the same screen before and after from real captures, plus the employer's. The 5:32 film is **not**
 re-cut — one review item changed one screen, and re-rendering the whole film would
 throw away a frame-by-frame check already done twice. The film still shows the old
 warning, which is correct for the build it was recorded from.
@@ -102,10 +102,13 @@ request. Be cautious"* is gone, replaced by a **PURPOSE** panel reading
 *"Master's admission eligibility (Computer Science)"* — the exact string
 `/api/verifier/education/masters/policy` publishes.
 
-The employer screen is **asserted but not filmed**: its purpose differs, the same
-`verify.sh` check covers it, and the phone was disconnected before that capture
-could be taken. A same-device deep link cannot substitute, for the reason in
-finding 19 below.
+The employer screen is filmed too, and shows more than the purpose: its school
+card has **no Percentage row**, because the job policy asks only for `learnerId`
+and `completionStatus` there. The two consent screens differ exactly as the two
+published policies differ — visible to the holder, not just asserted in a test.
+Captured over the cross-device QR journey the charter specifies; a same-device
+deep link to that portal cannot be used at all, for the reason in finding 19
+below.
 
 Of the four deviations recorded on 1 September, **three are now closed** and are
 kept in [`ACCEPTANCE.md`](ACCEPTANCE.md#known-deviations) with what changed rather
@@ -177,9 +180,6 @@ customer journey, which is wallet-driven issuance on a real device.
   app is supporting evidence.
 - **Inji interoperability is not demonstrated**, and is out of programme scope per
   [`../../reviews/DECISION-03-wallet-scope.md`](../../reviews/DECISION-03-wallet-scope.md).
-- **The employer portal's purpose panel is not filmed.** The admissions one is,
-  and both are asserted on the signed request object by `verify.sh`. Stated in
-  [`ACCEPTANCE.md`](ACCEPTANCE.md#known-deviations) as deviation 1.
 - **A same-device deep link is not a working channel for every verifier.** See
   finding 19 above. Education's charter journey is cross-device QR, which is
   unaffected.
