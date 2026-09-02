@@ -536,25 +536,23 @@ describe('what the portals must refuse', () => {
     }
   });
 
-  test('a claim the job portal never asked for does not reach it', async () => {
+  test('a claim the job portal never asked for is refused, not quietly dropped', async () => {
     guard();
     // A wallet that reveals MORE than the request asked for. The job portal did
     // not ask for the school percentage, and this presentation discloses it
     // anyway.
     //
-    // What actually happens, verified here rather than assumed: DCQL claim
-    // filtering in oid4vc-service drops the unrequested disclosure, so the
-    // percentage never reaches the verifier service, its decision or its
-    // response. The presentation is therefore DECIDED, not rejected.
+    // This is refused at the protocol boundary: the DCQL matcher compares the
+    // disclosed claim names against the query and rejects the credential, so the
+    // presentation never becomes a decision and the extra claim reaches neither
+    // the verifier service nor the portal.
     //
-    // Stated plainly because it is a real limit on the guarantee: the extra
-    // disclosure did travel from the wallet to the protocol façade. What this
-    // test establishes is narrower and still worth having — the relying party
-    // cannot learn it, and the decision cannot be influenced by it. The
-    // verifier's own assertExactClaims (step 2) remains the backstop for
-    // anything filtering lets through, and tests/unit covers it directly.
+    // Until the Education review it was DROPPED instead — filtering removed the
+    // claim before the relying party could see it, and the presentation was
+    // DECIDED. That was contained but wrong: a holder could put a claim the
+    // verifier never asked for on the wire and be told the exchange succeeded.
     const wallet = await walletWithThreeCredentials(FIXTURES.bothPolicies);
-    const { result, presentations } = await presentTo('job', {
+    const { result, submission, presentations } = await presentTo('job', {
       ...wallet,
       disclose: { ...DISCLOSE.job, school: ['learnerId', 'completionStatus', 'percentage'] },
     });
@@ -563,9 +561,39 @@ describe('what the portals must refuse', () => {
       true,
       'the wallet really did over-disclose, or this test proves nothing',
     );
+    assert.equal(submission.status, 403, 'the stack must refuse the presentation outright');
+    assert.equal(result.state, 'rejected');
+    assert.equal(result.decision, undefined, 'and produce no decision at all');
+    assert.equal(result.disclosed, undefined, 'and disclose nothing to the portal');
+  });
+
+  test('the refusal names the unrequested claim and never its value', async () => {
+    guard();
+    // The diagnostic has to be usable — an operator needs to know WHICH claim
+    // was unexpected — without becoming a second disclosure channel for the
+    // value that was not supposed to be shared. 78.50 is the school percentage
+    // this fixture carries, and 7850 is how the arithmetic holds it.
+    const wallet = await walletWithThreeCredentials(FIXTURES.bothPolicies);
+    const { submission } = await presentTo('job', {
+      ...wallet,
+      disclose: { ...DISCLOSE.job, school: ['learnerId', 'completionStatus', 'percentage'] },
+    });
+    const body = JSON.stringify(submission.body ?? {});
+    assert.match(body, /percentage/, 'the refusal must say which claim was not asked for');
+    assert.equal(/78\.5|7850/.test(body), false, 'and must not carry its value');
+  });
+
+  test('the same three credentials are accepted when nothing extra is disclosed', async () => {
+    guard();
+    // The control for the two tests above: identical wallet, identical portal,
+    // only the extra disclosure removed. Without this a refusal could come from
+    // anything about this fixture and the tests would prove nothing about
+    // over-disclosure specifically.
+    const wallet = await walletWithThreeCredentials(FIXTURES.bothPolicies);
+    const { result, submission } = await presentTo('job', wallet);
+    assert.equal(submission.status, 200);
     assert.equal(result.state, 'decided');
-    assert.equal(result.disclosed.school.percentage, undefined, 'the portal must not receive it');
-    assert.deepEqual(result.thresholds, { university: 60 }, 'and it cannot become a threshold');
+    assert.equal(result.disclosed.school.percentage, undefined);
   });
 
   test('a learner who declines discloses nothing and gets no decision', async () => {

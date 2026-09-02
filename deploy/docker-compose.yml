@@ -234,7 +234,7 @@ services:
   # The OpenID4VCI / OpenID4VP protocol façade. Native to v2.1.0 — this is why
   # the architecture needs no standards adapter.
   oid4vc-service:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -269,6 +269,12 @@ services:
       # Paradym requires a signed request object; signing requires a
       # wallet-resolvable DID. Both are written by scripts/bootstrap.sh.
       OID4VP_SIGN_REQUEST: ${OID4VP_SIGN_REQUEST:-true}
+      # Refuse a presentation that discloses more than the request asked for,
+      # rather than dropping the extra claim before the relying service sees it.
+      # Explicit although this is the build's default: it is a privacy guarantee
+      # the acceptance table asserts, and a reader should not have to know the
+      # default to see that it is on.
+      REJECT_UNREQUESTED_DISCLOSURES: 'true'
       VERIFIER_DID: ${VERIFIER_DID:-}
       # Final OpenID4VCI 1.0 shapes. Paradym speaks final; DRAFT13 is Inji's
       # idiom and belongs to the Agriculture iteration.
@@ -320,7 +326,7 @@ services:
   # could also issue would be a fifth issuer nobody asked for, and it would appear
   # in wallet issuer directories.
   oid4vc-bank:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
     restart: unless-stopped
     depends_on:
       identity:
@@ -343,6 +349,12 @@ services:
       REDIS_URL: redis://redis:6379
       SESSION_STORE: redis
       OID4VP_SIGN_REQUEST: ${OID4VP_SIGN_REQUEST:-true}
+      # Refuse a presentation that discloses more than the request asked for,
+      # rather than dropping the extra claim before the relying service sees it.
+      # Explicit although this is the build's default: it is a privacy guarantee
+      # the acceptance table asserts, and a reader should not have to know the
+      # default to see that it is on.
+      REJECT_UNREQUESTED_DISCLOSURES: 'true'
       VERIFIER_DID: ${BANK_VERIFIER_DID:-}
       # Advertise nothing. This instance authored no schema, so with the filter on
       # its issuer metadata is empty — which is the intent: it is not an issuer.
@@ -372,7 +384,7 @@ services:
   # read a land record (DESIGN §4).
 
   oid4vc-farmer:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -423,7 +435,7 @@ services:
       retries: 30
 
   oid4vc-land:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -485,7 +497,7 @@ services:
   # the request_uri inside a QR resolves back to the instance that signed it.
 
   oid4vc-university-vp:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -507,6 +519,12 @@ services:
       REDIS_URL: redis://redis:6379
       SESSION_STORE: redis
       OID4VP_SIGN_REQUEST: ${OID4VP_SIGN_REQUEST:-true}
+      # Refuse a presentation that discloses more than the request asked for,
+      # rather than dropping the extra claim before the relying service sees it.
+      # Explicit although this is the build's default: it is a privacy guarantee
+      # the acceptance table asserts, and a reader should not have to know the
+      # default to see that it is on.
+      REJECT_UNREQUESTED_DISCLOSURES: 'true'
       VERIFIER_DID: ${UNIVERSITY_VERIFIER_DID:-}
       # Advertise nothing: this instance authored no schema and is not an issuer.
       ADVERTISE_OWN_CREDENTIALS_ONLY: 'true'
@@ -520,7 +538,7 @@ services:
       retries: 30
 
   oid4vc-employer-vp:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -542,6 +560,12 @@ services:
       REDIS_URL: redis://redis:6379
       SESSION_STORE: redis
       OID4VP_SIGN_REQUEST: ${OID4VP_SIGN_REQUEST:-true}
+      # Refuse a presentation that discloses more than the request asked for,
+      # rather than dropping the extra claim before the relying service sees it.
+      # Explicit although this is the build's default: it is a privacy guarantee
+      # the acceptance table asserts, and a reader should not have to know the
+      # default to see that it is on.
+      REJECT_UNREQUESTED_DISCLOSURES: 'true'
       VERIFIER_DID: ${EMPLOYER_VERIFIER_DID:-}
       # Advertise nothing: this instance authored no schema and is not an issuer.
       ADVERTISE_OWN_CREDENTIALS_ONLY: 'true'
@@ -569,7 +593,7 @@ services:
   # the learner's own access token. None of them is handed a learnerId by anyone.
 
   oid4vc-school:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -613,7 +637,7 @@ services:
       retries: 30
 
   oid4vc-college:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -657,7 +681,7 @@ services:
       retries: 30
 
   oid4vc-university:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:

@@ -145,6 +145,31 @@ for policy in (\"masters\", \"job\"):
         qr = json.load(r)[\"qrData\"]
     ids.append(urllib.parse.parse_qs(urllib.parse.urlparse(qr.replace(\"openid4vp://\", \"https://x\")).query)[\"client_id\"][0])
 raise SystemExit(0 if len(set(ids)) == 2 and all(i.startswith(\"did:web:\") for i in ids) else 1)"'
+  # The request object the WALLET reads, not the policy the page publishes: the
+  # purpose has to be inside the signed JAR or the holder's consent screen still
+  # says no reason was given. Asserted equal to the published purpose, because
+  # two strings that can differ eventually do.
+  check "each Education request tells the wallet why it is asking" 'python3 -c "
+import json, urllib.request, urllib.parse, base64
+for policy in (\"masters\", \"job\"):
+    with urllib.request.urlopen(\"$BASE/api/verifier/education/%s/policy\" % policy, timeout=10) as r:
+        published = json.load(r)[\"purpose\"]
+    req = urllib.request.Request(\"$BASE/api/verifier/education/%s/sessions\" % policy, method=\"POST\")
+    with urllib.request.urlopen(req, timeout=10) as r:
+        qr = json.load(r)[\"qrData\"]
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(qr.replace(\"openid4vp://\", \"https://x\")).query)
+    with urllib.request.urlopen(query[\"request_uri\"][0], timeout=10) as r:
+        jwt = r.read().decode()
+    payload = jwt.split(\".\")[1]
+    payload += \"=\" * (-len(payload) % 4)
+    sets = json.loads(base64.urlsafe_b64decode(payload))[\"dcql_query\"].get(\"credential_sets\") or []
+    if not sets or sets[0].get(\"purpose\") != published:
+        raise SystemExit(1)
+    # One required set naming all three credentials: splitting them would make a
+    # three-credential request satisfiable by fewer.
+    if not sets[0].get(\"required\") or len(sets[0][\"options\"]) != 1 or len(sets[0][\"options\"][0]) != 3:
+        raise SystemExit(1)
+raise SystemExit(0)"'
   check "both Education portal pages are served" 'for p in admissions employer; do curl -sf --max-time 8 -o /dev/null "$BASE/$p/" || exit 1; done'
   # Two pages, one script: the difference between a university and an employer has
   # to come out of the policy, not out of two separately written front ends.
@@ -231,17 +256,30 @@ if [ -d "$FORK/.git" ]; then
   # Exact count on purpose: the port is meant to stay narrow, so an unexplained
   # extra commit should show up here rather than in review. Raise it deliberately
   # when the port legitimately grows.
-  # Raised from 4 to 5 deliberately, per the note above. The fifth commit lets an
-  # issuer advertise only the credentials it authored: credential-schema's
-  # /oid4vci-configs is deployment-wide and takes no filter, so with two Agriculture
-  # registries sharing one schema service every issuer advertised all three
-  # published credentials. No configuration could scope it. Recorded as a
-  # compatibility finding with a removal path.
-  check "port branch is 5 commits off v2.1.0 (port, alg, narrowing, issuer display, own credentials)" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "5" ]'
+  # Raised from 4 to 5 deliberately. The fifth commit lets an issuer advertise
+  # only the credentials it authored: credential-schema's /oid4vci-configs is
+  # deployment-wide and takes no filter, so with two Agriculture registries
+  # sharing one schema service every issuer advertised all three published
+  # credentials. No configuration could scope it.
+  #
+  # Raised from 5 to 7 for Anand's Education review. The sixth closes the hole
+  # that fifth one left: it narrowed advertised METADATA only, so the credential
+  # endpoint went on issuing any published type and an institution could be made
+  # to sign another institution's credential. It also refuses a disclosure the
+  # request did not ask for, rather than dropping it downstream. The seventh
+  # fixes the wiring that made the second of those inert on the keyed vp_token
+  # path — see the commit, which explains why the unit tests missed it.
+  check "port branch is 7 commits off v2.1.0 (port, alg, narrowing, issuer display, own credentials, own issuance + disclosure, wiring)" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "7" ]'
   # The tag compose asks for, whatever it currently is: reading it from compose
   # rather than repeating it here is what stops this check drifting into
   # asserting a build nothing uses.
   check "the image compose pins is actually built" 'docker images -q "$(python3 -c "import re,sys; print(re.search(r\"sunbird-rc-oid4vc-service:v2\\.1\\.0-authcode\\.[0-9a-f]+\", open(\"deploy/docker-compose.yml\").read()).group(0))")" | grep -q .'
+  # The two guarantees the Education review sent back, asserted on the RUNNING
+  # containers rather than on the source: both are single flags, and a flag that
+  # is right in the compose file and unset in the container is exactly the
+  # failure this catches.
+  check "an issuer is restricted to its own credential type" 'for c in school college university; do docker compose -f deploy/docker-compose.yml exec -T "oid4vc-$c" printenv ADVERTISE_OWN_CREDENTIALS_ONLY 2>/dev/null | grep -qx true || exit 1; done'
+  check "an unrequested disclosure is refused, not dropped" 'for c in oid4vc-service oid4vc-bank oid4vc-university-vp oid4vc-employer-vp; do docker compose -f deploy/docker-compose.yml exec -T "$c" printenv REJECT_UNREQUESTED_DISCLOSURES 2>/dev/null | grep -qx true || exit 1; done'
   check "the ported build is pinned by source commit in its tag" 'grep -qE "sunbird-rc-oid4vc-service:v2.1.0-authcode\.[0-9a-f]{7,}" deploy/docker-compose.yml'
 else
   skip "fork checks" "no checkout at $FORK — set SUNBIRD_RC_CORE_PATH"

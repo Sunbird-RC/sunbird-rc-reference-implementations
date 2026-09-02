@@ -66,25 +66,42 @@ worth checking if three separate authorities asserted it.
 
 | Suite | Result | Where |
 |---|---|---|
-| Unit | **167 passed, 0 failed** (62 Education) | [`runs/test-unit.txt`](runs/test-unit.txt) |
-| End-to-end, against the deployment | **145 passed, 0 failed** (48 Education) | [`runs/test-e2e.txt`](runs/test-e2e.txt) |
-| `verify.sh --no-tests`, against the deployment | **108 passed, 0 failed** | [`runs/verify.txt`](runs/verify.txt) |
-| Age + Agriculture regression, same deployment | **97 passed, 0 failed** | [`runs/regression-01-02.txt`](runs/regression-01-02.txt) |
+| Unit | **175 passed, 0 failed** (54 in the three Education files) | [`runs/test-unit.txt`](runs/test-unit.txt) |
+| End-to-end, against the deployment | **150 passed, 0 failed** (52 Education) | [`runs/test-e2e.txt`](runs/test-e2e.txt) |
+| `verify.sh --no-tests`, against the deployment | **111 passed, 0 failed** | [`runs/verify.txt`](runs/verify.txt) |
+| Age + Agriculture regression, same deployment | **98 passed, 0 failed** | [`runs/regression-01-02.txt`](runs/regression-01-02.txt) |
+| `sunbird-rc-core` fork jest | **154 passed, 0 failed** | run by `verify.sh` |
 
-`verify.sh` also runs the `sunbird-rc-core` fork's own jest suite.
+## What the review sent back, and what closed it
 
-Four deviations are recorded in [`ACCEPTANCE.md`](ACCEPTANCE.md#known-deviations)
-and must not be read as capabilities that were verified. One of them —
-**finding 16**, an institution being able to sign another institution's credential
-type — needs a decision, because the fix changes a security guarantee.
+Anand accepted the functional demonstration on 1 September 2026 and asked for
+five things. Four are closed here; the fifth is closed in the request and
+**unfilmed**.
+
+| # | Asked for | Status |
+|---|---|---|
+| 1 | Commit the captured test evidence | closed at `8c7949d`, refreshed here |
+| 2 | Apply the issuer restriction to the credential endpoint, with positive and negative tests | **closed** — 7 fork tests, 4 end-to-end, 1 `verify.sh` check |
+| 3 | Send the request purpose so the wallet displays it | **closed in the request**; the consent screen is not yet re-filmed |
+| 4 | Reject an unrequested disclosure at the protocol boundary | **closed** — refused, not dropped |
+| 5 | Make the acceptance table and this README accurate | this document and [`ACCEPTANCE.md`](ACCEPTANCE.md) |
+
+Item 3 changes what a holder sees, so it needs the short replacement segment
+Anand asked for. No device was attached when the change landed, so that segment
+is **outstanding** and the committed film still shows the old warning screen.
+
+Of the four deviations recorded on 1 September, **three are now closed** and are
+kept in [`ACCEPTANCE.md`](ACCEPTANCE.md#known-deviations) with what changed rather
+than deleted. What remains: part eight's rendered caption, and the unfilmed
+purpose screen above.
 
 ## Versions and configuration
 
 | Component | Version |
 |---|---|
 | Sunbird RC services | `v2.1.0` (official ghcr images) |
-| `oid4vc-service` | `sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b` — the ported build, pinned by source commit in its tag |
-| Fork branch | `oid4vc-keycloak-as-v2.1.0`, 5 commits off `v2.1.0` |
+| `oid4vc-service` | `sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27` — the ported build, pinned by source commit in its tag |
+| Fork branch | `oid4vc-keycloak-as-v2.1.0`, 7 commits off `v2.1.0` |
 | Keycloak | `quay.io/keycloak/keycloak:26.0`, `start-dev`, three realms imported |
 | Wallet | vendored at `vendor/paradym-wallet`, upstream `2d68168` + nine showcase commits, tip `82b1def` |
 | Wallet APK | `id.paradym.wallet.preview` 1.20.3, arm64-v8a, issuer directory limited to the three institutions |
@@ -130,6 +147,8 @@ customer journey, which is wallet-driven issuance on a real device.
   app is supporting evidence.
 - **Inji interoperability is not demonstrated**, and is out of programme scope per
   [`../../reviews/DECISION-03-wallet-scope.md`](../../reviews/DECISION-03-wallet-scope.md).
-- **Over-disclosure is discarded upstream rather than refused**, and an institution
-  can be made to sign another's credential type. Both are contained, both are
-  tested, and both are stated in [`ACCEPTANCE.md`](ACCEPTANCE.md#known-deviations).
+- **The wallet's consent screen showing the request purpose is not filmed.** The
+  request carries it and two suites assert that, including one that decodes the
+  signed request object — but the screen has not been re-observed on a device, and
+  the committed film shows the old "no purpose provided" warning. Stated in
+  [`ACCEPTANCE.md`](ACCEPTANCE.md#known-deviations) as deviation 1.

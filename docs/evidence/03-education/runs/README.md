@@ -9,14 +9,45 @@ headers.
 
 | File | Command | Environment | Result |
 |---|---|---|---|
-| [`test-unit.txt`](test-unit.txt) | `npm run test:unit` | checkout only | **167 passed, 0 failed** |
-| [`test-e2e.txt`](test-e2e.txt) | `npm run test:e2e` | demo deployment, HTTPS | **145 passed, 0 failed** |
-| [`regression-01-02.txt`](regression-01-02.txt) | Iteration 01 and 02 suites only | demo deployment, HTTPS | **97 passed, 0 failed** |
-| [`verify.txt`](verify.txt) | `./scripts/verify.sh --no-tests` | demo deployment, HTTPS | **108 passed, 0 failed, 1 skipped** |
+| [`test-unit.txt`](test-unit.txt) | `npm run test:unit` | checkout only | **175 passed, 0 failed** |
+| [`test-e2e.txt`](test-e2e.txt) | `npm run test:e2e` | local stack, HTTP | **150 passed, 0 failed** |
+| [`regression-01-02.txt`](regression-01-02.txt) | Iteration 01 and 02 suites only | local stack, HTTP | **98 passed, 0 failed** |
+| [`verify.txt`](verify.txt) | `./scripts/verify.sh --no-tests` | local stack, HTTP | see the file's own summary |
+| [`test-fork.txt`](test-fork.txt) | `npx jest` in the fork's `oid4vc-service` | checkout only | **154 passed, 0 failed** |
 
-Of the 167 unit tests **62 are Education**; of the 145 end-to-end tests **48 are
-Education** — 33 in `tests/e2e/education.test.mjs` and 15 in
+Of the 175 unit tests, **54 are in the three Education files** — 30 decision, 12
+percentage, 12 fixtures — with further Education cases inside the shared DCQL,
+trust and verification-gate suites. Of the 150 end-to-end tests **52 are
+Education**: 35 in `tests/e2e/education.test.mjs` and 17 in
 `tests/e2e/flow3-education-issuance.test.mjs`.
+
+## These were re-captured for Anand's review, on the LOCAL stack
+
+The 1 September captures ran against the demo deployment over HTTPS. These ran
+against the local stack over HTTP, because **ssh to the demo host is still not
+answering** — port 22 times out while 443 continues to serve, unchanged since the
+first capture. The deployment therefore still runs the 1 September image and does
+not yet carry the three fixes below; redeploying it needs the host back.
+
+What that costs, stated rather than glossed: these runs do not exercise the real
+Let's Encrypt certificate or the public origin. Everything they do exercise is
+the same code, the same images and the same twenty containers, and the two
+guarantees the review was about are protocol behaviour rather than transport.
+
+What the re-capture proves that the first one could not:
+
+- an institution is refused another institution's credential type, by
+  configuration id and by `vct`
+- an unrequested disclosure is refused at the protocol boundary rather than
+  dropped behind it
+- each Education request carries a purpose inside the **signed** request object,
+  equal to the purpose its portal publishes
+
+Two suite results changed for reasons worth naming rather than reading as drift:
+Age gained one end-to-end test (the control for its rewritten over-disclosure
+case) and its over-disclosure test now asserts a refusal instead of a filtered
+decision. Iteration 01 got stronger from an Iteration 03 fix to the shared
+service.
 
 ## Why `verify.sh` was captured with `--no-tests`
 

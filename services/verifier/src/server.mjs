@@ -155,6 +155,9 @@ function educationUseCase(policyId, signer) {
   return {
     signer,
     requests,
+    // Exactly the string /policy publishes and the result page prints, so the
+    // wallet's consent screen, the portal and the response cannot disagree.
+    purpose: () => policy.purpose,
     describe: () => `requesting the school, college and university credentials for ${policy.purpose}`,
     requestedClaims: () => policy.claims,
     decide: (verified) => decideEducation(verified, policyId),
@@ -342,7 +345,11 @@ async function createSession(useCaseName = 'age') {
   if (!useCase) throw new Error(`unknown use case ${useCaseName}`);
 
   const requests = useCase.requests();
-  const query = buildDcqlQuery(requests);
+  // The purpose the wallet shows the holder before they consent, taken from the
+  // use case rather than written here: the string a learner reads has to be the
+  // same one the portal's /policy endpoint publishes, or the consent screen and
+  // the published policy could disagree about why the data was wanted.
+  const query = buildDcqlQuery(requests, { purpose: useCase.purpose?.() });
   const vp = await signers[useCase.signer].createRequest(query);
 
   const session = sessions.create({

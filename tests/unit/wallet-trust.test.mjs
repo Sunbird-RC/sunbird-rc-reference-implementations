@@ -342,3 +342,47 @@ describe('the vendored wallet trusts all three Education institutions', () => {
     }
   });
 });
+
+// The request purpose, from the wallet's side.
+//
+// The verifier now sends `credential_sets[].purpose` (services/verifier/src/core/dcql.mjs).
+// Whether a holder SEES it depends on the wallet reading that exact field, and
+// the first attempt at this put the string in `client_metadata` — which is a
+// valid place to put things and not the place anything reads a purpose from, so
+// the consent screen went on warning that no reason was given.
+//
+// Asserted against the vendored SDK source because it is the only check that can
+// run without a device. It is NOT a substitute for the device: what this proves
+// is that the field the verifier fills is the field the wallet consults, not that
+// the screen renders it. The recording is the evidence for that.
+describe('the request purpose the wallet will display', () => {
+  const SDK = join(ROOT, 'vendor', 'paradym-wallet', 'packages', 'sdk', 'src', 'format', 'dcqlRequest.ts');
+  const sdk = existsSync(SDK) ? readFileSync(SDK, 'utf8') : null;
+  const sdkGuard = () => {
+    if (!sdk) throw new Error(`no vendored wallet SDK at ${SDK} — run ./scripts/vendor-wallet.sh`);
+  };
+
+  test('the wallet takes its purpose from the DCQL credential sets', () => {
+    sdkGuard();
+    // The formatter builds its FormattedSubmission.purpose from credential_sets.
+    assert.match(sdk, /purpose:\s*credentialSets\.map\(\(s\)\s*=>\s*s\.purpose\)/);
+  });
+
+  test('and takes the first set that has one, so one set is enough', () => {
+    sdkGuard();
+    // `.find()` over the sets, not a join or a concatenation: this is why the
+    // verifier emits ONE set carrying every credential id rather than one set
+    // per credential, which would leave the purpose on the first and the other
+    // two unexplained.
+    const line = sdk.slice(sdk.indexOf('purpose: credentialSets.map'));
+    assert.match(line.slice(0, 200), /\.find\(/);
+  });
+
+  test('the verifier fills exactly that field', () => {
+    // Both halves in one assertion, because either alone can be true while the
+    // holder still sees the warning.
+    const builder = readFileSync(join(ROOT, 'services', 'verifier', 'src', 'core', 'dcql.mjs'), 'utf8');
+    assert.match(builder, /credential_sets:\s*\[/);
+    assert.match(builder, /purpose,/);
+  });
+});

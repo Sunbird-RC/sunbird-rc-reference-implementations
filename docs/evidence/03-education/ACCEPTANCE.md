@@ -8,10 +8,10 @@ in its own order, against the evidence that closes it.
 | Source | Where |
 |---|---|
 | **V** — the demonstration video, by part | [`Education-Employment-Showcase-01Sep.mp4`](Education-Employment-Showcase-01Sep.mp4) |
-| **U** — unit suite, 167 passed | [`runs/test-unit.txt`](runs/test-unit.txt) |
-| **E** — end-to-end suite, 145 passed, against the deployment | [`runs/test-e2e.txt`](runs/test-e2e.txt) |
-| **C** — `verify.sh --no-tests`, 108 passed / 0 failed | [`runs/verify.txt`](runs/verify.txt) |
-| **R** — Age + Agriculture regression, 97 e2e | [`runs/regression-01-02.txt`](runs/regression-01-02.txt) |
+| **U** — unit suite, 175 passed | [`runs/test-unit.txt`](runs/test-unit.txt) |
+| **E** — end-to-end suite, 150 passed, against the deployment | [`runs/test-e2e.txt`](runs/test-e2e.txt) |
+| **C** — `verify.sh --no-tests`, 111 passed / 0 failed | [`runs/verify.txt`](runs/verify.txt) |
+| **R** — Age + Agriculture regression, 98 e2e | [`runs/regression-01-02.txt`](runs/regression-01-02.txt) |
 | **cfg** — version-controlled configuration | paths given inline |
 
 The film's nine parts: 1 at 0:34, 2 at 0:46, 3 at 1:29, 4 at 1:44, 5 at 2:28,
@@ -73,7 +73,7 @@ here and in [Known deviations](#known-deviations) — or **NOT MET**, stated pla
 | Requirement | Evidence | Status |
 |---|---|---|
 | Starts a cross-device QR request for all three credentials | **V** part 4 — laptop QR, phone camera, one consent · **C** "both Education portal pages are served" | MET |
-| Shows institution, purpose, credentials, claims and consent in the wallet | **V** part 4 | MET (deviation — purpose) |
+| Shows institution, purpose, credentials, claims and consent in the wallet | **V** part 4 (institution, credentials, claims, consent) · **C** "each Education request tells the wallet why it is asking" — the purpose, asserted on the signed request object · **U** `wallet-trust.test.mjs`, the field the SDK reads | MET for the request; the rendered purpose is **not yet filmed** (deviation 1) |
 | Receives only policy-required disclosures | **E** "no National ID or Student ID reaches either verifier, in any outcome" | MET |
 | Validates transaction and credentials before applying the rule | **U** `verification-gate.test.mjs` · **C** "it is checked before the domain decision" | MET |
 | Applies 60 / 60 / 70, completed credentials, Bachelor degree, accepted field | **V** parts 4 and 6 · **U** 30 decision tests · **E** boundary tests | MET |
@@ -104,7 +104,7 @@ here and in [Known deviations](#known-deviations) — or **NOT MET**, stated pla
 | Verify before executing business rules | **C** "it is checked before the domain decision" | MET |
 | Enforce the approved algorithm allowlist, with positive and negative tests | **E** "an ES256 presentation is accepted and the check is reported"; "an unapproved algorithm is rejected, though every signature verifies" (genuine ES384 keys, accepted upstream, refused by the verifier) | MET |
 | Validate issuer/type per role, same-holder binding, audience, nonce, expiry, response mode, atomic single-use state | **E** "a credential presented in the wrong role slot is REJECTED"; "a credential collected by a different holder is REJECTED"; "a verified three-credential presentation cannot be replayed"; "a presentation made to the other portal is not accepted here" | MET |
-| Reject tampering, replay, over-disclosure, missing credentials, mixed holders, mismatched Learner IDs, issuer-role substitution | **E** "a forged percentage is refused outright"; "a forged completion status on one credential of three is refused"; "a tampered issuer signature… is refused"; plus the four above and the untrusted-issuer set | MET (deviation — over-disclosure) |
+| Reject tampering, replay, over-disclosure, missing credentials, mixed holders, mismatched Learner IDs, issuer-role substitution | **E** "a forged percentage is refused outright"; "a forged completion status on one credential of three is refused"; "a tampered issuer signature… is refused"; plus the four above and the untrusted-issuer set · over-disclosure now **refused** at the protocol boundary — "a claim the job portal never asked for is refused, not quietly dropped", "the refusal names the unrequested claim and never its value", and the control "the same three credentials are accepted when nothing extra is disclosed" | MET |
 | Verified rule failure produces NOT ELIGIBLE with an understandable reason | **V** parts 4 and 7 | MET |
 | Verification failure produces REJECTED / UNABLE TO VERIFY and no decision | **V** part 8 · **E** "three credentials naming different learners are REJECTED, not answered" | MET |
 | Refusal produces NO DATA SHARED and no eligibility result | **V** part 9 · **E** "a learner who declines discloses nothing and gets no decision" | MET |
@@ -144,33 +144,73 @@ here and in [Known deviations](#known-deviations) — or **NOT MET**, stated pla
 
 ## Known deviations
 
-Four, each stated rather than absorbed.
+**Three of the four recorded on 1 September 2026 are now closed**, at Anand's
+instruction, in the commit this table is captured at. They are kept below with
+what changed rather than deleted, because the review asked for them and a table
+that simply stopped mentioning them would be harder to check than one that says
+what happened.
 
-**1. The wallet shows no purpose string for a presentation request.** Its review
-screen reads *"No information was provided on the purpose of the data request. Be
-cautious."* That is accurate: the verifier sends no `client_metadata`, so there is
-nothing for the wallet to display. It is on screen in the video and the narration
-names it out loud rather than talking over it. §5 asks the wallet to show
-*purpose*; institution, credentials, claims and consent are all shown.
+One remains open, and one closure is **partial** — the request now carries a
+purpose and that is asserted on the signed request object, but the wallet screen
+that displays it has not been re-observed on a device.
 
-**2. Over-disclosure is filtered upstream, not refused.** A wallet that reveals a
-claim the request did not ask for gets a DECIDED answer, because DCQL claim
-filtering in `oid4vc-service` strips the extra disclosure before the verifier sees
-it. The relying party cannot learn it and the decision cannot use it — both
-asserted in `tests/e2e/education.test.mjs` — but the disclosure did reach the
-protocol façade. §8 lists over-disclosure among the things to reject; what happens
-is that it is discarded.
+**1. The wallet showed no purpose string. CLOSED in the request, NOT YET
+CONFIRMED on the device.** The review screen read *"No information was provided on
+the purpose of the data request. Be cautious."* — accurate, because the verifier
+sent no purpose anywhere.
 
-**3. An institution can be made to sign another institution's credential type.**
-`ADVERTISE_OWN_CREDENTIALS_ONLY` filters issuer metadata but not the credential
-endpoint, so asking the school instance for the college configuration returns a
-credential signed with the College's DID carrying the learner's school record. It
-is contained — the `vct` is scoped to the minting instance, so no portal's query
-matches it, and `tests/e2e/flow3-education-issuance.test.mjs` asserts both the mint
-and the refusal. Recorded as **finding 16** in
-[`../../design/COMPATIBILITY.md`](../../design/COMPATIBILITY.md). **This one needs a
-decision:** the fix is a few lines in the fork applying the same `author` filter to
-the credential endpoint, and it changes a security guarantee.
+`client_metadata` was the wrong place, and trying it there first is why this took
+a second attempt: it describes the client and the wallet SDK does not read a
+purpose from it. The field the wallet consults is OpenID4VP 1.0's
+`credential_sets[].purpose`. Both Education requests now carry it, and it is the
+same string `/policy` publishes and the result page prints, so the consent screen
+and the published policy cannot disagree.
+
+Verified as far as it can be without hardware: `verify.sh` decodes the **signed
+request object** and asserts its purpose equals the published one, and
+`wallet-trust.test.mjs` asserts the verifier fills the field the vendored SDK
+reads. What is **not** verified is that the screen renders it — no device was
+attached. Recorded as **finding 18** in
+[`../../design/COMPATIBILITY.md`](../../design/COMPATIBILITY.md). Anand asked for a
+short replacement segment if the consent screen visibly changes; it should, and
+that segment is outstanding.
+
+**2. Over-disclosure was filtered upstream, not refused. CLOSED.** A wallet that
+revealed a claim the request did not ask for used to get a DECIDED answer: DCQL
+claim filtering stripped the extra disclosure before the verifier saw it, so the
+relying party could not learn it and the decision could not use it — but the
+disclosure had reached the protocol façade, and §8 lists over-disclosure among
+the things to **reject**.
+
+It is now refused at that boundary: the matcher compares the disclosed claim
+names against the query and rejects the credential, naming the surplus claims and
+never their values. `tests/e2e/education.test.mjs` asserts the refusal, that the
+refusal carries no value, and — as the control — that the same three credentials
+are accepted when nothing extra is disclosed. Age gains the same guarantee from
+the same shared service, so an Iteration 01 test changed too; nothing in either
+demonstration shows this path, which needs a wallet that deliberately
+over-discloses.
+
+Worth reading in [`../../design/COMPATIBILITY.md`](../../design/COMPATIBILITY.md)
+as **finding 17**: the fix was briefly inert on the only path this deployment
+uses, and eight passing unit tests did not notice.
+
+**3. An institution could be made to sign another institution's credential type.
+CLOSED.** `ADVERTISE_OWN_CREDENTIALS_ONLY` filtered issuer metadata but not the
+credential endpoint, so asking the school instance for the college configuration
+returned a credential signed with the College's DID carrying the learner's school
+record. It was contained only by the `vct` being scoped to the minting instance —
+a trust boundary resting on how a URL is constructed rather than on an
+authorization check, which is why it was escalated instead of fixed.
+
+The endpoint now resolves against the same own-authored list the metadata is built
+from, so advertising and issuing cannot diverge again. A request for another
+issuer's type is refused by name, including a `vct`-only request, which is the
+shape a real wallet sends. Seven fork tests and four end-to-end tests cover both
+directions and both request shapes; a `verify.sh` check asserts the restriction on
+the running containers. **Finding 16** in
+[`../../design/COMPATIBILITY.md`](../../design/COMPATIBILITY.md) records what
+changed.
 
 **4. Part eight's three Learner IDs are a rendered caption, not footage.** The
 wallet's store screen never scrolls far enough to show a Learner ID, so the three

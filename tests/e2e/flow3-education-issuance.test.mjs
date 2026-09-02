@@ -119,6 +119,11 @@ before(async () => {
       // useful at all — so the realm has to know every scope the issuers publish.
       scope: config?.scope || null,
       displayName: config?.display?.[0]?.name || null,
+      // The published credential type, taken from metadata rather than built
+      // here: the cross-issuer refusal test asks one institution for another's
+      // vct, and a constructed value would pass by naming a type that does not
+      // exist anywhere.
+      vct: config?.vct || null,
     };
     if (!(body.authorization_servers || []).some((a) => a.includes('/realms/education'))) {
       skip = `the ${which} issuer does not advertise the education realm — wallet-driven issuance is off`;
@@ -376,125 +381,32 @@ describe('Flow 3 — what the institutions refuse', () => {
     }
   });
 
-  // FINDING (1 September 2026), recorded rather than asserted away.
+  // FINDING 16 (1 September 2026), now CLOSED — and this is where it was found.
   //
-  // An institution WILL mint another institution's credential for an
-  // authenticated learner. `ADVERTISE_OWN_CREDENTIALS_ONLY` filters issuer
-  // METADATA; it does not restrict the credential endpoint, which accepts any
-  // published `credential_configuration_id`. Asking the school instance for the
-  // college configuration returns a credential signed with the COLLEGE's DID
-  // (credentials-service signs with the schema author's key) carrying the
-  // learner's SCHOOL record.
+  // Two tests used to live here asserting the defect: an institution WOULD mint
+  // another institution's credential for an authenticated learner, because
+  // ADVERTISE_OWN_CREDENTIALS_ONLY filtered issuer METADATA and left the
+  // credential endpoint accepting any published credential_configuration_id.
+  // Asking the school instance for the college configuration returned a
+  // credential signed with the COLLEGE's key carrying the learner's SCHOOL
+  // record, and the only thing containing it was the vct being normalised
+  // against the minting instance's PUBLIC_URL — a defence resting on URL
+  // construction rather than on an authorization check, which is why it was
+  // escalated rather than left as a passing test.
   //
-  // The Agriculture equivalent of this test passes, which is why it went
-  // unnoticed: the Land schema requires claims a FarmerRecord lookup cannot
-  // supply, so cross-issuance there fails on validation rather than on
-  // authorization. The three Education records share their claim shape, so
-  // nothing stops it.
+  // The Agriculture equivalent passed throughout, which is why it went
+  // unnoticed for two iterations: the Land schema requires claims a
+  // FarmerRecord lookup cannot supply, so cross-issuance there failed on
+  // validation rather than on authorization. The three Education records share
+  // their claim shape, so nothing stopped it.
   //
-  // What contains it is the `vct`, and only the vct: oid4vc-service normalises a
-  // relative vct against the MINTING instance's PUBLIC_URL, so the credential's
-  // type is `<host>/school/vct/college-record-credential` — not the
-  // `<host>/college/vct/...` every portal pins. The two tests below assert both
-  // halves: the mint happens, and the result cannot be presented to anyone.
-  //
-  // See docs/design/COMPATIBILITY.md. This is a defence resting on URL
-  // construction rather than on an authorization check, so it is escalated
-  // rather than left as a passing test.
-  test('an institution can be made to sign another institution’s credential type', async () => {
-    guard();
-    const session = await signInAs(PRIYA);
-    const holder = await createHolder();
-    const schoolRecord = await registryRecord('SchoolRecord', PRIYA.nationalId);
-    const collegeRecord = await registryRecord('CollegeRecord', PRIYA.nationalId);
-    assert.notEqual(
-      schoolRecord.percentage,
-      collegeRecord.percentage,
-      'the two fixtures must differ, or this test cannot show whose data was used',
-    );
-
-    const res = await tryRequestCredential({
-      base: advertised.school.issuerBase,
-      token: { access_token: session.accessToken },
-      holder,
-      extra: { credential_configuration_id: advertised.college.configurationId },
-    });
-    assert.equal(res.status, 200, 'behaviour changed — if this now refuses, tighten the test and the finding');
-
-    const credential = res.body.credential;
-    const payload = JSON.parse(
-      Buffer.from(credential.split('~')[0].split('.')[1], 'base64url').toString('utf8'),
-    );
-    // Signed by the COLLEGE, over the SCHOOL's data. Both halves stated, because
-    // either one alone understates the finding.
-    const collegeIssuer = JSON.parse(
-      Buffer.from(
-        (await collect('college', session, holder)).credential.split('~')[0].split('.')[1],
-        'base64url',
-      ).toString('utf8'),
-    ).iss;
-    assert.equal(payload.iss, collegeIssuer, "the credential is signed with the college's key");
-    assert.equal(
-      disclosableValues(credential).percentage,
-      schoolRecord.percentage,
-      "and carries the school's percentage",
-    );
-
-    // The one thing that saves it.
-    assert.match(payload.vct, /\/school\/vct\/college-record-credential$/);
-    const collegePinned = (await educationPolicy(base, 'masters')).credentialTypes.college;
-    assert.notEqual(payload.vct, collegePinned, 'the vct is what makes this unpresentable');
-  });
-
-  test('and that credential cannot be presented to either portal', async () => {
-    guard();
-    // The containment, proven rather than reasoned about. This is the assertion
-    // the demo's safety actually rests on: whatever an instance can be persuaded
-    // to sign, a portal must not accept it in a slot it does not belong to.
-    const session = await signInAs(PRIYA);
-    const holder = await createHolder();
-    const forged = (
-      await tryRequestCredential({
-        base: advertised.school.issuerBase,
-        token: { access_token: session.accessToken },
-        holder,
-        extra: { credential_configuration_id: advertised.college.configurationId },
-      })
-    ).body.credential;
-    const genuine = {
-      school: (await collect('school', session, holder)).credential,
-      university: (await collect('university', session, holder)).credential,
-    };
-
-    for (const policyName of ['masters', 'job']) {
-      const policy = await educationPolicy(base, policyName);
-      const vpSession = await startEducationVerification(base, policyName);
-      const request = await fetchRequestObject({ requestUri: requestUriFromQr(vpSession.qrData) });
-      const presentations = {};
-      for (const [role, credential] of [
-        ['school', genuine.school],
-        ['college', forged],
-        ['university', genuine.university],
-      ]) {
-        presentations[ROLE_IDS[role]] = await presentSdJwt({
-          credential,
-          disclose: policy.requestedClaims[role],
-          nonce: request.nonce,
-          audience: request.client_id,
-          holder,
-        });
-      }
-      await submitMultiPresentation({
-        base,
-        responseUri: request.response_uri,
-        state: request.state,
-        presentations,
-      });
-      const result = (await readEducationVerification(base, policyName, vpSession.sessionId)).body;
-      assert.equal(result.state, 'rejected', `${policyName} accepted a cross-minted credential`);
-      assert.equal(result.decision, undefined);
-    }
-  });
+  // The endpoint now resolves against the same own-authored list the metadata is
+  // built from. The refusal is asserted in 'Flow 3 — an institution issues only
+  // its own credential type' below, in both directions and by both request
+  // shapes; the containment those two tests proved — a credential is not
+  // accepted in a DCQL slot it does not belong to — is asserted independently in
+  // education.test.mjs, 'a credential presented in the wrong role slot is
+  // REJECTED', and does not depend on cross-minting being possible.
 });
 
 // The fourth outcome, produced the way a PHONE can produce it.
@@ -624,5 +536,120 @@ describe('Flow 3 — a mismatched set, collected by the wallet itself', () => {
       assert.match(result.reason, /name different learners/);
       assert.equal(result.decision, undefined, 'a rejection must carry no business answer');
     }
+  });
+});
+
+describe('Flow 3 — an institution issues only its own credential type', () => {
+  // Anand's review found this: ADVERTISE_OWN_CREDENTIALS_ONLY narrowed the
+  // ADVERTISED metadata and nothing else, so the credential endpoint still
+  // resolved the deployment-wide configuration list. Five path-scoped issuers
+  // share one credential-schema service here, which means a caller who named the
+  // college's configuration id got a College Record Credential from the SCHOOL
+  // issuer, signed with the school's key. The metadata test above passed
+  // throughout — advertising is not authorisation.
+  //
+  // Both directions are asserted, because either alone would be misleading: a
+  // stack that refused everything would pass the negative test and issue
+  // nothing at all.
+
+  /** Every institution's configuration id, so each can be offered the others'. */
+  const others = (role) => ROLES.filter((r) => r !== role);
+
+  test('each institution issues its own type', async () => {
+    guard();
+    // The positive half. Not a duplicate of the happy path above: this is the
+    // control for the refusals below, using the same account and the same holder
+    // key, so a refusal there cannot be explained by the request itself.
+    const session = await signInAs(PRIYA);
+    const holder = await createHolder();
+    for (const role of ROLES) {
+      const res = await tryRequestCredential({
+        base: advertised[role].issuerBase,
+        token: { access_token: session.accessToken },
+        holder,
+        extra: { credential_configuration_id: advertised[role].configurationId },
+      });
+      assert.equal(res.status, 200, `${role} refused its own credential type`);
+    }
+  });
+
+  test('and refuses another institution\'s, by configuration id', async () => {
+    guard();
+    const session = await signInAs(PRIYA);
+    const holder = await createHolder();
+    for (const role of ROLES) {
+      for (const other of others(role)) {
+        const res = await tryRequestCredential({
+          base: advertised[role].issuerBase,
+          token: { access_token: session.accessToken },
+          holder,
+          extra: { credential_configuration_id: advertised[other].configurationId },
+        });
+        assert.notEqual(
+          res.status,
+          200,
+          `the ${role} issuer minted the ${other} credential type`,
+        );
+        // The diagnostic has to be actionable: an operator seeing this needs to
+        // know the type exists and belongs to somebody else, not that it is
+        // unknown. Before the fix the message was 'could not determine the
+        // credential type', which sends you looking for a missing schema.
+        assert.match(
+          JSON.stringify(res.body),
+          /not issued by this issuer/,
+          `the ${role} issuer's refusal of the ${other} type does not say why`,
+        );
+      }
+    }
+  });
+
+  test('and refuses it by vct too, which is the shape a wallet sends', async () => {
+    guard();
+    // The authorization_code path carries no configuration id — Credo sends
+    // `vct` — so a restriction that only inspected the id would have left the
+    // real wallet request unguarded. The vct comes from the other institution's
+    // own published metadata rather than being constructed here, so this cannot
+    // pass by asking for a type that does not exist.
+    const session = await signInAs(PRIYA);
+    const holder = await createHolder();
+    for (const role of ROLES) {
+      for (const other of others(role)) {
+        const vct = advertised[other].vct;
+        assert.ok(vct, `the ${other} issuer advertises no vct to test with`);
+        const res = await tryRequestCredential({
+          base: advertised[role].issuerBase,
+          token: { access_token: session.accessToken },
+          holder,
+          extra: { vct },
+        });
+        assert.notEqual(res.status, 200, `the ${role} issuer minted the ${other} type by vct`);
+        assert.match(
+          JSON.stringify(res.body),
+          /not issued by this issuer/,
+          `the ${role} issuer's refusal of the ${other} vct does not say why`,
+        );
+      }
+    }
+  });
+
+  test('a refused cross-issuer request leaks no registry data', async () => {
+    guard();
+    // The refusal names the credential type and its author, both of which are
+    // published metadata. It must not name the learner whose record was being
+    // requested, which is registry data the caller has not been authorised for
+    // in this direction.
+    const session = await signInAs(PRIYA);
+    const holder = await createHolder();
+    const res = await tryRequestCredential({
+      base: advertised.school.issuerBase,
+      token: { access_token: session.accessToken },
+      holder,
+      extra: { credential_configuration_id: advertised.university.configurationId },
+    });
+    assert.notEqual(res.status, 200);
+    const body = JSON.stringify(res.body);
+    assert.equal(body.includes(PRIYA.learnerId), false, 'the refusal carried a learner id');
+    assert.equal(body.includes(PRIYA.nationalId), false, 'the refusal carried a national id');
+    assert.equal(/EDU-L-\d{6}/.test(body), false, 'the refusal carried a registry record');
   });
 });

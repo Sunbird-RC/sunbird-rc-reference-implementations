@@ -172,24 +172,57 @@ against the **minting** instance's `PUBLIC_URL`, so the result's type is
 portals pin. `tests/e2e/flow3-education-issuance.test.mjs` asserts both halves —
 the mint succeeds, and neither portal accepts the result.
 
-No verifier change was needed. What is unsatisfactory is that a trust boundary
-rests on how a URL is constructed rather than on an authorization check, so it is
+No verifier change was needed. What was unsatisfactory is that a trust boundary
+rested on how a URL is constructed rather than on an authorization check, so it was
 recorded as finding 16 in [`../../docs/design/COMPATIBILITY.md`](../../docs/design/COMPATIBILITY.md)
-and **raised for Anand** rather than patched: the fix is to apply the existing
-`author` filter to the credential endpoint too, which changes a security
+and **raised for Anand** rather than patched, since the fix changes a security
 guarantee.
 
-## One limit on the disclosure guarantee, stated plainly
+**He asked for it, and it is now fixed** (2 September 2026). The credential
+endpoint resolves against the same own-authored list the metadata is built from,
+so advertising and issuing cannot diverge again — which was the whole defect. A
+request for another issuer's type is refused by name, including a `vct`-only
+request: that is the shape a wallet on the authorization_code path actually sends,
+and matching there is on the type **slug**, because every instance normalises a
+relative `vct` against its own `PUBLIC_URL` and comparing whole `vct`s across
+instances is always false. The two tests that asserted the defect are replaced by
+four that assert the refusal in both directions and both request shapes, plus
+seven in the fork; the containment they proved lives in
+`tests/e2e/education.test.mjs` → *a credential presented in the wrong role slot is
+REJECTED*, which does not depend on cross-minting being possible.
 
-A wallet that discloses **more** than the request asked for gets a DECIDED answer,
-not a rejection. DCQL claim filtering in oid4vc-service strips the unrequested
-disclosure before the verifier sees it, so the relying party cannot learn it and
-the decision cannot use it — both asserted in
-`tests/e2e/education.test.mjs`. But the extra disclosure did travel from the
-wallet to the protocol façade, so "the employer never receives the school
-percentage" is true of the employer and of the verifier service, and not of the
-whole path. The verifier's own `assertExactClaims` remains the backstop for
-anything filtering lets through.
+## The disclosure guarantee, and the limit that used to be on it
+
+A wallet that discloses **more** than the request asked for is now **refused**.
+
+It used to get a DECIDED answer. DCQL claim filtering stripped the unrequested
+disclosure before the verifier saw it, so the relying party could not learn it and
+the decision could not use it — both asserted at the time. But the extra
+disclosure had travelled from the wallet to the protocol façade, so *"the employer
+never receives the school percentage"* was true of the employer and of the verifier
+service and not of the whole path. Anand sent that back: REQUIREMENTS §8 lists
+over-disclosure among the things to reject.
+
+The DCQL matcher now compares the disclosed claim names against the query and
+rejects the credential, naming the surplus claims and never their values — a
+diagnostic that echoed the value would disclose exactly what it had refused. On
+the first path segment, since a nested claim is disclosed as its top-level
+object; only for selective-disclosure formats; and only when the query named
+claims, because a query with no `claims` asks for the whole credential and nothing
+can exceed it. The verifier's own `assertExactClaims` stays as the second line.
+
+Two things worth carrying forward from how this went:
+
+- **`REJECT_UNREQUESTED_DISCLOSURES` defaults ON**, unlike finding 14's flag.
+  Accepting data nobody asked for is not a safe default, and a privacy control
+  that has to be switched on is one that is off in every deployment nobody
+  configured.
+- **The first build of it did nothing.** `extractCredentials()` produced the field
+  and the matcher consumed it, but the keyed `vp_token` branch — the path every
+  SD-JWT presentation here takes — built its entry without it. All eight unit tests
+  passed, because each handed the matcher a fixture written by hand. Three tests
+  now drive it from a real SD-JWT through the actual extractor with no fixture in
+  between.
 
 ## Running it
 
@@ -649,7 +682,8 @@ And one thing from the Agriculture sign-off: the recorded deviations "must not b
 represented as capabilities that were verified when they were not." If the
 narration touches finding 16 or the upstream disclosure filtering, describe them as
 they are in `COMPATIBILITY.md` — or leave them to the repository, which is where he
-said the detail belongs.
+said the detail belongs. Both are closed as of 2 September 2026, so a re-cut would
+describe them differently; the committed film predates that.
 
 ### Two things that will bite
 
@@ -662,8 +696,18 @@ said the detail belongs.
 
 ## Known limitations, carried forward deliberately
 
-- **Finding 16 is contained, not fixed.** See above; it needs Anand's decision.
-- **Over-disclosure is filtered upstream, not refused.** See above.
+- ~~**Finding 16 is contained, not fixed.**~~ **Fixed** on Anand's instruction —
+  see above.
+- ~~**Over-disclosure is filtered upstream, not refused.**~~ **Refused** at the
+  protocol boundary — see finding 17. Worth knowing: the fix was briefly inert on
+  the only path this deployment uses, because the branch that builds the matcher's
+  input dropped the field the check reads. Eight unit tests passed throughout; the
+  end-to-end test caught it. The lesson generalises — a check whose every unit
+  test hands it a hand-written fixture has not been shown to be wired up.
+- **The wallet's purpose screen is not filmed.** The request now carries
+  `credential_sets[].purpose` and `verify.sh` asserts it on the signed request
+  object, but no device was attached when that landed, so the consent screen has
+  not been re-observed and the committed film still shows the old warning.
 - **The mobile verifier is supporting, not the charter's channel.** `DEMO.md`
   specifies "verifier websites on a separate screen", so the two web portals are
   what acceptance rests on. The app exists because leaving the previous
