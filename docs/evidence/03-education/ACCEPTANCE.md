@@ -135,7 +135,7 @@ here and in [Known deviations](#known-deviations) — or **NOT MET**, stated pla
 | Representative REJECTED / UNABLE TO VERIFY | **V** part 8 | MET |
 | Refusal with NO DATA SHARED | **V** part 9 | MET |
 | Sanitized minimum-disclosure and Learner ID correlation evidence | **V** parts 4, 5 and 8 · **E** the two disclosure tests | MET |
-| Automated positive, negative, privacy, trust, algorithm, holder, tampering, replay and percentage-boundary tests | **U** 167, of which 62 are Education · **E** 145, of which 48 are Education | MET |
+| Automated positive, negative, privacy, trust, algorithm, holder, tampering, replay and percentage-boundary tests | **U** 175, of which 54 are in the three Education files · **E** 150, of which 52 are Education | MET |
 | Exact component, wallet, fork, image, profile and configuration versions | [`README.md`](README.md) | MET |
 | Clean-checkout setup, test and demo instructions | [`../../../README.md`](../../../README.md), [`../../../iterations/03-education/IMPLEMENTATION.md`](../../../iterations/03-education/IMPLEMENTATION.md) | MET |
 | Captured Age and Agriculture regression results | **R** 98 passed, 0 failed, on the same stack as **E** and **C** | MET |

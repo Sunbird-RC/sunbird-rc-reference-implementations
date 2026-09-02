@@ -1,0 +1,3468 @@
+From bc892456f21eee65aec5b702d02ac766df2ed9ef Mon Sep 17 00:00:00 2001
+From: Kartheek Palla <palla.kartheekreddy@gmail.com>
+Date: Mon, 24 Aug 2026 18:17:58 +0530
+Subject: [PATCH 1/7] feat(oid4vc-service): Keycloak-as-authorization-server
+ issuance on v2.1.0
+
+Ports the wallet self-service issuance capability from the fork's
+oid4vc_issuer branch onto the v2.1.0 tag. That branch is 24 commits BEHIND
+the release, so building from it would have dropped release fixes this
+depends on - notably the SD-JWT claim reconstruction that makes DCQL
+matching work. Porting forward keeps both.
+
+Why it is needed: released v2.1.0 cannot do authenticated wallet-driven
+issuance, and no configuration changes that. Issuer metadata hardcoded
+itself as the authorization server, only the pre-authorised grant was
+offered, and /credential accepted only self-minted tokens. All three are
+now resolved:
+
+- authorization_servers is resolved from config, so the wallet can be
+  pointed at a Keycloak realm
+- /credential accepts Keycloak-issued access tokens, verified against the
+  realm JWKS, alongside its own pre-auth tokens
+- claims are resolved at issuance from the token's subject claim to a
+  registry record, through a claim-source abstraction; the caller cannot
+  supply or select them
+
+Deliberately NOT ported, to keep the change reviewable:
+
+- tx_code/PIN verification. v2.1.0 refuses tx_code offers rather than ship
+  a no-op check, and the authorization_code flow does not use it. Kept the
+  release's behaviour and dropped that branch's spec.
+- the demo apps, portals, registry schemas and compose files that commit
+  also carried. Only services/oid4vc-service/src is ported.
+- the old OFFER_REQUIRES_STAFF gate on POST /oid4vc/offer: v2.1.0's
+  ENABLE_AUTH KeycloakAuthGuard supersedes it.
+
+Taken FROM that branch where it is better: per-format credential signing
+algorithm advertisement, configurable. Publishing Ed25519Signature2020 (a
+Linked-Data suite) as an SD-JWT VC signing algorithm - which the release
+does for every non-mdoc format - is not a value a JOSE wallet can act on.
+
+tsc --noEmit clean; 11 suites / 127 tests pass, including the release's
+own oid4vp suite.
+
+Also includes one pre-existing local edit that was already in the working
+tree: services/oid4vc-service/Makefile gains a PLATFORM flag for docker
+build. Kept because the local build needs --platform linux/amd64; noted
+here because it is not part of the port.
+---
+ services/oid4vc-service/Makefile              |   4 +-
+ services/oid4vc-service/src/app.controller.ts |  49 +-
+ .../src/claims/claim-source.factory.ts        |  83 +++
+ .../src/claims/claim-source.interface.ts      |  86 +++
+ .../src/claims/claim-source.spec.ts           | 280 +++++++++
+ .../src/claims/http.claim-source.ts           | 174 ++++++
+ .../src/claims/registry.claim-source.ts       |  49 ++
+ .../src/clients/clients.module.ts             |  24 +-
+ .../src/clients/registry.client.ts            | 150 +++++
+ .../src/config/configuration.ts               | 325 +++++++++++
+ services/oid4vc-service/src/main.ts           |  13 +
+ .../src/oid4vci/oid4vci.controller.ts         |   4 +-
+ .../src/oid4vci/oid4vci.self-service.spec.ts  | 389 +++++++++++++
+ .../src/oid4vci/oid4vci.service.ts            | 544 +++++++++++++++++-
+ .../src/oid4vci/registry-claims.util.spec.ts  | 297 ++++++++++
+ .../src/oid4vci/registry-claims.util.ts       | 170 ++++++
+ .../oid4vci/token.service.keycloak.spec.ts    | 236 ++++++++
+ .../src/oid4vci/token.service.ts              | 149 ++++-
+ 18 files changed, 2989 insertions(+), 37 deletions(-)
+ create mode 100644 services/oid4vc-service/src/claims/claim-source.factory.ts
+ create mode 100644 services/oid4vc-service/src/claims/claim-source.interface.ts
+ create mode 100644 services/oid4vc-service/src/claims/claim-source.spec.ts
+ create mode 100644 services/oid4vc-service/src/claims/http.claim-source.ts
+ create mode 100644 services/oid4vc-service/src/claims/registry.claim-source.ts
+ create mode 100644 services/oid4vc-service/src/clients/registry.client.ts
+ create mode 100644 services/oid4vc-service/src/oid4vci/oid4vci.self-service.spec.ts
+ create mode 100644 services/oid4vc-service/src/oid4vci/registry-claims.util.spec.ts
+ create mode 100644 services/oid4vc-service/src/oid4vci/registry-claims.util.ts
+ create mode 100644 services/oid4vc-service/src/oid4vci/token.service.keycloak.spec.ts
+
+diff --git a/services/oid4vc-service/Makefile b/services/oid4vc-service/Makefile
+index f8abb7f5..3a67edc8 100644
+--- a/services/oid4vc-service/Makefile
++++ b/services/oid4vc-service/Makefile
+@@ -1,7 +1,9 @@
+ IMAGE:=ghcr.io/sunbird-rc/sunbird-rc-oid4vc-service
++PLATFORM ?=
++PLATFORM_FLAG := $(if $(PLATFORM),--platform $(PLATFORM),)
+ .PHONY: docker publish
+ 
+ docker:
+-	@docker build -t $(IMAGE) .
++	@docker build $(PLATFORM_FLAG) -t $(IMAGE) .
+ publish:
+ 	@docker push $(IMAGE)
+diff --git a/services/oid4vc-service/src/app.controller.ts b/services/oid4vc-service/src/app.controller.ts
+index 8cae9396..fce1b9b4 100644
+--- a/services/oid4vc-service/src/app.controller.ts
++++ b/services/oid4vc-service/src/app.controller.ts
+@@ -1,10 +1,31 @@
+-import { Controller, Get, Param, Header, NotFoundException } from '@nestjs/common';
++import {
++  BadRequestException,
++  Controller,
++  Get,
++  Header,
++  NotFoundException,
++  Param,
++  Query,
++  Res,
++} from '@nestjs/common';
+ import { ApiOperation, ApiTags } from '@nestjs/swagger';
++import { FastifyReply } from 'fastify';
++import * as QRCode from 'qrcode';
+ import { loadConfig } from './config/configuration';
+ import { KeycloakService } from './auth/keycloak.service';
+ import { SchemaClient } from './clients/schema.client';
+ import { Oid4vciService } from './oid4vci/oid4vci.service';
+ 
++/**
++ * Largest payload the QR endpoint will encode.
++ *
++ * Chosen from the format's own ceiling rather than arbitrarily: 4296 alphanumeric
++ * characters is the maximum a version-40 QR symbol can carry at the lowest error
++ * correction level, so anything beyond this could not be rendered anyway. The
++ * largest legitimate caller is a credential-offer URI of a few hundred bytes.
++ */
++const MAX_QR_PAYLOAD = 4096;
++
+ @ApiTags('Health')
+ @Controller()
+ export class AppController {
+@@ -30,6 +51,32 @@ export class AppController {
+     };
+   }
+ 
++  /**
++   * Renders any string as a QR PNG, so consoles need no client-side QR library.
++   *
++   * This lives here because it previously lived in the demo app, whose source was
++   * deleted while its container kept serving `/qr` from an image that can no
++   * longer be rebuilt — and the verifier console renders every QR through it. The
++   * `qrcode` dependency was already present, so this adds nothing to the tree.
++   */
++  @ApiOperation({ summary: 'Render a string as a QR code PNG' })
++  @Get('qr')
++  async qr(@Query('data') data: string, @Res() res: FastifyReply) {
++    if (!data) throw new BadRequestException('data query parameter is required');
++    // Bounded input: QR encoding is superlinear in payload size.
++    if (data.length > MAX_QR_PAYLOAD) {
++      throw new BadRequestException(`data exceeds ${MAX_QR_PAYLOAD} characters`);
++    }
++    try {
++      const png = await QRCode.toBuffer(data, { width: 240, margin: 1 });
++      // no-store: an offer URI is single-use, so a cached image is at best
++      // useless and at worst confusing when it renders a spent offer.
++      res.header('content-type', 'image/png').header('cache-control', 'no-store').send(png);
++    } catch (err: any) {
++      throw new BadRequestException(`Could not encode QR: ${err?.message ?? err}`);
++    }
++  }
++
+   // Serves a schema's inline W3C VC Render Method SVG template
+   // (https://www.w3.org/TR/vc-render-method/), for schemas that configure
+   // `oid4vciConfig.renderMethod.svg` instead of an already-hosted `url`.
+diff --git a/services/oid4vc-service/src/claims/claim-source.factory.ts b/services/oid4vc-service/src/claims/claim-source.factory.ts
+new file mode 100644
+index 00000000..425d3b97
+--- /dev/null
++++ b/services/oid4vc-service/src/claims/claim-source.factory.ts
+@@ -0,0 +1,83 @@
++import { Injectable, Logger } from '@nestjs/common';
++import { loadConfig } from '../config/configuration';
++import {
++  ClaimSourceNotConfiguredError,
++  ClaimSourceUnavailableError,
++  type ClaimSourceProvider,
++} from './claim-source.interface';
++import { HttpClaimSource } from './http.claim-source';
++import { RegistryClaimSource } from './registry.claim-source';
++
++/** The credential-type fields the factory may key on. */
++export interface ClaimSourceTarget {
++  schemaId: string;
++  name: string;
++}
++
++/**
++ * Chooses the claim source for a credential type.
++ *
++ * Per credential type rather than per process, so one deployment can serve an
++ * authority that keeps its own records alongside authorities that use the Sunbird
++ * registry — which is the actual shape of the multi-issuer deployment.
++ */
++@Injectable()
++export class ClaimSourceFactory {
++  private readonly logger = new Logger(ClaimSourceFactory.name);
++  private readonly config = loadConfig();
++  /** Built once per name: an HTTP source holds only config, so it is reusable. */
++  private readonly httpSources = new Map<string, HttpClaimSource>();
++
++  constructor(private readonly registrySource: RegistryClaimSource) {}
++
++  /**
++   * `schemaId` is tried before `name`: an id is unique, whereas two credential
++   * types can legitimately share a display name, and silently picking the wrong
++   * one would issue a credential from the wrong authority's data.
++   */
++  private nameFor(target: ClaimSourceTarget): string {
++    const map = this.config.claimSourceMap;
++    const hit = map[target.schemaId] ?? map[target.name];
++    return (hit ?? this.config.claimSourceDefault).trim().toLowerCase();
++  }
++
++  for(target: ClaimSourceTarget): ClaimSourceProvider {
++    const name = this.nameFor(target);
++
++    // An explicit opt out. Not a misconfiguration: an authority may issue only
++    // through POST /oid4vc/offer, supplying claims from its own backend, and never
++    // want a credential mintable from a login alone.
++    if (name === 'none') throw new ClaimSourceNotConfiguredError(target.name);
++
++    if (name === 'registry') {
++      if (!this.registrySource.available) {
++        // Distinguished from `none` deliberately: this deployment asked for the
++        // registry and did not configure it, which is a mistake worth naming,
++        // whereas `none` is a decision.
++        throw new ClaimSourceUnavailableError(
++          'registry',
++          'REGISTRY_BASE_URL is not set. Set it, map this credential type to another ' +
++            'claim source in CLAIM_SOURCE_MAP, or set CLAIM_SOURCE_DEFAULT=none if this ' +
++            'deployment issues only through POST /oid4vc/offer.',
++        );
++      }
++      return this.registrySource;
++    }
++
++    const spec = this.config.claimSources[name];
++    if (!spec) {
++      throw new ClaimSourceUnavailableError(
++        name,
++        `no such claim source. Declare it by setting CLAIM_SOURCE_${name.toUpperCase()}_URL ` +
++          `to the endpoint that authority hosts, or correct CLAIM_SOURCE_MAP.`,
++      );
++    }
++
++    const existing = this.httpSources.get(name);
++    if (existing) return existing;
++    const created = new HttpClaimSource(spec);
++    this.httpSources.set(name, created);
++    this.logger.log(`Claim source '${name}' -> ${spec.url}`);
++    return created;
++  }
++}
+diff --git a/services/oid4vc-service/src/claims/claim-source.interface.ts b/services/oid4vc-service/src/claims/claim-source.interface.ts
+new file mode 100644
+index 00000000..595b53f8
+--- /dev/null
++++ b/services/oid4vc-service/src/claims/claim-source.interface.ts
+@@ -0,0 +1,86 @@
++import type { ResolvedClaims } from '../oid4vci/registry-claims.util';
++
++/**
++ * Where a credential's claims come from.
++ *
++ * Issuing and record-keeping are deliberately separable: an authority may run its
++ * farmers and land parcels in its own database and never adopt the Sunbird
++ * registry, yet still issue through this service. The registry is therefore one
++ * implementation of this interface rather than a dependency of issuance.
++ *
++ * Note what is NOT here: authentication. Who the holder is has already been
++ * established by the time a provider is called — the Keycloak token was verified
++ * and `subjectId` read out of it — and no provider is given the chance to
++ * influence that. A provider answers only "what do we know about this subject".
++ */
++export interface ClaimSourceProvider {
++  /** Configured name, used in errors and logs so a failure names its source. */
++  readonly name: string;
++  resolve(req: ClaimRequest): Promise<ResolvedClaims>;
++}
++
++export interface ClaimRequest {
++  /**
++   * The holder's key in the issuing authority's system.
++   *
++   * Taken from the VALIDATED access token, never from the request body — that is
++   * what makes "a holder cannot ask for someone else's credential" structural
++   * rather than a check that could be forgotten.
++   */
++  subjectId: string;
++  /** Token claim `subjectId` came from. Passed on so an issuer can log it. */
++  subjectClaim: string;
++  /** Which credential is being issued. */
++  credentialConfigurationId: string;
++  credentialName: string;
++  /** The attributes this credential type declares, and which of them are required. */
++  properties: string[];
++  required: string[];
++}
++
++/**
++ * A provider could not answer because the SOURCE failed — unreachable, timed out,
++ * or returned an error of its own.
++ *
++ * Distinguished from "this subject has no record" on purpose. The two need
++ * different messages: one is the issuing authority's system being down, the other
++ * is a holder who was never provisioned, and telling an operator the wrong one
++ * sends them looking in the wrong place.
++ */
++export class ClaimSourceUnavailableError extends Error {
++  constructor(
++    readonly source: string,
++    reason: string,
++  ) {
++    super(`claim source '${source}' is unavailable: ${reason}`);
++    this.name = 'ClaimSourceUnavailableError';
++  }
++}
++
++/** The source answered, and has no record for this subject. */
++export class SubjectNotFoundError extends Error {
++  constructor(
++    readonly source: string,
++    readonly subjectId: string,
++  ) {
++    super(`no record for subject '${subjectId}' in claim source '${source}'`);
++    this.name = 'SubjectNotFoundError';
++  }
++}
++
++/**
++ * No claim source is configured for a credential type, so nothing can be issued
++ * from a login alone. Not an error state for the deployment: an authority may
++ * deliberately issue only through `POST /oid4vc/offer`, where its own backend
++ * supplies the claims.
++ */
++export class ClaimSourceNotConfiguredError extends Error {
++  constructor(credentialName: string) {
++    super(
++      `no claim source is configured for '${credentialName}', so it cannot be issued from a ` +
++        `holder login. Map it in CLAIM_SOURCE_MAP, set CLAIM_SOURCE_DEFAULT, or issue it ` +
++        `through POST /oid4vc/offer instead.`,
++    );
++    this.name = 'ClaimSourceNotConfiguredError';
++  }
++}
+diff --git a/services/oid4vc-service/src/claims/claim-source.spec.ts b/services/oid4vc-service/src/claims/claim-source.spec.ts
+new file mode 100644
+index 00000000..27a24d5a
+--- /dev/null
++++ b/services/oid4vc-service/src/claims/claim-source.spec.ts
+@@ -0,0 +1,280 @@
++import * as http from 'http';
++import type { AddressInfo } from 'net';
++import { ClaimSourceFactory } from './claim-source.factory';
++import { HttpClaimSource } from './http.claim-source';
++import { RegistryClaimSource } from './registry.claim-source';
++import {
++  ClaimSourceNotConfiguredError,
++  ClaimSourceUnavailableError,
++  SubjectNotFoundError,
++  type ClaimRequest,
++} from './claim-source.interface';
++
++// Claim sources: where a credential's values come from.
++//
++// The property these tests exist for is that ISSUING AND RECORD-KEEPING ARE
++// SEPARABLE. An authority may hold its farmers in its own database and never adopt
++// the Sunbird registry, and must still be able to issue — so the registry has to be
++// one option here, not a precondition.
++describe('claim sources', () => {
++  const ORIGINAL_ENV = process.env;
++
++  /** The credential type under test: three declared attributes, two required. */
++  const REQ: ClaimRequest = {
++    subjectId: 'FRM-000123',
++    subjectClaim: 'farmer_id',
++    credentialConfigurationId: 'did:schema:farmer',
++    credentialName: 'Farmer Land Holding',
++    properties: ['name', 'landAreaAcres', 'primaryCrop'],
++    required: ['name', 'landAreaAcres'],
++  };
++
++  beforeEach(() => {
++    process.env = { ...ORIGINAL_ENV };
++    // Not set by default: these tests must not silently depend on the registry.
++    delete process.env.REGISTRY_BASE_URL;
++    delete process.env.CLAIM_SOURCE_MAP;
++    delete process.env.CLAIM_SOURCE_DEFAULT;
++  });
++
++  afterEach(() => {
++    process.env = ORIGINAL_ENV;
++  });
++
++  // --- a stand-in for the issuing authority's own system ---------------------
++
++  let server: http.Server;
++  let received: any[] = [];
++
++  /** Starts a throwaway endpoint standing in for the authority's own API. */
++  const startEndpoint = async (
++    handler: (body: any, res: http.ServerResponse) => void,
++  ): Promise<string> => {
++    received = [];
++    server = http.createServer((req, res) => {
++      let raw = '';
++      req.on('data', (c) => (raw += c));
++      req.on('end', () => {
++        const body = raw ? JSON.parse(raw) : {};
++        received.push({ body, headers: req.headers });
++        handler(body, res);
++      });
++    });
++    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
++    return `http://127.0.0.1:${(server.address() as AddressInfo).port}/claims`;
++  };
++
++  const json = (res: http.ServerResponse, status: number, payload: unknown) => {
++    res.writeHead(status, { 'content-type': 'application/json' });
++    res.end(JSON.stringify(payload));
++  };
++
++  afterEach(async () => {
++    if (server?.listening) await new Promise<void>((r) => server.close(() => r()));
++  });
++
++  const httpSource = (url: string, extra: Record<string, unknown> = {}) =>
++    new HttpClaimSource({ name: 'agri', url, timeoutMs: 2000, ...extra });
++
++  describe('http claim source', () => {
++    it('issues from the authority’s own database, with no registry configured', async () => {
++      // THE REQUIREMENT. Nothing about the Sunbird registry is set here.
++      const url = await startEndpoint((_b, res) =>
++        json(res, 200, { claims: { name: 'Ravi Kumar', landAreaAcres: 4.5, primaryCrop: 'Wheat' } }),
++      );
++
++      const result = await httpSource(url).resolve(REQ);
++
++      expect(result.missing).toEqual([]);
++      expect(result.claims).toEqual({
++        name: 'Ravi Kumar',
++        landAreaAcres: 4.5,
++        primaryCrop: 'Wheat',
++      });
++    });
++
++    it('sends the subject from the token and the attributes being asked for', async () => {
++      const url = await startEndpoint((_b, res) =>
++        json(res, 200, { name: 'Ravi Kumar', landAreaAcres: 4.5 }),
++      );
++
++      await httpSource(url).resolve(REQ);
++
++      expect(received[0].body).toEqual({
++        subjectId: 'FRM-000123',
++        subjectClaim: 'farmer_id',
++        credentialConfigurationId: 'did:schema:farmer',
++        credentialName: 'Farmer Land Holding',
++        attributes: ['name', 'landAreaAcres', 'primaryCrop'],
++      });
++    });
++
++    it('accepts a bare record, so the simplest implementation works', async () => {
++      // An authority returning its row unwrapped should not need a wrapper object.
++      const url = await startEndpoint((_b, res) =>
++        json(res, 200, { name: 'Ravi Kumar', landAreaAcres: 4.5 }),
++      );
++
++      const result = await httpSource(url).resolve(REQ);
++
++      expect(result.claims.name).toBe('Ravi Kumar');
++      expect(result.missing).toEqual([]);
++    });
++
++    it('DROPS fields the credential type does not declare', async () => {
++      // The security property. A compromised or buggy endpoint must not be able to
++      // put claims into a credential that its schema never defined — least of all
++      // ones that look authoritative.
++      const url = await startEndpoint((_b, res) =>
++        json(res, 200, {
++          name: 'Ravi Kumar',
++          landAreaAcres: 4.5,
++          isGovernmentOfficial: true,
++          nationalIdNumber: '1234-5678',
++        }),
++      );
++
++      const result = await httpSource(url).resolve(REQ);
++
++      expect(result.claims).not.toHaveProperty('isGovernmentOfficial');
++      expect(result.claims).not.toHaveProperty('nationalIdNumber');
++      expect(Object.keys(result.claims).sort()).toEqual(['landAreaAcres', 'name']);
++    });
++
++    it('reports required attributes the authority did not return, by name', async () => {
++      const url = await startEndpoint((_b, res) => json(res, 200, { name: 'Ravi Kumar' }));
++
++      const result = await httpSource(url).resolve(REQ);
++
++      expect(result.missing).toEqual(['landAreaAcres']);
++    });
++
++    it('sends a bearer token when one is configured', async () => {
++      const url = await startEndpoint((_b, res) =>
++        json(res, 200, { name: 'Ravi Kumar', landAreaAcres: 4.5 }),
++      );
++
++      await httpSource(url, { token: 's3cret' }).resolve(REQ);
++
++      expect(received[0].headers.authorization).toBe('Bearer s3cret');
++    });
++
++    it('distinguishes “no such holder” from “the system is down”', async () => {
++      // These need different messages: one is a provisioning gap for one holder,
++      // the other is the authority's system failing. Collapsing them sends whoever
++      // is debugging to the wrong place.
++      const notFound = await startEndpoint((_b, res) => json(res, 404, { error: 'unknown' }));
++      await expect(httpSource(notFound).resolve(REQ)).rejects.toThrow(SubjectNotFoundError);
++      await new Promise<void>((r) => server.close(() => r()));
++
++      const broken = await startEndpoint((_b, res) => json(res, 500, { error: 'boom' }));
++      await expect(httpSource(broken).resolve(REQ)).rejects.toThrow(ClaimSourceUnavailableError);
++    });
++
++    it('gives up on a slow endpoint instead of hanging the wallet', async () => {
++      const url = await startEndpoint(() => {
++        /* never responds */
++      });
++
++      await expect(httpSource(url, { timeoutMs: 150 }).resolve(REQ)).rejects.toThrow(
++        /did not respond within 150ms/,
++      );
++    });
++
++    it('refuses plain http to another organisation, before sending anything', async () => {
++      // A claim source is a different organisation's system, so the call leaves our
++      // network: the holder's identifier goes out and their personal data comes
++      // back. That is a different trust boundary from `REGISTRY_BASE_URL=
++      // http://registry:8081`, which is a sibling service whose traffic never
++      // leaves the cluster — so the weaker standard must not be borrowed for it.
++      const source = httpSource('http://agri.example.gov/claims');
++
++      await expect(source.resolve(REQ)).rejects.toThrow(/refusing to send holder data/);
++      await expect(source.resolve(REQ)).rejects.toThrow(/use https/);
++    });
++
++    it('rejects a URL that is not a URL at all', async () => {
++      const source = new HttpClaimSource({ name: 'agri', url: 'not-a-url' });
++
++      await expect(source.resolve(REQ)).rejects.toThrow(/is not a valid URL/);
++    });
++
++    it('rejects a response that is not a JSON object of claims', async () => {
++      const url = await startEndpoint((_b, res) => json(res, 200, ['not', 'an', 'object']));
++
++      await expect(httpSource(url).resolve(REQ)).rejects.toThrow(/not a JSON object of claims/);
++    });
++  });
++
++  // --- selection -------------------------------------------------------------
++
++  describe('factory', () => {
++    const registryStub = (enabled: boolean) =>
++      new RegistryClaimSource({ enabled, subjectSources: jest.fn() } as any);
++
++    const target = { schemaId: 'did:schema:farmer', name: 'Farmer Land Holding' };
++
++    it('sends one credential type to the authority’s API and another to the registry', async () => {
++      // The multi-issuer case: two authorities, two systems of record, one
++      // deployment. This is why selection is per credential type.
++      process.env.CLAIM_SOURCE_AGRI_URL = 'https://agri.example.gov/claims';
++      process.env.CLAIM_SOURCE_MAP = JSON.stringify({ 'Farmer Land Holding': 'agri' });
++      process.env.REGISTRY_BASE_URL = 'http://registry:8081';
++
++      const factory = new ClaimSourceFactory(registryStub(true));
++
++      expect(factory.for(target).name).toBe('agri');
++      expect(factory.for({ schemaId: 'did:schema:edu', name: 'Education' }).name).toBe('registry');
++    });
++
++    it('prefers a schemaId mapping over a name mapping', async () => {
++      // Two credential types can share a display name; an id cannot be ambiguous,
++      // and picking the wrong one would issue from the wrong authority's data.
++      process.env.CLAIM_SOURCE_AGRI_URL = 'https://agri.example.gov/claims';
++      process.env.CLAIM_SOURCE_MAP = JSON.stringify({
++        'did:schema:farmer': 'agri',
++        'Farmer Land Holding': 'registry',
++      });
++      process.env.REGISTRY_BASE_URL = 'http://registry:8081';
++
++      expect(new ClaimSourceFactory(registryStub(true)).for(target).name).toBe('agri');
++    });
++
++    it('treats CLAIM_SOURCE_DEFAULT=none as a decision, not a misconfiguration', async () => {
++      // A deployment may issue only through POST /oid4vc/offer, where the caller
++      // supplies claims. The error has to read as "not offered here", and must not
++      // demand the registry be configured.
++      process.env.CLAIM_SOURCE_DEFAULT = 'none';
++
++      const factory = new ClaimSourceFactory(registryStub(false));
++
++      expect(() => factory.for(target)).toThrow(ClaimSourceNotConfiguredError);
++      expect(() => factory.for(target)).toThrow(/POST \/oid4vc\/offer/);
++    });
++
++    it('names the mistake when a mapping points at an undeclared source', async () => {
++      process.env.CLAIM_SOURCE_MAP = JSON.stringify({ 'Farmer Land Holding': 'typo' });
++
++      expect(() => new ClaimSourceFactory(registryStub(true)).for(target)).toThrow(
++        /CLAIM_SOURCE_TYPO_URL/,
++      );
++    });
++
++    it('defaults to the registry, so deployments that predate this keep working', async () => {
++      process.env.REGISTRY_BASE_URL = 'http://registry:8081';
++
++      expect(new ClaimSourceFactory(registryStub(true)).for(target).name).toBe('registry');
++    });
++
++    it('ignores an http source declared without a URL', async () => {
++      // Registering it would defer the failure to the first holder who tries to
++      // collect, reported as their problem rather than the operator's.
++      process.env.CLAIM_SOURCE_MAP = JSON.stringify({ 'Farmer Land Holding': 'agri' });
++      jest.spyOn(console, 'warn').mockImplementation(() => {});
++
++      expect(() => new ClaimSourceFactory(registryStub(true)).for(target)).toThrow(
++        /no such claim source/,
++      );
++    });
++  });
++});
+diff --git a/services/oid4vc-service/src/claims/http.claim-source.ts b/services/oid4vc-service/src/claims/http.claim-source.ts
+new file mode 100644
+index 00000000..090e327f
+--- /dev/null
++++ b/services/oid4vc-service/src/claims/http.claim-source.ts
+@@ -0,0 +1,174 @@
++import { Logger } from '@nestjs/common';
++import { loadConfig, type ClaimSourceSpec } from '../config/configuration';
++import { resolveRegistryClaims } from '../oid4vci/registry-claims.util';
++import {
++  ClaimSourceUnavailableError,
++  SubjectNotFoundError,
++  type ClaimRequest,
++  type ClaimSourceProvider,
++} from './claim-source.interface';
++
++/**
++ * Claims from an endpoint the issuing authority hosts against its own database.
++ *
++ * This is what makes the Sunbird registry optional. A Department of Agriculture
++ * that keeps farmers and land parcels in its own system implements one endpoint;
++ * nothing about its schema, storage or queries reaches this service.
++ *
++ * The contract:
++ *
++ *   POST <url>
++ *     { subjectId, subjectClaim, credentialConfigurationId, credentialName,
++ *       attributes: [...] }
++ *
++ *   200 { "claims": { "name": "...", "landAreaAcres": 4.5 } }   (or a bare object)
++ *   404                                                          no such holder
++ *
++ * The response is run through the SAME resolver the registry source uses, which
++ * buys three things: an issuer may return their raw record and still get
++ * name-matching, the configured aliases and `age_over_NN` derivation; required
++ * attributes that are absent are reported by name instead of failing opaquely
++ * downstream; and — the security-relevant one — the resolver only ever reads the
++ * attributes the credential type DECLARES, so extra fields in the response are
++ * dropped rather than copied into the credential. A compromised or simply buggy
++ * endpoint cannot add claims the schema does not define.
++ */
++export class HttpClaimSource implements ClaimSourceProvider {
++  private readonly logger = new Logger(HttpClaimSource.name);
++  private readonly config = loadConfig();
++
++  constructor(private readonly spec: ClaimSourceSpec) {}
++
++  get name(): string {
++    return this.spec.name;
++  }
++
++  async resolve(req: ClaimRequest) {
++    const url = this.assertSafeUrl(this.spec.url ?? '');
++    const body = await this.fetchClaims(url, req);
++
++    // `{ claims: {...} }` if present, otherwise the whole body as the record.
++    // Accepting both means the simplest possible issuer implementation — return
++    // your row — works, without forcing a wrapper on anyone.
++    const record =
++      body && typeof body === 'object' && body.claims && typeof body.claims === 'object'
++        ? body.claims
++        : body;
++
++    if (!record || typeof record !== 'object' || Array.isArray(record)) {
++      throw new ClaimSourceUnavailableError(
++        this.name,
++        'response was not a JSON object of claims',
++      );
++    }
++
++    return resolveRegistryClaims({
++      properties: req.properties,
++      required: req.required,
++      // One source, named after the provider so provenance in the portal and in
++      // the "missing" message points at the authority that owns the data.
++      sources: [{ entity: this.name, record: record as Record<string, any> }],
++      aliases: this.config.registrySources.claimAliases,
++      birthDateField: this.config.registrySources.birthDateField,
++    });
++  }
++
++  /**
++   * Requires HTTPS. Loopback is the only exception.
++   *
++   * A claim source is a DIFFERENT ORGANISATION's system — that is the whole point
++   * of it existing — so this call leaves our network: a holder's identifier goes
++   * out and their personal data comes back, across hops neither party controls.
++   * Plain HTTP there is readable and rewritable by every one of them.
++   *
++   * Not the same judgement as `REGISTRY_BASE_URL=http://registry:8081`, and the
++   * difference is the trust boundary rather than the payload: the registry is a
++   * sibling service on the private network whose traffic never leaves the cluster.
++   * Being "consistent" across those two would mean applying the weaker standard to
++   * the hop that actually crosses the internet.
++   *
++   * Loopback stays exempt so the flow can be developed without provisioning a
++   * certificate; that traffic never leaves the host either. There is deliberately
++   * NO override for anything else — an escape hatch here would be found by the
++   * first deployment that hit a certificate problem, and then it would be load
++   * bearing.
++   */
++  private assertSafeUrl(raw: string): URL {
++    let url: URL;
++    try {
++      url = new URL(raw);
++    } catch {
++      throw new ClaimSourceUnavailableError(this.name, `'${raw}' is not a valid URL`);
++    }
++    if (url.protocol === 'https:') return url;
++
++    const loopback = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname);
++    if (loopback) return url;
++
++    throw new ClaimSourceUnavailableError(
++      this.name,
++      `refusing to send holder data to '${url.hostname}' over ${url.protocol}//. ` +
++        `A claim source is another organisation's system, so this call leaves our ` +
++        `network: use https. Plain http is accepted only for loopback, for local ` +
++        `development.`,
++    );
++  }
++
++  private async fetchClaims(url: URL, req: ClaimRequest): Promise<any> {
++    // A wallet is blocked on this call, so it is bounded and not retried: a slow
++    // upstream must surface as a named error rather than a request that hangs
++    // until the holder gives up.
++    const controller = new AbortController();
++    const timer = setTimeout(() => controller.abort(), this.spec.timeoutMs ?? 5000);
++    let res: Response;
++    try {
++      res = await fetch(url, {
++        method: 'POST',
++        // Never follow a redirect: the operator vetted THIS origin, and a 302
++        // would send the holder's identifier somewhere they did not.
++        redirect: 'error',
++        signal: controller.signal,
++        headers: {
++          'content-type': 'application/json',
++          accept: 'application/json',
++          ...(this.spec.token ? { authorization: `Bearer ${this.spec.token}` } : {}),
++        },
++        body: JSON.stringify({
++          subjectId: req.subjectId,
++          subjectClaim: req.subjectClaim,
++          credentialConfigurationId: req.credentialConfigurationId,
++          credentialName: req.credentialName,
++          attributes: req.properties,
++        }),
++      });
++    } catch (err: any) {
++      const reason =
++        err?.name === 'AbortError'
++          ? `did not respond within ${this.spec.timeoutMs ?? 5000}ms`
++          : (err?.message ?? String(err));
++      throw new ClaimSourceUnavailableError(this.name, reason);
++    } finally {
++      clearTimeout(timer);
++    }
++
++    // 404 is the holder, not the system: a record that was never created. Kept
++    // distinct so an operator is not sent to check whether the service is up.
++    if (res.status === 404) throw new SubjectNotFoundError(this.name, req.subjectId);
++    if (!res.ok) {
++      throw new ClaimSourceUnavailableError(this.name, `responded ${res.status}`);
++    }
++
++    try {
++      const parsed = await res.json();
++      // Deliberately no claim values in the log — they are the holder's personal
++      // data. The provider, the subject and the outcome are enough to debug with.
++      this.logger.log(`Claims resolved by '${this.name}' for ${req.subjectId}`);
++      return parsed;
++    } catch (err: any) {
++      throw new ClaimSourceUnavailableError(
++        this.name,
++        `response was not valid JSON (${err?.message ?? err})`,
++      );
++    }
++  }
++}
+diff --git a/services/oid4vc-service/src/claims/registry.claim-source.ts b/services/oid4vc-service/src/claims/registry.claim-source.ts
+new file mode 100644
+index 00000000..ae03ea82
+--- /dev/null
++++ b/services/oid4vc-service/src/claims/registry.claim-source.ts
+@@ -0,0 +1,49 @@
++import { Injectable } from '@nestjs/common';
++import { RegistryClient } from '../clients/registry.client';
++import { loadConfig } from '../config/configuration';
++import { resolveRegistryClaims } from '../oid4vci/registry-claims.util';
++import {
++  ClaimSourceUnavailableError,
++  SubjectNotFoundError,
++  type ClaimRequest,
++  type ClaimSourceProvider,
++} from './claim-source.interface';
++
++/**
++ * Claims from the Sunbird RC registry.
++ *
++ * An adapter, not new behaviour: this is exactly what the issuance path did
++ * inline before claim sources became selectable, moved behind the interface so the
++ * registry is one option rather than a precondition for issuing.
++ */
++@Injectable()
++export class RegistryClaimSource implements ClaimSourceProvider {
++  readonly name = 'registry';
++  private readonly config = loadConfig();
++
++  constructor(private readonly registry: RegistryClient) {}
++
++  /** False when REGISTRY_BASE_URL is unset, so the factory can say so precisely. */
++  get available(): boolean {
++    return this.registry.enabled;
++  }
++
++  async resolve(req: ClaimRequest) {
++    if (!this.registry.enabled) {
++      throw new ClaimSourceUnavailableError(this.name, 'REGISTRY_BASE_URL is not set');
++    }
++
++    // Sources come back in precedence order for whatever entities this deployment
++    // declares. Which entities those are is configuration — this code names none.
++    const { subject, sources } = await this.registry.subjectSources(req.subjectId);
++    if (!subject) throw new SubjectNotFoundError(this.name, req.subjectId);
++
++    return resolveRegistryClaims({
++      properties: req.properties,
++      required: req.required,
++      sources,
++      aliases: this.config.registrySources.claimAliases,
++      birthDateField: this.config.registrySources.birthDateField,
++    });
++  }
++}
+diff --git a/services/oid4vc-service/src/clients/clients.module.ts b/services/oid4vc-service/src/clients/clients.module.ts
+index 2d900f62..5a62a053 100644
+--- a/services/oid4vc-service/src/clients/clients.module.ts
++++ b/services/oid4vc-service/src/clients/clients.module.ts
+@@ -3,12 +3,30 @@ import { HttpModule } from '@nestjs/axios';
+ import { CredentialsClient } from './credentials.client';
+ import { IdentityClient } from './identity.client';
+ import { SchemaClient } from './schema.client';
++import { RegistryClient } from './registry.client';
++import { ClaimSourceFactory } from '../claims/claim-source.factory';
++import { RegistryClaimSource } from '../claims/registry.claim-source';
+ 
+-// HTTP clients to the existing (unchanged) Sunbird RC services.
++// HTTP clients to the existing (unchanged) Sunbird RC services, plus the claim
++// sources — which live here rather than in a module of their own because this
++// module is already @Global() and already owns the registry client they build on.
+ @Global()
+ @Module({
+   imports: [HttpModule],
+-  providers: [CredentialsClient, IdentityClient, SchemaClient],
+-  exports: [CredentialsClient, IdentityClient, SchemaClient],
++  providers: [
++    CredentialsClient,
++    IdentityClient,
++    SchemaClient,
++    RegistryClient,
++    RegistryClaimSource,
++    ClaimSourceFactory,
++  ],
++  exports: [
++    CredentialsClient,
++    IdentityClient,
++    SchemaClient,
++    RegistryClient,
++    ClaimSourceFactory,
++  ],
+ })
+ export class ClientsModule {}
+diff --git a/services/oid4vc-service/src/clients/registry.client.ts b/services/oid4vc-service/src/clients/registry.client.ts
+new file mode 100644
+index 00000000..8d88ca46
+--- /dev/null
++++ b/services/oid4vc-service/src/clients/registry.client.ts
+@@ -0,0 +1,150 @@
++import { HttpService } from '@nestjs/axios';
++import { Injectable, Logger } from '@nestjs/common';
++import { firstValueFrom } from 'rxjs';
++import { loadConfig, type RelatedEntitySpec } from '../config/configuration';
++import type { ClaimSource } from '../oid4vci/registry-claims.util';
++
++/**
++ * Reads entity records from the Sunbird RC registry.
++ *
++ * This exists so wallet self-service issuance can source a credential's claims
++ * from the system of record rather than from the request. In that flow the
++ * caller is the holder's own wallet, so anything it sends about itself is
++ * unverified by definition — the only trustworthy input is the subject id inside
++ * its Keycloak access token, which this client turns into a record.
++ *
++ * Which entities those are is CONFIGURATION (`registrySources`), not code: this
++ * client works for any registry, and issuing a new credential type over new
++ * entities needs no change here.
++ */
++@Injectable()
++export class RegistryClient {
++  private readonly logger = new Logger(RegistryClient.name);
++  private readonly config = loadConfig();
++
++  constructor(private readonly http: HttpService) {}
++
++  get enabled(): boolean {
++    return Boolean(this.config.registryBaseUrl);
++  }
++
++  private get baseUrl(): string {
++    return this.config.registryBaseUrl.replace(/\/$/, '');
++  }
++
++  /**
++   * Searches one entity type. The service account's own token is used, not the
++   * holder's: a citizen's token carries the `citizen` role and the registry
++   * refuses reads with it, yet the record is legitimately needed to issue to
++   * them. Authorisation is enforced by the caller instead — a holder only ever
++   * reaches the record named by their own token's subject claim.
++   */
++  async search<T = Record<string, any>>(
++    entity: string,
++    filters: Record<string, unknown>,
++    limit = 100,
++  ): Promise<T[]> {
++    if (!this.enabled) return [];
++    try {
++      const res = await firstValueFrom(
++        this.http.post(
++          `${this.baseUrl}/api/v1/${encodeURIComponent(entity)}/search`,
++          { offset: 0, limit, filters },
++          { headers: { 'content-type': 'application/json' } },
++        ),
++      );
++      const data = res.data;
++      // The registry returns a bare array on some versions and {data:[…]} on
++      // others; normalise rather than depending on which is deployed.
++      return Array.isArray(data) ? data : (data?.data ?? []);
++    } catch (err: any) {
++      this.logger.error(
++        `Registry search ${entity} failed: ${err?.response?.status ?? ''} ${err?.message ?? err}`,
++      );
++      throw new Error(`registry unavailable: ${err?.message ?? err}`);
++    }
++  }
++
++  /** The single record for a subject id, or undefined. */
++  async findOne<T = Record<string, any>>(
++    entity: string,
++    field: string,
++    value: string,
++  ): Promise<T | undefined> {
++    const rows = await this.search<T>(entity, { [field]: { eq: value } }, 1);
++    return rows[0];
++  }
++
++  /**
++   * Everything issuance needs about one subject, as claim sources in precedence
++   * order: the subject record first, then one record from each configured related
++   * entity.
++   *
++   * The entities come from configuration, so this method names none of them. All
++   * of them are fetched regardless of which credential is being issued, because
++   * the claim resolver — not this client — decides which records a given type
++   * draws on. Fetching per credential type would split that decision across two
++   * places, and the searches are indexed and run concurrently.
++   *
++   * ONE record per related entity, not the list: the holder does not get to choose
++   * which of their records a self-issued credential describes (a wallet has no UI
++   * for it, and letting the request choose would be a way to ask for someone
++   * else's row). The configured sort makes that choice deterministic — newest
++   * first unless the deployment says otherwise.
++   */
++  async subjectSources(subjectId: string): Promise<{
++    subject?: Record<string, any>;
++    sources: ClaimSource[];
++  }> {
++    const { subjectEntity, subjectKey, related } = this.config.registrySources;
++    if (!subjectEntity || !subjectKey) {
++      throw new Error(
++        'registry claim sources are not configured: set REGISTRY_SUBJECT_ENTITY and ' +
++          'REGISTRY_SUBJECT_KEY (or KEYCLOAK_SUBJECT_CLAIM) to the entity and field ' +
++          'holding the subject record',
++      );
++    }
++
++    const [subject, ...relatedRecords] = await Promise.all([
++      this.findOne(subjectEntity, subjectKey, subjectId),
++      ...related.map((spec) =>
++        this.search(spec.entity, { [subjectKey]: { eq: subjectId } })
++          // An entity a deployment has not created answers 4xx. That must not
++          // fail issuance of credentials which never needed it: treated as "no
++          // records", so the resolver reports any REQUIRED claim it fed as
++          // missing, which names the real problem instead of a 500.
++          .catch(() => [] as Record<string, any>[])
++          .then((rows) => this.pickOne(rows, spec)),
++      ),
++    ]);
++
++    return {
++      subject,
++      sources: [
++        { entity: subjectEntity, record: subject },
++        ...related.map((spec, i) => ({ entity: spec.entity, record: relatedRecords[i] })),
++      ],
++    };
++  }
++
++  /** The one record a credential should describe, per the entity's sort order. */
++  private pickOne(
++    rows: Record<string, any>[],
++    spec: RelatedEntitySpec,
++  ): Record<string, any> | undefined {
++    if (!spec.orderBy) return rows[0];
++    const dir = spec.ascending ? 1 : -1;
++    // Numeric where both sides are numeric (years, sequence numbers), string
++    // otherwise (ISO dates sort correctly as strings, which covers most of the
++    // rest without having to know the field's type).
++    const sorted = [...rows].sort((a, b) => {
++      const x = a?.[spec.orderBy!];
++      const y = b?.[spec.orderBy!];
++      const nx = Number(x);
++      const ny = Number(y);
++      if (Number.isFinite(nx) && Number.isFinite(ny)) return (nx - ny) * dir;
++      return String(x ?? '').localeCompare(String(y ?? '')) * dir;
++    });
++    return sorted[0];
++  }
++}
+diff --git a/services/oid4vc-service/src/config/configuration.ts b/services/oid4vc-service/src/config/configuration.ts
+index 5dc1406d..974e5f43 100644
+--- a/services/oid4vc-service/src/config/configuration.ts
++++ b/services/oid4vc-service/src/config/configuration.ts
+@@ -1,4 +1,154 @@
+ // Typed access to environment configuration for oid4vc-service.
++
++/** One entity holding records that belong to a subject. */
++export interface RelatedEntitySpec {
++  /** Registry entity name, e.g. LandParcel. */
++  entity: string;
++  /** Field to sort on, so "the holder's current one" is deterministic. */
++  orderBy?: string;
++  /** Descending by default: the most recent record is the interesting one. */
++  ascending?: boolean;
++}
++
++export interface RegistrySources {
++  /** Entity holding the subject record itself. */
++  subjectEntity: string;
++  /** Field on that entity matching the token's subject claim. */
++  subjectKey: string;
++  /** Entities holding the subject's supporting records, in precedence order. */
++  related: RelatedEntitySpec[];
++  /**
++   * Credential attribute -> registry field, for the cases a name match cannot
++   * cover. Values may name an entity (`Crop.cropName`) or just a field
++   * (`cropName`), in which case every source is searched in precedence order.
++   *
++   * Only needed where a schema's attribute name genuinely differs from the
++   * registry's field name — a well-named schema needs no aliases at all.
++   */
++  claimAliases: Record<string, string>;
++  /**
++   * Field holding the subject's date of birth, enabling `age_over_NN` claims.
++   * Empty disables age derivation rather than guessing a field name.
++   */
++  birthDateField: string;
++}
++
++/**
++ * Parses `Entity[:orderField[:asc|desc]]` lists, e.g.
++ * `LandParcel,Crop:year:desc,Qualification:yearOfPassing`.
++ */
++function parseRelated(raw: string): RelatedEntitySpec[] {
++  return raw
++    .split(',')
++    .map((s) => s.trim())
++    .filter(Boolean)
++    .map((item) => {
++      const [entity, orderBy, dir] = item.split(':').map((p) => p.trim());
++      return {
++        entity,
++        ...(orderBy ? { orderBy } : {}),
++        ...(dir?.toLowerCase() === 'asc' ? { ascending: true } : {}),
++      };
++    });
++}
++
++/**
++ * Parses a JSON object of string -> string from an env var.
++ *
++ * Malformed input is warned about rather than thrown on, but never silently
++ * dropped: both callers configure how claims are found, so a typo that reduced to
++ * `{}` in silence would produce credentials quietly missing values.
++ */
++function parseStringMap(
++  raw: string,
++  envName: string,
++  expected: string,
++  warn: (m: string) => void,
++): Record<string, string> {
++  if (!raw.trim()) return {};
++  try {
++    const parsed = JSON.parse(raw);
++    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
++      throw new Error('not a JSON object');
++    }
++    return Object.fromEntries(
++      Object.entries(parsed as Record<string, unknown>).map(([k, v]) => [k, String(v)]),
++    );
++  } catch (err: any) {
++    warn(
++      `${envName} could not be parsed (${err?.message ?? err}); continuing with none. ` +
++        `Expected a JSON object of ${expected}.`,
++    );
++    return {};
++  }
++}
++
++/** Parses the alias map, tolerating an unset or malformed value. */
++function parseAliases(raw: string, warn: (m: string) => void): Record<string, string> {
++  return parseStringMap(raw, 'REGISTRY_CLAIM_ALIASES', 'attribute -> field', warn);
++}
++
++/**
++ * One named claim source: an endpoint the issuing authority hosts against its own
++ * system of record.
++ *
++ * There is no `type` discriminator. `registry` is a built-in name usable directly
++ * in `CLAIM_SOURCE_MAP`, so every source declared here is an HTTP one — and then
++ * the URL says everything a type field would have. Should a future source type not
++ * be URL-based, that is when a discriminator earns its place.
++ */
++export interface ClaimSourceSpec {
++  /** Lower-cased name, as referenced by CLAIM_SOURCE_MAP / CLAIM_SOURCE_DEFAULT. */
++  name: string;
++  /** The endpoint. Its presence is what declares this source. */
++  url: string;
++  /** Bearer token, if the issuer's endpoint requires one. */
++  token?: string;
++  /** Request timeout. A wallet is waiting on this call, so it is bounded. */
++  timeoutMs?: number;
++}
++
++/** Names with built-in meaning, which a declared source must not shadow. */
++const RESERVED_SOURCE_NAMES = new Set(['registry', 'none']);
++
++/**
++ * Discovers named claim sources from `CLAIM_SOURCE_<NAME>_URL` variables.
++ *
++ * The URL is the declaration, so a source cannot exist in a half-configured state
++ * where it is selectable but has nowhere to call — which would defer the failure to
++ * the first holder who tried to collect a credential, and report it as their
++ * problem rather than the operator's.
++ *
++ * Separate variables rather than one JSON blob so a bearer token stays a discrete
++ * secret, injected like every other secret, instead of being embedded in a value
++ * that gets echoed whole in logs and `docker compose config` output.
++ */
++function parseClaimSources(
++  env: Record<string, string | undefined>,
++  warn: (m: string) => void,
++): Record<string, ClaimSourceSpec> {
++  const out: Record<string, ClaimSourceSpec> = {};
++  for (const key of Object.keys(env)) {
++    const m = /^CLAIM_SOURCE_([A-Z0-9]+)_URL$/.exec(key);
++    if (!m) continue;
++    const name = m[1].toLowerCase();
++    const url = (env[key] || '').trim();
++    if (!url) continue;
++    if (RESERVED_SOURCE_NAMES.has(name)) {
++      warn(`${key} is ignored: '${name}' already has a built-in meaning.`);
++      continue;
++    }
++    const prefix = `CLAIM_SOURCE_${m[1]}`;
++    out[name] = {
++      name,
++      url,
++      ...(env[`${prefix}_TOKEN`] ? { token: env[`${prefix}_TOKEN`] } : {}),
++      timeoutMs: num(env[`${prefix}_TIMEOUT_MS`], 5000),
++    };
++  }
++  return out;
++}
++
+ export interface Oid4vcConfig {
+   port: number;
+   publicUrl: string;
+@@ -25,6 +175,105 @@ export interface Oid4vcConfig {
+     jwksUri: string;
+     issuers: string[];
+   };
++  /**
++   * Keycloak-as-authorization-server, enabling wallet self-service issuance.
++   *
++   * When `keycloak.enabled`, issuer metadata advertises the Keycloak realm as the
++   * authorization server, the wallet runs authorization_code + PKCE against
++   * Keycloak directly (so this service implements no /authorize and no consent
++   * UI), and the credential endpoint accepts Keycloak-issued access tokens —
++   * sourcing claims from the registry record named by the token rather than from
++   * anything the caller sends.
++   */
++  keycloak: {
++    enabled: boolean;
++    /** Browser-facing base, e.g. https://host/auth. Published in metadata. */
++    publicUrl: string;
++    /** In-cluster base for JWKS fetches. Defaults to publicUrl. */
++    internalUrl: string;
++    realm: string;
++    /** Token claim carrying the subject's registry key. */
++    subjectClaim: string;
++    /** Expected `aud`; empty accepts any audience (Keycloak's default is azp-only). */
++    audience: string;
++  };
++  registryBaseUrl: string;
++  /**
++   * Where a self-issued credential's claims come from, as CONFIGURATION rather
++   * than code.
++   *
++   * This service issues whatever credential types the schema registry publishes,
++   * for whatever registry entities a deployment happens to have. It therefore
++   * knows no domain nouns: which entity holds the subject, which entities hold
++   * their supporting records, and how a credential attribute maps onto a field
++   * are all declared here. Adding a new credential type — or a whole new issuing
++   * domain — is a configuration change, not a code change.
++   */
++  registrySources: RegistrySources;
++  /**
++   * Named claim sources, keyed by lower-cased name.
++   *
++   * `registry` is always available (configured by `REGISTRY_*` above) and needs no
++   * entry here; anything else is declared with `CLAIM_SOURCE_<NAME>_*`.
++   */
++  claimSources: Record<string, ClaimSourceSpec>;
++  /**
++   * Credential type -> claim source name. Keys match a credential's `schemaId` or
++   * its name, in that order — the name is what an operator can read in a compose
++   * file, the schemaId is unambiguous when two types share a name.
++   */
++  claimSourceMap: Record<string, string>;
++  /**
++   * Source for credential types not named in the map. `registry` preserves the
++   * behaviour that predates per-type sources; `none` means credentials are issued
++   * only through `POST /oid4vc/offer`, where the caller supplies the claims.
++   */
++  claimSourceDefault: string;
++  /**
++   * Locale stamped onto SD-JWT VC Type Metadata display entries that lack one.
++   * A missing locale makes the document fail wallet-side validation outright.
++   */
++  defaultDisplayLocale: string;
++  /**
++   * Require an `issuer-staff` Keycloak token on POST /oid4vc/offer. Defaults
++   * false so existing deployments keep working; production should set it true —
++   * unauthenticated offer creation with caller-supplied claims lets anyone mint
++   * a credential saying anything about anyone.
++   */
++  offerRequiresStaff: boolean;
++  /**
++   * Realm role that satisfies `offerRequiresStaff`.
++   *
++   * A role name belongs to the deployment's realm, not to this service, so it is
++   * configuration — the one security-relevant identifier here that used to be a
++   * literal. Defaulted rather than required, because unlike a registry field name
++   * a wrong value fails closed (nobody can create an offer) instead of silently
++   * reading the wrong data.
++   */
++  offerStaffRole: string;
++  /**
++   * What issuer metadata ADVERTISES as supported, per value space.
++   *
++   * This service does not sign credentials — credentials-service does, with the
++   * key behind each schema's `author` DID — so it cannot derive these from the
++   * key in use. They are therefore declared, and the declaration must be
++   * correctable without a code change: an issuer whose keys are Ed25519 needs to
++   * say so.
++   *
++   * `ldp` carries Linked-Data cryptosuite names (`Ed25519Signature2020`), `jose`
++   * carries JWA algorithm names (`ES256`). They are different value spaces and
++   * must not be emitted into each other's formats.
++   */
++  credentialSigningAlgs: {
++    /** vc+sd-jwt — JWA names. */
++    jose: string[];
++    /** ldp_vc / jwt_vc_json — LD cryptosuite names. */
++    ldp: string[];
++    /** mso_mdoc — COSE, ES256 in practice. */
++    mdoc: string[];
++  };
++  /** Accepted wallet key-proof algorithms, published in proof_types_supported. */
++  proofSigningAlgs: string[];
+   ttl: {
+     offer: number;
+     nonce: number;
+@@ -39,6 +288,22 @@ const num = (v: string | undefined, def: number) => {
+   return isNaN(n) ? def : n;
+ };
+ 
++/**
++ * Comma-separated env list, falling back to `def`.
++ *
++ * An env var set to only separators or blanks yields the default rather than an
++ * empty list: publishing an EMPTY `credential_signing_alg_values_supported` tells
++ * a wallet the issuer can sign with nothing, which is worse than a stale default
++ * and reads in the metadata as if the field were broken.
++ */
++const list = (v: string | undefined, def: string[]): string[] => {
++  const parsed = (v || '')
++    .split(',')
++    .map((s) => s.trim())
++    .filter(Boolean);
++  return parsed.length ? parsed : def;
++};
++
+ export const loadConfig = (): Oid4vcConfig => ({
+   port: num(process.env.PORT, 3400),
+   publicUrl: process.env.PUBLIC_URL || 'http://localhost:3400',
+@@ -82,6 +347,66 @@ export const loadConfig = (): Oid4vcConfig => ({
+       .map((s) => s.trim())
+       .filter(Boolean),
+   },
++  keycloak: {
++    // Presence of a URL is the switch: there is no separate enable flag to get
++    // out of sync with it.
++    enabled: Boolean(process.env.KEYCLOAK_PUBLIC_URL),
++    publicUrl: (process.env.KEYCLOAK_PUBLIC_URL || '').replace(/\/$/, ''),
++    internalUrl: (
++      process.env.KEYCLOAK_INTERNAL_URL ||
++      process.env.KEYCLOAK_PUBLIC_URL ||
++      ''
++    ).replace(/\/$/, ''),
++    realm: process.env.KEYCLOAK_REALM || 'sunbird-rc',
++    // No default. This is a DOMAIN field name — which claim carries the holder's
++    // registry key is a property of the deployment's realm, not of this service.
++    // A default here (it used to be `farmerId`) also silently backfilled
++    // registrySources.subjectKey below, so an unconfigured deployment searched a
++    // borrowed field name and reported "no record found" instead of naming the
++    // variable it was missing.
++    subjectClaim: process.env.KEYCLOAK_SUBJECT_CLAIM || '',
++    audience: process.env.KEYCLOAK_AUDIENCE || '',
++  },
++  registryBaseUrl: process.env.REGISTRY_BASE_URL || '',
++  registrySources: {
++    // No domain defaults. A deployment declares its own entities; leaving these
++    // unset disables registry-sourced issuance with an explicit error naming the
++    // variable, which is far better than defaulting to some other project's
++    // entity name and reporting "no record found".
++    subjectEntity: process.env.REGISTRY_SUBJECT_ENTITY || '',
++    subjectKey:
++      process.env.REGISTRY_SUBJECT_KEY || process.env.KEYCLOAK_SUBJECT_CLAIM || '',
++    related: parseRelated(process.env.REGISTRY_RELATED_ENTITIES || ''),
++    claimAliases: parseAliases(process.env.REGISTRY_CLAIM_ALIASES || '', (m) =>
++      console.warn(`[configuration] ${m}`),
++    ),
++    birthDateField: process.env.REGISTRY_BIRTHDATE_FIELD || '',
++  },
++  claimSources: parseClaimSources(process.env, (m) => console.warn(`[configuration] ${m}`)),
++  claimSourceMap: parseStringMap(
++    process.env.CLAIM_SOURCE_MAP || '',
++    'CLAIM_SOURCE_MAP',
++    'credential schemaId or name -> claim source name',
++    (m) => console.warn(`[configuration] ${m}`),
++  ),
++  // `registry` by default: this setting was introduced after registry-sourced
++  // issuance was already deployed, and silently switching those deployments to
++  // `none` would take away a working flow.
++  claimSourceDefault: (process.env.CLAIM_SOURCE_DEFAULT || 'registry').trim().toLowerCase(),
++  defaultDisplayLocale: process.env.DEFAULT_DISPLAY_LOCALE || 'en-US',
++  offerRequiresStaff: process.env.OFFER_REQUIRES_STAFF === 'true',
++  offerStaffRole: process.env.OFFER_STAFF_ROLE || 'issuer-staff',
++  credentialSigningAlgs: {
++    // JWA names, because vc+sd-jwt is JOSE. `EdDSA` is how JWA spells Ed25519 —
++    // the previous literal published `Ed25519Signature2020` here, which is a
++    // Linked-Data cryptosuite and not a value any JOSE wallet can act on.
++    jose: list(process.env.CREDENTIAL_SIGNING_ALGS_JOSE, ['ES256', 'EdDSA']),
++    // LD cryptosuite names, for ldp_vc / jwt_vc_json. Unchanged from what this
++    // service has always published, and the value space that name belongs to.
++    ldp: list(process.env.CREDENTIAL_SIGNING_ALGS_LDP, ['ES256', 'Ed25519Signature2020']),
++    mdoc: list(process.env.CREDENTIAL_SIGNING_ALGS_MDOC, ['ES256']),
++  },
++  proofSigningAlgs: list(process.env.PROOF_SIGNING_ALGS, ['ES256']),
+   ttl: {
+     offer: num(process.env.OFFER_TTL, 600),
+     nonce: num(process.env.NONCE_TTL, 300),
+diff --git a/services/oid4vc-service/src/main.ts b/services/oid4vc-service/src/main.ts
+index 120abe73..ce8c88dc 100644
+--- a/services/oid4vc-service/src/main.ts
++++ b/services/oid4vc-service/src/main.ts
+@@ -50,6 +50,19 @@ async function bootstrap() {
+   const port = process.env.PORT || 3400;
+   await app.listen(port, '0.0.0.0');
+   Logger.log(`🚀 oid4vc-service running on: http://0.0.0.0:${port}/`);
++
++  // PUBLIC_URL is baked into issuer metadata, `vct` URLs, credential offer URIs
++  // and the AS metadata `issuer` — so leaving it unset does not fail here, it
++  // fails much later inside a holder's wallet as an unresolvable vct. The
++  // localhost default is what makes `npm run start:dev` work with no env at all,
++  // which is worth keeping; announcing it is what stops it reaching a deployment.
++  if (!process.env.PUBLIC_URL) {
++    Logger.warn(
++      'PUBLIC_URL is not set — falling back to http://localhost:3400. Issuer metadata, ' +
++        'vct URLs and offer URIs will all point at localhost, so any credential issued ' +
++        'is unusable outside this machine. Set PUBLIC_URL to the public base URL.',
++    );
++  }
+ }
+ // A failed boot must be a clean non-zero exit, not an unhandled rejection —
+ // the auth config is validated during startup and the container needs to see
+diff --git a/services/oid4vc-service/src/oid4vci/oid4vci.controller.ts b/services/oid4vc-service/src/oid4vci/oid4vci.controller.ts
+index 15e73fe2..0e68cf33 100644
+--- a/services/oid4vc-service/src/oid4vci/oid4vci.controller.ts
++++ b/services/oid4vc-service/src/oid4vci/oid4vci.controller.ts
+@@ -28,8 +28,8 @@ export class Oid4vciController {
+   @ApiBearerAuth()
+   @UseGuards(KeycloakAuthGuard)
+   @Post('offer')
+-  createOffer(@Body() body: any) {
+-    return this.oid4vci.createOffer(body);
++  createOffer(@Body() body: any, @Headers('authorization') auth?: string) {
++    return this.oid4vci.createOffer(body, auth);
+   }
+ 
+   @ApiOperation({ summary: 'Dereference a credential offer (wallet)' })
+diff --git a/services/oid4vc-service/src/oid4vci/oid4vci.self-service.spec.ts b/services/oid4vc-service/src/oid4vci/oid4vci.self-service.spec.ts
+new file mode 100644
+index 00000000..43d5d931
+--- /dev/null
++++ b/services/oid4vc-service/src/oid4vci/oid4vci.self-service.spec.ts
+@@ -0,0 +1,389 @@
++import { Oid4vciService } from './oid4vci.service';
++import { MemoryStoreService } from '../session/memory-store.service';
++import { ClaimSourceFactory } from '../claims/claim-source.factory';
++import { RegistryClaimSource } from '../claims/registry.claim-source';
++
++// Wallet self-service issuance: a holder signs into Keycloak from their own
++// wallet and is issued the credential for THEIR record.
++//
++// The property under test is the one the whole design rests on — the credential's
++// contents come from the registry record named by the holder's own token, so a
++// holder cannot obtain someone else's credential and cannot influence what their
++// own one says. The last two tests attack exactly that.
++describe('Oid4vciService wallet self-service issuance', () => {
++  const ORIGINAL_ENV = process.env;
++  let schema: any;
++  let tokens: any;
++  let credentials: any;
++  let pop: any;
++  let registry: any;
++
++  const SCHEMA_ID = 'did:schema:farmer';
++
++  const RAVI = {
++    farmer: { farmerId: 'FRM-000123', name: 'Ravi Kumar', gender: 'Male' },
++    parcels: [{ landRecordRef: 'LR-1', landAreaAcres: 4.5, ownershipType: 'Owned' }],
++    crops: [{ cropName: 'Wheat', year: 2026 }],
++  };
++  const LAKSHMI = {
++    farmer: { farmerId: 'FRM-000124', name: 'Lakshmi Devi', gender: 'Female' },
++    parcels: [{ landRecordRef: 'LR-2', landAreaAcres: 2, ownershipType: 'Leased' }],
++    crops: [],
++  };
++
++  /**
++   * What RegistryClient.subjectSources returns: the subject record, plus one
++   * record per configured related entity, in precedence order.
++   *
++   * The entity names here are this deployment's configuration, not the service's
++   * — the service reads whatever it is given, which is why the resolver's own
++   * tests cover a completely different domain.
++   */
++  const asSources = (b: { farmer?: any; parcels?: any[]; crops?: any[] }) => ({
++    subject: b.farmer,
++    sources: [
++      { entity: 'Farmer', record: b.farmer },
++      { entity: 'LandParcel', record: b.parcels?.[0] },
++      { entity: 'Crop', record: b.crops?.[0] },
++    ],
++  });
++
++  beforeEach(() => {
++    process.env = { ...ORIGINAL_ENV };
++    process.env.PUBLIC_URL = 'https://issuer.example';
++    process.env.KEYCLOAK_PUBLIC_URL = 'https://issuer.example/auth';
++    process.env.REGISTRY_BASE_URL = 'http://registry:8081';
++    // Which token claim names the holder has no default — the field name belongs
++    // to the deployment, not to this service. A test below asserts that leaving it
++    // unset reports the missing variable instead of blaming the holder's account.
++    process.env.KEYCLOAK_SUBJECT_CLAIM = 'farmerId';
++
++    schema = {
++      getOid4vciConfigs: jest.fn().mockResolvedValue([
++        {
++          schemaId: SCHEMA_ID,
++          version: '1.0.0',
++          name: 'Farmer Land Holding Credential',
++          type: 'FarmerCredential',
++          tags: ['farmer'],
++          formats: ['vc+sd-jwt'],
++          vct: 'https://issuer.example/vct/farmer',
++          display: [],
++          author: 'did:web:issuer.example:authority',
++          schema: {
++            properties: {
++              farmerId: { type: 'string' },
++              name: { type: 'string' },
++              landAreaAcres: { type: 'number' },
++            },
++            required: ['farmerId', 'name', 'landAreaAcres'],
++          },
++        },
++      ]),
++    };
++    tokens = {
++      getIssuerDid: jest.fn().mockReturnValue('did:web:issuer.example:authority'),
++      mintAccessToken: jest.fn(),
++      validateAccessToken: jest.fn(),
++      authorizationServers: jest.fn().mockReturnValue(['https://issuer.example/auth']),
++    };
++    // issueForSession delegates here; capture what it was asked to sign. The
++    // claims land in `credential.credentialSubject` alongside the holder's id.
++    credentials = { issue: jest.fn().mockResolvedValue({ credential: 'sd.jwt~disclosures' }) };
++    pop = {
++      verifyJwtProof: jest.fn().mockResolvedValue({
++        valid: true,
++        holderDid: 'did:key:zHolder',
++        holderKid: 'did:key:zHolder#0',
++      }),
++    };
++    registry = { enabled: true, subjectSources: jest.fn() };
++  });
++
++  afterEach(() => {
++    process.env = ORIGINAL_ENV;
++  });
++
++  /**
++   * Built with the REAL claim-source factory over the mocked registry client, not
++   * a mocked factory — these tests are about registry-sourced issuance, so the
++   * provider selection and the registry adapter are part of what they cover.
++   */
++  const makeService = () =>
++    new Oid4vciService(
++      new MemoryStoreService() as any,
++      credentials,
++      schema,
++      tokens,
++      pop,
++      new ClaimSourceFactory(new RegistryClaimSource(registry)),
++    );
++
++  /**
++   * The claims actually sent for signing, with the holder's DID stripped —
++   * `credentialSubject.id` is the wallet's own key, not a registry value.
++   */
++  function subjectOf(c: any) {
++    const { id, ...claims } = c.issue.mock.calls[0][0].credential.credentialSubject;
++    return claims;
++  }
++
++  /** A Keycloak token for a signed-in holder carrying their registry key. */
++  const keycloakToken = (farmerId?: string, sub = 'kc-user-1') => ({
++    payload: { sub, iss: 'https://issuer.example/realms/sunbird-rc' },
++    source: 'keycloak' as const,
++    subjectId: farmerId,
++    roles: ['citizen'],
++  });
++
++  /**
++   * Drives the credential endpoint far enough to capture the resolved claims.
++   * A live c_nonce is required, so mint one through the service itself.
++   */
++  async function requestCredential(
++    service: Oid4vciService,
++    body: Record<string, any> = { credential_configuration_id: SCHEMA_ID },
++  ) {
++    const nonce = await service.issueNonce();
++    jest
++      .spyOn(service as any, 'decodeJwtClaims')
++      .mockReturnValue({ nonce });
++    return service.credential('Bearer kc-token', {
++      proof: { jwt: 'proof.jwt.value' },
++      ...body,
++    });
++  }
++
++  it('issues from the registry record named by the token', async () => {
++    tokens.validateAccessToken.mockResolvedValue(keycloakToken('FRM-000123'));
++    registry.subjectSources.mockResolvedValue(asSources(RAVI));
++    const service = makeService();
++
++    const res = await requestCredential(service);
++
++    expect(registry.subjectSources).toHaveBeenCalledWith('FRM-000123');
++    expect(res.credential).toBeDefined();
++    const claims = subjectOf(credentials);
++    expect(claims).toEqual({
++      farmerId: 'FRM-000123',
++      name: 'Ravi Kumar',
++      landAreaAcres: 4.5,
++    });
++  });
++
++  it('gives a different holder their own credential, not the first one', async () => {
++    tokens.validateAccessToken.mockResolvedValue(keycloakToken('FRM-000124', 'kc-user-2'));
++    registry.subjectSources.mockResolvedValue(asSources(LAKSHMI));
++    const service = makeService();
++
++    await requestCredential(service);
++
++    expect(registry.subjectSources).toHaveBeenCalledWith('FRM-000124');
++    const claims = subjectOf(credentials);
++    expect(claims.name).toBe('Lakshmi Devi');
++    expect(claims.farmerId).toBe('FRM-000124');
++  });
++
++  it('IGNORES claims supplied by the wallet', async () => {
++    // The attack this closes: the caller is the holder's own wallet, so anything
++    // it asserts about itself is unverified. A wallet asking for 900 acres under
++    // someone else's name must still receive exactly its own record.
++    tokens.validateAccessToken.mockResolvedValue(keycloakToken('FRM-000123'));
++    registry.subjectSources.mockResolvedValue(asSources(RAVI));
++    const service = makeService();
++
++    await requestCredential(service, {
++      credential_configuration_id: SCHEMA_ID,
++      claims: { farmerId: 'FRM-999999', name: 'Someone Else', landAreaAcres: 900 },
++    });
++
++    const claims = subjectOf(credentials);
++    expect(claims).toEqual({
++      farmerId: 'FRM-000123',
++      name: 'Ravi Kumar',
++      landAreaAcres: 4.5,
++    });
++  });
++
++  it('cannot reach another holder’s record by naming it in the request', async () => {
++    // Only the token decides whose record is read. `farmerId` in the body is not
++    // consulted at all.
++    tokens.validateAccessToken.mockResolvedValue(keycloakToken('FRM-000123'));
++    registry.subjectSources.mockResolvedValue(asSources(RAVI));
++    const service = makeService();
++
++    await requestCredential(service, {
++      credential_configuration_id: SCHEMA_ID,
++      farmerId: 'FRM-000124',
++      subject: 'FRM-000124',
++    });
++
++    expect(registry.subjectSources).toHaveBeenCalledTimes(1);
++    expect(registry.subjectSources).toHaveBeenCalledWith('FRM-000123');
++  });
++
++  it('refuses cleanly when the account is not linked to a record', async () => {
++    // Authenticated but no farmerId claim: a provisioning gap, not a protocol
++    // error, so the message has to say what an administrator must do.
++    tokens.validateAccessToken.mockResolvedValue(keycloakToken(undefined));
++    const service = makeService();
++
++    await expect(requestCredential(service)).rejects.toThrow(
++      /not linked to a registry record/,
++    );
++    expect(registry.subjectSources).not.toHaveBeenCalled();
++  });
++
++  it('names the missing variable when no subject claim is configured', async () => {
++    // The regression this guards: KEYCLOAK_SUBJECT_CLAIM used to default to
++    // `farmerId` — a field name borrowed from one deployment's registry. An
++    // operator who never set it got "this account is not linked to a registry
++    // record" and went looking through Keycloak users for a problem that was in
++    // the environment. There is now no default, so the error has to name the
++    // variable rather than blame the holder.
++    delete process.env.KEYCLOAK_SUBJECT_CLAIM;
++    tokens.validateAccessToken.mockResolvedValue(keycloakToken(undefined));
++    const service = makeService();
++
++    await expect(requestCredential(service)).rejects.toThrow(/KEYCLOAK_SUBJECT_CLAIM/);
++    await expect(requestCredential(service)).rejects.not.toThrow(/not linked/);
++    expect(registry.subjectSources).not.toHaveBeenCalled();
++  });
++
++  it('refuses cleanly when the linked record does not exist', async () => {
++    tokens.validateAccessToken.mockResolvedValue(keycloakToken('FRM-DELETED'));
++    registry.subjectSources.mockResolvedValue(asSources({ farmer: undefined, parcels: [], crops: [] }));
++    const service = makeService();
++
++    // "no record", not "no registry record": the holder's records may live in the
++    // issuing authority's own database, so the message must not name ours.
++    await expect(requestCredential(service)).rejects.toThrow(/no record for farmerId/);
++  });
++
++  it('refuses when the record is missing a required claim, naming it', async () => {
++    // Better than the opaque 500 credentials-service would otherwise return, and
++    // the message tells the holder who can fix it.
++    tokens.validateAccessToken.mockResolvedValue(keycloakToken('FRM-000123'));
++    registry.subjectSources.mockResolvedValue(asSources({ ...RAVI, parcels: [] }));
++    const service = makeService();
++
++    await expect(requestCredential(service)).rejects.toThrow(
++      /missing required landAreaAcres/,
++    );
++  });
++
++  it('rejects an unknown credential_configuration_id rather than substituting another', async () => {
++    // A request that NAMES a type it cannot have must fail. Quietly issuing the
++    // only type on file would hand the holder something they did not ask for.
++    tokens.validateAccessToken.mockResolvedValue(keycloakToken('FRM-000123'));
++    registry.subjectSources.mockResolvedValue(asSources(RAVI));
++    const service = makeService();
++
++    await expect(
++      requestCredential(service, { credential_configuration_id: 'did:schema:nope' }),
++    ).rejects.toThrow(/could not determine the credential type/);
++  });
++
++  it('refuses when the chosen claim source is the registry and it is unconfigured', async () => {
++    // Without a system of record there is nothing trustworthy to issue from, so
++    // this must not silently fall back to caller-supplied claims. The message has
++    // to name the variable AND the alternatives, because "the registry is not
++    // configured" is a mistake only if this deployment meant to use the registry —
++    // an authority using its own database sets CLAIM_SOURCE_MAP instead.
++    registry.enabled = false;
++    tokens.validateAccessToken.mockResolvedValue(keycloakToken('FRM-000123'));
++    const service = makeService();
++
++    await expect(requestCredential(service)).rejects.toThrow(/REGISTRY_BASE_URL is not set/);
++    await expect(requestCredential(service)).rejects.toThrow(/CLAIM_SOURCE_MAP/);
++  });
++
++  describe('format is derived from the credential, not assumed', () => {
++    /** Republishes the one test credential under a different format list. */
++    const publishAs = async (...formats: string[]) => {
++      const [cfg] = await schema.getOid4vciConfigs();
++      schema.getOid4vciConfigs.mockResolvedValue([{ ...cfg, formats }]);
++    };
++
++    it('issues for an ldp_vc-only deployment when the request names no format', async () => {
++      // The regression this guards: the format used to default to 'vc+sd-jwt', so
++      // the candidate filter matched nothing and a deployment publishing a single
++      // ldp_vc credential was told "could not determine the credential type" —
++      // with exactly one type published and nothing ambiguous about it.
++      await publishAs('ldp_vc');
++      tokens.validateAccessToken.mockResolvedValue(keycloakToken('FRM-000123'));
++      registry.subjectSources.mockResolvedValue(asSources(RAVI));
++      const service = makeService();
++
++      await expect(requestCredential(service, {})).resolves.toHaveProperty('credential');
++    });
++
++    it('answers a vct-identified request with SD-JWT even when ldp_vc is listed first', async () => {
++      // Credo sends `vct` and no format. `vct` exists only in SD-JWT VC, so
++      // resolving by it settles the format — taking formats[0] instead would hand
++      // back an LDP credential for an SD-JWT request.
++      await publishAs('ldp_vc', 'vc+sd-jwt');
++      tokens.validateAccessToken.mockResolvedValue(keycloakToken('FRM-000123'));
++      registry.subjectSources.mockResolvedValue(asSources(RAVI));
++      const service = makeService();
++
++      await requestCredential(service, { vct: 'https://issuer.example/vct/farmer' });
++
++      expect(credentials.issue.mock.calls[0][0].format).toBe('vc+sd-jwt');
++    });
++
++    it('honours the format encoded in a <schemaId>_<format> configuration id', async () => {
++      await publishAs('ldp_vc', 'vc+sd-jwt');
++      tokens.validateAccessToken.mockResolvedValue(keycloakToken('FRM-000123'));
++      registry.subjectSources.mockResolvedValue(asSources(RAVI));
++      const service = makeService();
++
++      await requestCredential(service, {
++        credential_configuration_id: `${SCHEMA_ID}_vc+sd-jwt`,
++      });
++
++      expect(credentials.issue.mock.calls[0][0].format).toBe('vc+sd-jwt');
++    });
++
++    it('still refuses a format the credential does not publish', async () => {
++      await publishAs('ldp_vc');
++      tokens.validateAccessToken.mockResolvedValue(keycloakToken('FRM-000123'));
++      registry.subjectSources.mockResolvedValue(asSources(RAVI));
++      const service = makeService();
++
++      await expect(
++        requestCredential(service, {
++          credential_configuration_id: SCHEMA_ID,
++          format: 'mso_mdoc',
++        }),
++      ).rejects.toThrow(/format 'mso_mdoc' not supported/);
++    });
++  });
++
++  it('still honours the pre-authorized_code path unchanged', async () => {
++    // The staff flow must not regress: its claims were fixed at offer creation
++    // and the registry is not consulted.
++    tokens.validateAccessToken.mockResolvedValue({
++      payload: { sub: 'offer-id-1' },
++      source: 'preauth' as const,
++    });
++    const service = makeService();
++    const offer = await service.createOffer({
++      credential_configuration_id: SCHEMA_ID,
++      claims: { farmerId: 'FRM-000123', name: 'Ravi Kumar', landAreaAcres: 4.5 },
++    });
++    tokens.validateAccessToken.mockResolvedValue({
++      payload: { sub: offer.offer_id },
++      source: 'preauth' as const,
++    });
++
++    await requestCredential(service);
++
++    expect(registry.subjectSources).not.toHaveBeenCalled();
++    expect(subjectOf(credentials)).toEqual({
++      farmerId: 'FRM-000123',
++      name: 'Ravi Kumar',
++      landAreaAcres: 4.5,
++    });
++  });
++});
+diff --git a/services/oid4vc-service/src/oid4vci/oid4vci.service.ts b/services/oid4vc-service/src/oid4vci/oid4vci.service.ts
+index 71b379c0..b3e51cf3 100644
+--- a/services/oid4vc-service/src/oid4vci/oid4vci.service.ts
++++ b/services/oid4vc-service/src/oid4vci/oid4vci.service.ts
+@@ -1,5 +1,6 @@
+ import {
+   BadRequestException,
++  ForbiddenException,
+   Inject,
+   Injectable,
+   Logger,
+@@ -10,14 +11,22 @@ import * as crypto from 'crypto';
+ import { SESSION_STORE, SessionStore } from '../session/session-store.interface';
+ import { CredentialsClient } from '../clients/credentials.client';
+ import { SchemaClient, Oid4vciSchemaConfig } from '../clients/schema.client';
+-import { TokenService } from './token.service';
++import { TokenService, ValidatedToken } from './token.service';
+ import { PopService } from './pop.service';
+ import { loadConfig } from '../config/configuration';
+ import { digestMultibase } from '../utils/multibase.util';
+ import { normalizeVct, slugifyVct, isAbsoluteHttpUri } from './vct.util';
++import { ClaimSourceFactory } from '../claims/claim-source.factory';
++import {
++  ClaimSourceNotConfiguredError,
++  ClaimSourceUnavailableError,
++  SubjectNotFoundError,
++  type ClaimSourceProvider,
++} from '../claims/claim-source.interface';
+ 
+ const PREAUTH_GRANT = 'urn:ietf:params:oauth:grant-type:pre-authorized_code';
+ 
++
+ interface OfferSession {
+   credentialConfigurationId: string;
+   format: string;
+@@ -32,6 +41,13 @@ interface OfferSession {
+   claims: Record<string, any>;
+   preAuthCode: string;
+   txCodeRequired: boolean;
++  /** True when the offer carries authorization_code instead of pre-authorized_code. */
++  authCodeGrant?: boolean;
++  // The actual PIN, when one is required. Held server-side ONLY: it is returned
++  // to the offer's creator (so a portal can display it) and never placed in the
++  // offer object, which would defeat the purpose — the QR would then carry its
++  // own PIN and prove nothing about who received it.
++  txCode?: string;
+   tags: string[];
+   // Optional deferred: when set, issuance waits on this claim id.
+   deferredClaimId?: string;
+@@ -53,6 +69,7 @@ interface OfferSession {
+ export class Oid4vciService {
+   private readonly logger = new Logger(Oid4vciService.name);
+   private readonly config = loadConfig();
++  private offerAuthWarned = false;
+ 
+   constructor(
+     @Inject(SESSION_STORE) private readonly store: SessionStore,
+@@ -60,6 +77,10 @@ export class Oid4vciService {
+     private readonly schema: SchemaClient,
+     private readonly tokens: TokenService,
+     private readonly pop: PopService,
++    // Not a RegistryClient: which system of record backs a credential type is a
++    // per-type decision, so this service depends on the chooser rather than on any
++    // one system of record.
++    private readonly claimSources: ClaimSourceFactory,
+   ) {}
+ 
+   // --- Metadata ------------------------------------------------------------
+@@ -86,18 +107,42 @@ export class Oid4vciService {
+         const isMdoc = format === 'mso_mdoc';
+         supported[id] = {
+           format,
+-          scope: cfg.name,
++          // An OAuth scope, so it MUST NOT contain spaces — space is the scope
++          // delimiter. Publishing the raw schema name ("Farmer Land Holding")
++          // made Keycloak reject the wallet's authorization request outright with
++          // `invalid_scope`, so the holder never even reached a login form.
++          // Slugified to stay a single valid token.
++          scope: slugifyVct(cfg.name),
+           cryptographic_binding_methods_supported: ['did:web', 'did:key', 'jwk'],
+-          credential_signing_alg_values_supported: isMdoc ? ['ES256'] : ['ES256', 'Ed25519Signature2020'],
+-          proof_types_supported: { jwt: { proof_signing_alg_values_supported: ['ES256'] } },
+-          // vct MUST be a URI if it contains a ':', and some wallets resolve
+-          // EVERY vct as a URL regardless of that spec carve-out, so a bare
+-          // display name like "National Identity Credential" crashes them on
+-          // the embedded space. normalizeVct() turns any non-URI schema name
+-          // into `<publicUrl>/vct/<slug>`, which vct.controller.ts then
++          // Per FORMAT, because these are two different value spaces: ldp_vc and
++          // jwt_vc_json name Linked-Data cryptosuites, vc+sd-jwt names JWA
++          // algorithms. Publishing `Ed25519Signature2020` (an LD suite) as an
++          // SD-JWT signing alg — which this did for every non-mdoc format — is
++          // not a value a JOSE wallet can act on.
++          //
++          // Declared rather than derived: the signing key belongs to each
++          // schema's `author` DID and the actual signing happens in
++          // credentials-service, so this service cannot inspect it. Which makes
++          // it configuration, so an issuer holding Ed25519 keys can correct the
++          // advertisement without a code change.
++          credential_signing_alg_values_supported: isMdoc
++            ? this.config.credentialSigningAlgs.mdoc
++            : format === 'vc+sd-jwt'
++              ? this.config.credentialSigningAlgs.jose
++              : this.config.credentialSigningAlgs.ldp,
++          proof_types_supported: {
++            jwt: { proof_signing_alg_values_supported: this.config.proofSigningAlgs },
++          },
++          // vct MUST be a URI if it contains a ':', and — found live against
++          // walt.id's wallet — some wallets resolve EVERY vct as a URL
++          // regardless of that spec carve-out, so a bare display name like
++          // "National Identity Credential" crashes them ("Illegal character
++          // in path" on the space). normalizeVct() turns any non-URI schema
++          // name into `<publicUrl>/vct/<slug>`, which vct.controller.ts then
+           // actually serves as SD-JWT VC Type Metadata.
+           ...(format === 'vc+sd-jwt' ? { vct: normalizeVct(cfg.vct, this.config.publicUrl) } : {}),
+-          display: cfg.display,
++          // Same locale requirement as the vct document — see withDisplayLocale.
++          display: this.withDisplayLocale(cfg.display),
+           // `credential_definition` is the W3C-format parameter (ldp_vc /
+           // jwt_vc_json). SD-JWT VC identifies its type with `vct` (set above)
+           // and mdoc with `doctype`, and neither may carry it: a strict wallet
+@@ -126,7 +171,11 @@ export class Oid4vciService {
+ 
+     const base = {
+       credential_issuer: this.config.publicUrl,
+-      authorization_servers: [this.config.publicUrl],
++      // With Keycloak configured this lists the realm first, so a wallet doing
++      // authorization_code + PKCE discovers the realm's own metadata and
++      // authenticates the holder there. This service implements no /authorize:
++      // Keycloak is the authorization server, we are the resource server.
++      authorization_servers: this.tokens.authorizationServers(),
+       credential_endpoint: `${this.config.publicUrl}/oid4vc/credential`,
+       nonce_endpoint: `${this.config.publicUrl}/oid4vc/nonce`,
+       deferred_credential_endpoint: `${this.config.publicUrl}/oid4vc/deferred`,
+@@ -164,20 +213,102 @@ export class Oid4vciService {
+     return {
+       vct: normalizeVct(cfg.vct, this.config.publicUrl),
+       name: cfg.name,
+-      display: cfg.display,
++      // Every display entry MUST carry a locale. SD-JWT VC Type Metadata
++      // validation in @sd-jwt/sd-jwt-vc — which Credo, and therefore Paradym,
++      // runs on the fetched document — rejects the whole credential with
++      //   "Either locale (preferred) or lang (spec name, deprecated) MUST be
++      //    defined on claim display entry"
++      // and the holder sees only "something went wrong". Schemas are authored by
++      // hand through the schema API and routinely omit it, so default here rather
++      // than depending on every author remembering.
++      display: this.withDisplayLocale(cfg.display),
+     };
+   }
+ 
++  /**
++   * Ensures each display entry has a `locale`, defaulting to en-US.
++   *
++   * Deliberately does not invent any other field: a missing locale is the one
++   * omission that makes the document invalid rather than merely sparse.
++   */
++  private withDisplayLocale(display: Record<string, any>[] | undefined): Record<string, any>[] {
++    const entries = Array.isArray(display) && display.length ? display : [{}];
++    return entries.map((d) => ({
++      ...d,
++      ...(d?.locale || d?.lang ? {} : { locale: this.config.defaultDisplayLocale }),
++    }));
++  }
++
+   // --- Offer ---------------------------------------------------------------
+ 
+-  async createOffer(body: {
+-    credential_configuration_id: string;
+-    claims: Record<string, any>;
+-    format?: string;
+-    tx_code_required?: boolean;
+-    tags?: string[];
+-    deferred_claim_id?: string;
+-  }) {
++  /**
++   * Requires a staff Keycloak token, when configured to.
++   *
++   * The role NAME is configuration (`OFFER_STAFF_ROLE`), because it lives in the
++   * deployment's realm rather than here — a realm that calls it
++   * `credential-issuer` should not need a code change to use this gate.
++   *
++   * Deliberately opt-in (`OFFER_REQUIRES_STAFF`): turning it on unconditionally
++   * would break every existing caller of this endpoint, including the verifier
++   * console's sample-issuance button. The one-shot warning makes the open state
++   * visible in the log rather than assumed to be intentional.
++   */
++  private async assertStaff(authHeader?: string): Promise<void> {
++    const staffRole = this.config.offerStaffRole;
++    if (!this.config.offerRequiresStaff) {
++      if (!this.offerAuthWarned) {
++        this.offerAuthWarned = true;
++        this.logger.warn(
++          'POST /oid4vc/offer is UNAUTHENTICATED and trusts caller-supplied claims — ' +
++            'anyone who can reach it can mint a credential about anyone. ' +
++            `Set OFFER_REQUIRES_STAFF=true (with KEYCLOAK_PUBLIC_URL) to require the ${staffRole} role.`,
++        );
++      }
++      return;
++    }
++    if (!this.config.keycloak.enabled) {
++      // Failing closed: asking for a role check with no way to check roles must
++      // not silently degrade into no check at all.
++      throw new BadRequestException(
++        'server_error: OFFER_REQUIRES_STAFF is set but KEYCLOAK_PUBLIC_URL is not configured',
++      );
++    }
++    const token = await this.tokens.validateAccessToken(authHeader);
++    if (token.source !== 'keycloak' || !(token.roles ?? []).includes(staffRole)) {
++      throw new ForbiddenException(`insufficient_scope: the '${staffRole}' role is required`);
++    }
++  }
++
++  async createOffer(
++    body: {
++      credential_configuration_id: string;
++      claims: Record<string, any>;
++      format?: string;
++      tx_code_required?: boolean;
++      tags?: string[];
++      deferred_claim_id?: string;
++      /**
++       * Which grant the offer should carry.
++       *
++       * `pre-authorized_code` (default) hands the holder a bearer offer, gated by
++       * a transaction code the issuer distributes out of band.
++       *
++       * `authorization_code` instead sends the holder to Keycloak to sign in:
++       * the wallet runs authorization_code + PKCE against the realm, and the
++       * credential is issued from the registry record belonging to whoever
++       * authenticated. No PIN, because the login itself establishes identity —
++       * and nobody can collect a credential without valid Keycloak credentials.
++       */
++      grant?: 'pre-authorized_code' | 'authorization_code';
++    },
++    authHeader?: string,
++  ) {
++    // Offer creation takes caller-supplied claims, so an unauthenticated caller
++    // can mint a credential asserting anything about anyone. Gated on the
++    // issuer-staff realm role when OFFER_REQUIRES_STAFF is on; left open by
++    // default so existing deployments keep working, which is why the warning
++    // below exists rather than a silent default.
++    await this.assertStaff(authHeader);
+     const configs = await this.schema.getOid4vciConfigs();
+     // Prefer an exact match on the stable, always-unique schemaId — this is
+     // what issuerMetadata() now actually publishes as credential_configuration_id
+@@ -264,7 +395,18 @@ export class Oid4vciService {
+     const configId = cfg.formats.length > 1 ? `${cfg.schemaId}_${format}` : cfg.schemaId;
+ 
+     const id = uuid();
++    const useAuthCode = body.grant === 'authorization_code';
++    if (useAuthCode && !this.config.keycloak.enabled) {
++      throw new BadRequestException(
++        'server_error: authorization_code offers require KEYCLOAK_PUBLIC_URL to be configured',
++      );
++    }
+     const preAuthCode = this.randomToken();
++    // A transaction code exists to substitute for authentication. With
++    // authorization_code the holder authenticates for real, so a PIN would be
++    // redundant friction — and the wallet would have nowhere to get it.
++    const txCodeRequired = !useAuthCode && !!body.tx_code_required;
++    const txCode = txCodeRequired ? this.randomPin() : undefined;
+     const session: OfferSession = {
+       credentialConfigurationId: configId,
+       format,
+@@ -281,7 +423,9 @@ export class Oid4vciService {
+       issuerDid: cfg.author || this.tokens.getIssuerDid(),
+       claims: body.claims || {},
+       preAuthCode,
+-      txCodeRequired: !!body.tx_code_required,
++      txCodeRequired,
++      txCode,
++      authCodeGrant: useAuthCode,
+       tags: body.tags || cfg.tags || [cfg.name],
+       deferredClaimId: body.deferred_claim_id,
+       renderMethod: this.resolveRenderMethod(cfg, format),
+@@ -293,7 +437,13 @@ export class Oid4vciService {
+     // Index by pre-auth code for the token endpoint.
+     await this.store.set(`oid4vc:code:${preAuthCode}`, { offerId: id }, this.config.ttl.offer);
+ 
+-    const offerObject = this.buildOfferObject(configId, preAuthCode, session.txCodeRequired);
++    const offerObject = this.buildOfferObject(
++      configId,
++      preAuthCode,
++      session.txCodeRequired,
++      useAuthCode,
++      id,
++    );
+     const offerUri = `${this.config.publicUrl}/oid4vc/offer/${id}`;
+     const qrData = `openid-credential-offer://?credential_offer_uri=${encodeURIComponent(offerUri)}`;
+ 
+@@ -302,6 +452,10 @@ export class Oid4vciService {
+       credential_offer_uri: offerUri,
+       credential_offer: offerObject,
+       qr_data: qrData,
++      // Returned to the CREATOR only (the issuer portal, which shows it to the
++      // holder out of band). Deliberately absent from `credential_offer` above:
++      // a PIN travelling inside the QR would prove nothing.
++      ...(txCode ? { tx_code: txCode } : {}),
+     };
+   }
+ 
+@@ -312,10 +466,46 @@ export class Oid4vciService {
+       session.credentialConfigurationId,
+       session.preAuthCode,
+       session.txCodeRequired,
++      !!session.authCodeGrant,
++      id,
+     );
+   }
+ 
+-  private buildOfferObject(configId: string, preAuthCode: string, txCodeRequired: boolean) {
++  private buildOfferObject(
++    configId: string,
++    preAuthCode: string,
++    txCodeRequired: boolean,
++    authCodeGrant = false,
++    offerId?: string,
++  ) {
++    const authorizationServers = this.tokens.authorizationServers();
++
++    // --- authorization_code: the holder signs in, no PIN ---------------------
++    // The wallet sees this grant, runs authorization_code + PKCE against the
++    // named authorization server (the Keycloak realm), and only reaches the
++    // credential endpoint with a token proving who authenticated. Issuance then
++    // resolves that person's own registry record, so a credential cannot be
++    // collected without valid Keycloak credentials.
++    if (authCodeGrant) {
++      return {
++        credential_issuer: this.config.publicUrl,
++        ...(this.config.draft13CompatMode
++          ? { credentials: [configId] }
++          : { credential_configuration_ids: [configId] }),
++        grants: {
++          authorization_code: {
++            // Ties the eventual authorization request back to this offer. The
++            // wallet echoes it to the authorization server; harmless if unused.
++            ...(offerId ? { issuer_state: offerId } : {}),
++            // Keycloak owns this grant — NOT this service, which implements no
++            // /authorize. Naming it is also mandatory whenever metadata
++            // advertises more than one authorization server.
++            authorization_server: this.keycloakAuthorizationServer(authorizationServers),
++          },
++        },
++      };
++    }
++
+     const grant: any = { 'pre-authorized_code': preAuthCode };
+     if (this.config.draft13CompatMode) {
+       // draft-13 idiom
+@@ -323,6 +513,23 @@ export class Oid4vciService {
+     } else if (txCodeRequired) {
+       grant.tx_code = { input_mode: 'numeric', length: 6 };
+     }
++
++    // When issuer metadata advertises MORE THAN ONE authorization server,
++    // OID4VCI requires each grant to name the one it applies to. Omitting it is
++    // not a soft warning: a Credo-based wallet (Paradym included) refuses the
++    // offer outright with
++    //   "Credential issuer metadata has 'authorization_server' with multiple
++    //    entries, but the credential offer grant did not specify which
++    //    authorization server to use."
++    // which the user sees only as "something went wrong".
++    //
++    // This became reachable the moment the Keycloak realm was added alongside
++    // this service in authorizationServers(). The pre-authorized_code grant is
++    // always served by THIS service — it mints the pre-auth token — so the
++    // correct value is our own issuer identifier, not the realm.
++    if (authorizationServers.length > 1) {
++      grant.authorization_server = this.config.publicUrl;
++    }
+     return {
+       credential_issuer: this.config.publicUrl,
+       // draft-13 offers list `credentials`; final-1.0 offers list
+@@ -388,10 +595,30 @@ export class Oid4vciService {
+   // --- Credential ----------------------------------------------------------
+ 
+   async credential(authHeader: string | undefined, body: Record<string, any>) {
+-    const tokenPayload = await this.tokens.validateAccessToken(authHeader);
+-    const offerId = tokenPayload.sub;
+-    const session = await this.store.get<OfferSession>(`oid4vc:offer:${offerId}`);
+-    if (!session) throw new BadRequestException('Offer session expired');
++    const token = await this.tokens.validateAccessToken(authHeader);
++
++    // Two ways to arrive here, and they differ in WHO decided the contents.
++    //
++    // pre-authorized_code: an offer already exists and its claims were fixed
++    // when staff created it, so the token's `sub` is just a handle to that.
++    //
++    // Keycloak: the caller is the holder's own wallet, signed in as a person.
++    // Nothing about the credential has been decided yet — and anything the
++    // wallet asserts about itself is unverified by construction — so the claims
++    // are built here, from the registry record its token names. That is what
++    // makes "a holder can only ever get their own credential" true structurally
++    // rather than by policy.
++    let session: OfferSession;
++    let offerId: string;
++    if (token.source === 'keycloak') {
++      offerId = `self:${token.payload.sub}`;
++      session = await this.buildSelfServiceSession(token, body);
++    } else {
++      offerId = token.payload.sub;
++      const existing = await this.store.get<OfferSession>(`oid4vc:offer:${offerId}`);
++      if (!existing) throw new BadRequestException('Offer session expired');
++      session = existing;
++    }
+ 
+     // Verify holder proof-of-possession.
+     const proofJwt = body?.proof?.jwt;
+@@ -436,6 +663,228 @@ export class Oid4vciService {
+     return { credential, c_nonce: await this.issueNonce(), format: session.format };
+   }
+ 
++  /**
++   * Builds an issuance session for a signed-in holder, with claims read from the
++   * registry rather than from the request.
++   *
++   * The wallet chooses only WHICH credential type it wants; every value in it
++   * comes from the record its token points at. A wallet that sends `claims` is
++   * ignored — silently, because a spec-compliant wallet has no reason to send
++   * them on this path and failing the request would be less useful than issuing
++   * the correct credential.
++   */
++  private async buildSelfServiceSession(
++    token: ValidatedToken,
++    body: Record<string, any>,
++  ): Promise<OfferSession> {
++    // Deliberately NOT gated on the registry here. Which system of record backs a
++    // credential type is resolved per type further down, once the type is known —
++    // an authority may keep its records in its own database, and requiring the
++    // Sunbird registry to be configured would make issuing depend on adopting it.
++    //
++    // Which claim identifies the holder is deployment configuration with no
++    // default, so distinguish the two ways it can be absent. Reporting an
++    // unconfigured service as "your account is not linked" sends an operator
++    // looking through Keycloak users for a problem that is in the environment.
++    if (!this.config.keycloak.subjectClaim) {
++      throw new BadRequestException(
++        'server_error: self-service issuance requires KEYCLOAK_SUBJECT_CLAIM — set it to ' +
++          "the token claim carrying the holder's registry key (there is no default, " +
++          'because the field name belongs to the deployment, not to this service)',
++      );
++    }
++    const subjectId = token.subjectId;
++    if (!subjectId) {
++      // Authenticated, but their account was never linked to a record. This is a
++      // provisioning gap rather than a wallet error, so say so plainly instead of
++      // returning something that reads like a protocol failure.
++      throw new BadRequestException(
++        `credential_request_denied: this account is not linked to a registry record ` +
++          `(no '${this.config.keycloak.subjectClaim}' claim). An issuer administrator must link it.`,
++      );
++    }
++
++    const requestedId = body?.credential_configuration_id || body?.credential_identifier;
++    const configs = await this.schema.getOid4vciConfigs();
++    // Only what the request actually said. The format is derived from the
++    // resolved credential further down — assuming one here (this used to default
++    // to 'vc+sd-jwt') made every filter below reject a deployment that publishes
++    // only ldp_vc or mso_mdoc, reporting "could not determine the credential
++    // type" even with exactly one type published.
++    const requestedFormat: string | undefined = body?.format;
++
++    let cfg = configs.find((c) => c.schemaId === requestedId);
++    // A multi-format credential is published as `<schemaId>_<format>`, so the id
++    // the wallet sent already says which format it wants. Captured rather than
++    // discarded: without it, a wallet asking for `…_mso_mdoc` would be answered
++    // with whichever format happened to be first.
++    let derivedFormat: string | undefined;
++    if (!cfg && requestedId) {
++      for (const c of configs) {
++        const suffix = c.formats.find((f) => `${c.schemaId}_${f}` === requestedId);
++        if (suffix) {
++          cfg = c;
++          derivedFormat = suffix;
++          break;
++        }
++      }
++    }
++    // OID4VCI lets a credential request identify what it wants in more than one
++    // way, and wallets differ. Credo sends neither
++    // `credential_configuration_id` nor `credential_identifier` on the
++    // authorization_code path, so fall back to the `vct` it does send — matched
++    // against the SAME normalised value published in issuer metadata.
++    if (!cfg && body?.vct) {
++      cfg = configs.find(
++        (c) =>
++          c.formats.includes('vc+sd-jwt') &&
++          normalizeVct(c.vct, this.config.publicUrl) === body.vct,
++      );
++      // `vct` exists only in SD-JWT VC, so identifying by it settles the format.
++      // Required, not cosmetic: Credo sends `vct` and no format, and a credential
++      // published as both ldp_vc and vc+sd-jwt would otherwise fall through to
++      // its first listed format and answer a vct request with an LDP credential.
++      if (cfg) derivedFormat = 'vc+sd-jwt';
++    }
++    // Last resort, and ONLY when the request named nothing at all: with a single
++    // credential type there is no ambiguity about what was meant.
++    //
++    // Filtered by format only when the request asked for one. Filtering by an
++    // assumed format instead would make "the deployment publishes exactly one
++    // credential type" fail whenever that type is not the assumed format.
++    //
++    // Deliberately not applied when the request DID name an id or vct that did
++    // not match. Falling back then would hand the holder a different credential
++    // from the one they asked for, silently — worse than a clear error.
++    const identifiedSomething = Boolean(requestedId || body?.vct);
++    if (!cfg && !identifiedSomething) {
++      const candidates = requestedFormat
++        ? configs.filter((c) => c.formats.includes(requestedFormat))
++        : configs;
++      if (candidates.length === 1) cfg = candidates[0];
++    }
++    if (!cfg) {
++      this.logger.warn(
++        `Self-service credential request did not identify a type. Body keys: ${Object.keys(
++          body ?? {},
++        ).join(', ')}`,
++      );
++      throw new BadRequestException(
++        `invalid_credential_request: could not determine the credential type from the request ` +
++          `(no credential_configuration_id, credential_identifier or known vct)`,
++      );
++    }
++    // Derived here, not assumed at the top, in this precedence:
++    //   1. what the request asked for
++    //   2. the format encoded in a `<schemaId>_<format>` configuration id
++    //   3. the credential's own first published format
++    // Mirrors resolveOfferConfig's `derivedFormat || cfg.formats[0]`, so the two
++    // issuance paths agree about what a request without a format means.
++    const format = requestedFormat || derivedFormat || cfg.formats[0];
++    if (!format) {
++      throw new BadRequestException(
++        `invalid_credential_request: credential type '${cfg.name}' publishes no format`,
++      );
++    }
++    if (!cfg.formats.includes(format)) {
++      throw new BadRequestException(`invalid_credential_request: format '${format}' not supported`);
++    }
++
++    // Where this credential type's claims come from — the Sunbird registry, or an
++    // endpoint the issuing authority hosts against its own database. Resolved per
++    // type, so authorities with different systems of record coexist here.
++    const properties = Object.keys(cfg.schema?.properties ?? {});
++    const { claims, missing } = await this.resolveClaimsFor(cfg, subjectId, properties);
++    if (missing.length) {
++      throw new BadRequestException(
++        `credential_request_denied: your record is missing required ${missing.join(', ')}. ` +
++          `Contact the issuing authority.`,
++      );
++    }
++
++    const configId = cfg.formats.length > 1 ? `${cfg.schemaId}_${format}` : cfg.schemaId;
++    this.logger.log(
++      `Self-service issuance: ${cfg.name} for ${this.config.keycloak.subjectClaim}=${subjectId}`,
++    );
++
++    return {
++      credentialConfigurationId: configId,
++      format,
++      schemaId: cfg.schemaId,
++      schemaVersion: cfg.version,
++      schemaName: cfg.name,
++      vct: format === 'vc+sd-jwt' ? normalizeVct(cfg.vct, this.config.publicUrl) : undefined,
++      issuerDid: cfg.author || this.tokens.getIssuerDid(),
++      claims,
++      // No pre-auth code and no PIN: the Keycloak login already established who
++      // this is, which is precisely what a tx_code exists to substitute for.
++      preAuthCode: '',
++      txCodeRequired: false,
++      tags: cfg.tags || [cfg.name],
++      renderMethod: this.resolveRenderMethod(cfg, format),
++      docType: cfg.mdoc?.docType,
++      namespace: cfg.mdoc?.namespace,
++      elementMapping: cfg.mdoc?.elementMapping,
++    };
++  }
++
++  /**
++   * Resolves claims through whichever source backs this credential type, turning
++   * each provider failure into the message that actually helps.
++   *
++   * The three cases are genuinely different and must not collapse into one
++   * "issuance failed": nothing configured is a deployment decision, the source
++   * being down is the authority's system, and no record for this subject is a
++   * provisioning gap for one holder. Reporting the wrong one sends whoever is
++   * debugging to the wrong system entirely.
++   */
++  private async resolveClaimsFor(
++    cfg: { schemaId: string; name: string; schema?: { required?: string[] } },
++    subjectId: string,
++    properties: string[],
++  ) {
++    let provider: ClaimSourceProvider;
++    try {
++      provider = this.claimSources.for({ schemaId: cfg.schemaId, name: cfg.name });
++    } catch (err) {
++      if (err instanceof ClaimSourceNotConfiguredError) {
++        throw new BadRequestException(`credential_request_denied: ${err.message}`);
++      }
++      if (err instanceof ClaimSourceUnavailableError) {
++        throw new BadRequestException(`server_error: ${err.message}`);
++      }
++      throw err;
++    }
++
++    try {
++      return await provider.resolve({
++        subjectId,
++        subjectClaim: this.config.keycloak.subjectClaim,
++        credentialConfigurationId: cfg.schemaId,
++        credentialName: cfg.name,
++        properties,
++        required: cfg.schema?.required ?? [],
++      });
++    } catch (err) {
++      if (err instanceof SubjectNotFoundError) {
++        throw new BadRequestException(
++          `credential_request_denied: no record for ` +
++            `${this.config.keycloak.subjectClaim} '${subjectId}'. Contact the issuing authority.`,
++        );
++      }
++      if (err instanceof ClaimSourceUnavailableError) {
++        // Named, because "try again" is the right advice here and is not the right
++        // advice for any of the other refusals on this path.
++        this.logger.error(err.message);
++        throw new BadRequestException(
++          `server_error: the issuing authority's records are temporarily unreachable ` +
++            `(${err.source}). Try again shortly.`,
++        );
++      }
++      throw err;
++    }
++  }
++
+   async deferred(authHeader: string | undefined, body: Record<string, any>) {
+     await this.tokens.validateAccessToken(authHeader);
+     const txId = body?.transaction_id;
+@@ -586,10 +1035,51 @@ export class Oid4vciService {
+     return undefined;
+   }
+ 
++  /**
++   * The Keycloak realm among the advertised authorization servers.
++   *
++   * Picked by matching the realm issuer rather than by position: the ordering in
++   * authorizationServers() is a display choice, and silently naming this service
++   * for an authorization_code grant would send the wallet to an /authorize
++   * endpoint that does not exist.
++   */
++  private keycloakAuthorizationServer(servers: string[]): string {
++    const realm = servers.find((s) => s !== this.config.publicUrl);
++    if (!realm) {
++      throw new BadRequestException(
++        'server_error: no external authorization server is advertised for authorization_code',
++      );
++    }
++    return realm;
++  }
++
+   private randomToken(): string {
+     return crypto.randomBytes(24).toString('base64url');
+   }
+ 
++  /**
++   * Six-digit transaction code, matching the `tx_code` shape published in the
++   * offer (`input_mode: 'numeric', length: 6`).
++   *
++   * `randomInt` rather than `Math.random()`: this is a shared secret protecting
++   * a credential, and it is short enough that a predictable generator would make
++   * guessing realistic.
++   */
++  private randomPin(): string {
++    return String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
++  }
++
++  /**
++   * Length-independent constant-time compare. `crypto.timingSafeEqual` throws on
++   * a length mismatch, and returning early on that would leak the PIN's length —
++   * so hash both sides to a fixed width first and compare those.
++   */
++  private constantTimeEquals(a: string, b: string): boolean {
++    const ha = crypto.createHash('sha256').update(a, 'utf8').digest();
++    const hb = crypto.createHash('sha256').update(b, 'utf8').digest();
++    return crypto.timingSafeEqual(ha, hb);
++  }
++
+   private decodeJwtClaims(jwt: string): any {
+     try {
+       const [, payload] = jwt.split('.');
+diff --git a/services/oid4vc-service/src/oid4vci/registry-claims.util.spec.ts b/services/oid4vc-service/src/oid4vci/registry-claims.util.spec.ts
+new file mode 100644
+index 00000000..e3eab4ec
+--- /dev/null
++++ b/services/oid4vc-service/src/oid4vci/registry-claims.util.spec.ts
+@@ -0,0 +1,297 @@
++import { resolveRegistryClaims, type ClaimSource } from './registry-claims.util';
++
++// The claim resolver is what makes wallet self-service issuance safe: it is the
++// only thing deciding what a self-issued credential says, from records the holder
++// cannot edit. These tests pin the behaviour that matters — that values come from
++// the right record, that absent REQUIRED values are reported rather than silently
++// dropped, that nothing the caller sends can leak in, and that the resolver holds
++// no domain knowledge: a credential type it has never seen, over entities it has
++// never heard of, must resolve with no configuration at all.
++
++const subject = {
++  farmerId: 'FRM-000123',
++  name: 'Ravi Kumar',
++  gender: 'Male',
++  dateOfBirth: '1979-04-12',
++  district: 'Mandya',
++};
++const parcel = {
++  landRecordRef: 'LR-KA-77-2201',
++  farmLocation: 'Rampur, Mandya',
++  landAreaAcres: 4.5,
++  ownershipType: 'Owned',
++};
++const crop = { cropName: 'Wheat', season: 'Rabi', year: 2026 };
++
++/** The reference deployment's sources, in precedence order. */
++const sources = (over: Partial<Record<string, any>> = {}): ClaimSource[] => [
++  { entity: 'Farmer', record: 'subject' in over ? over.subject : subject },
++  { entity: 'LandParcel', record: 'parcel' in over ? over.parcel : parcel },
++  { entity: 'Crop', record: 'crop' in over ? over.crop : crop },
++  ...(over.extra ?? []),
++];
++
++// The one alias the reference deployment needs: the schema says `primaryCrop`,
++// the registry field is `cropName`. Everything else matches by name.
++const ALIASES = { primaryCrop: 'cropName' };
++const DOB = 'dateOfBirth';
++
++const FARMER_PROPS = [
++  'farmerId',
++  'name',
++  'gender',
++  'landRecordRef',
++  'farmLocation',
++  'landAreaAcres',
++  'ownershipType',
++  'primaryCrop',
++];
++
++describe('resolveRegistryClaims', () => {
++  it('pulls each attribute from the correct record', () => {
++    const { claims, missing } = resolveRegistryClaims({
++      properties: FARMER_PROPS,
++      required: ['farmerId', 'name', 'landAreaAcres'],
++      sources: sources(),
++      aliases: ALIASES,
++      birthDateField: DOB,
++    });
++
++    expect(missing).toEqual([]);
++    expect(claims).toEqual({
++      farmerId: 'FRM-000123',
++      name: 'Ravi Kumar',
++      gender: 'Male',
++      landRecordRef: 'LR-KA-77-2201',
++      farmLocation: 'Rampur, Mandya',
++      landAreaAcres: 4.5,
++      ownershipType: 'Owned',
++      primaryCrop: 'Wheat',
++    });
++  });
++
++  it('reports the entity each claim came from', () => {
++    // Provenance is what the portal shows staff, and what makes an unexpected
++    // value traceable to a record rather than a guess.
++    const { sources: provenance } = resolveRegistryClaims({
++      properties: ['name', 'landAreaAcres', 'primaryCrop'],
++      sources: sources(),
++      aliases: ALIASES,
++    });
++    expect(provenance.name).toBe('Farmer.name');
++    expect(provenance.landAreaAcres).toBe('LandParcel.landAreaAcres');
++    expect(provenance.primaryCrop).toBe('Crop.cropName');
++  });
++
++  it('reports required attributes it cannot fill, and omits optional ones', () => {
++    // A holder with no land parcel — the case that must be caught before
++    // issuance, since credentials-service reports it only as an opaque 500.
++    const { claims, missing } = resolveRegistryClaims({
++      properties: FARMER_PROPS,
++      required: ['farmerId', 'name', 'landAreaAcres'],
++      sources: sources({ parcel: undefined, crop: undefined }),
++      aliases: ALIASES,
++    });
++
++    expect(missing).toEqual(['landAreaAcres']);
++    // Optional parcel/crop fields are absent rather than present-and-empty: an
++    // SD-JWT disclosure of "" is a claim, and asserting a blank land reference
++    // would be worse than asserting nothing.
++    expect(Object.keys(claims).sort()).toEqual(['farmerId', 'gender', 'name']);
++    expect(claims).not.toHaveProperty('landRecordRef');
++  });
++
++  it('never emits an attribute that matches no field on any record', () => {
++    const { claims, missing } = resolveRegistryClaims({
++      properties: ['name', 'somethingNobodyMapped'],
++      required: ['somethingNobodyMapped'],
++      sources: sources(),
++    });
++    expect(claims).toEqual({ name: 'Ravi Kumar' });
++    expect(missing).toEqual(['somethingNobodyMapped']);
++  });
++
++  it('matches attribute names regardless of case and separators', () => {
++    // Schemas in a registry are authored at different times: the same concept
++    // appears as land_area_acres, landAreaAcres and LandAreaAcres.
++    for (const attr of ['land_area_acres', 'landAreaAcres', 'LAND-AREA-ACRES']) {
++      const { claims } = resolveRegistryClaims({ properties: [attr], sources: sources() });
++      expect(claims[attr]).toBe(4.5);
++    }
++  });
++
++  // --- genericity ----------------------------------------------------------
++
++  it('resolves a credential from an entirely unrelated domain, with no config', () => {
++    // The point of the resolver: a domain it has never seen, entity names it has
++    // never heard of, no aliases. If this needs a code change, the service is not
++    // generic.
++    const { claims, missing } = resolveRegistryClaims({
++      properties: ['patientId', 'name', 'vaccine', 'doseNumber', 'administeredOn'],
++      required: ['patientId', 'vaccine', 'doseNumber'],
++      sources: [
++        { entity: 'Patient', record: { patientId: 'PAT-9', name: 'Asha Menon' } },
++        {
++          entity: 'Immunisation',
++          record: { vaccine: 'MMR', doseNumber: 2, administeredOn: '2026-02-11' },
++        },
++      ],
++    });
++    expect(missing).toEqual([]);
++    expect(claims).toEqual({
++      patientId: 'PAT-9',
++      name: 'Asha Menon',
++      vaccine: 'MMR',
++      doseNumber: 2,
++      administeredOn: '2026-02-11',
++    });
++  });
++
++  it('resolves the subject record before a related one when both carry a field', () => {
++    // Precedence must be the configured order, not whichever search returned
++    // first — otherwise the same holder can be issued different values run to run.
++    const { claims, sources: provenance } = resolveRegistryClaims({
++      properties: ['name'],
++      sources: [
++        { entity: 'Student', record: { name: 'Real Name' } },
++        { entity: 'Enrolment', record: { name: 'Course Name' } },
++      ],
++    });
++    expect(claims.name).toBe('Real Name');
++    expect(provenance.name).toBe('Student.name');
++  });
++
++  it('honours an entity-qualified alias instead of the first name match', () => {
++    // `Enrolment.name` pins the source when the same field name means different
++    // things on two records.
++    const { claims } = resolveRegistryClaims({
++      properties: ['courseName'],
++      sources: [
++        { entity: 'Student', record: { name: 'Real Name' } },
++        { entity: 'Enrolment', record: { name: 'B.Sc. Agriculture' } },
++      ],
++      aliases: { courseName: 'Enrolment.name' },
++    });
++    expect(claims.courseName).toBe('B.Sc. Agriculture');
++  });
++
++  it('reports an entity-qualified alias as missing rather than falling back', () => {
++    // Falling back to another entity's same-named field would silently put the
++    // wrong value in a signed credential.
++    const { claims, missing } = resolveRegistryClaims({
++      properties: ['courseName'],
++      required: ['courseName'],
++      sources: [{ entity: 'Student', record: { name: 'Real Name' } }],
++      aliases: { courseName: 'Enrolment.name' },
++    });
++    expect(claims).toEqual({});
++    expect(missing).toEqual(['courseName']);
++  });
++
++  // --- derived age claims --------------------------------------------------
++
++  it('derives age_over_18 from the configured date-of-birth field', () => {
++    const { claims } = resolveRegistryClaims({
++      properties: ['name', 'birthdate', 'age_over_18'],
++      required: ['name', 'birthdate'],
++      sources: sources(),
++      aliases: { birthdate: DOB },
++      birthDateField: DOB,
++    });
++    expect(claims.birthdate).toBe('1979-04-12');
++    expect(claims.age_over_18).toBe(true);
++  });
++
++  it('derives any age threshold, not a fixed list', () => {
++    // age_over_65 must work without anybody adding it anywhere.
++    const born1979 = sources();
++    for (const [attr, expected] of [
++      ['age_over_21', true],
++      ['ageOver40', true],
++      ['age_over_65', false],
++    ] as const) {
++      const { claims } = resolveRegistryClaims({
++        properties: [attr],
++        sources: born1979,
++        birthDateField: DOB,
++      });
++      expect(claims[attr]).toBe(expected);
++    }
++  });
++
++  it('derives age_over_18 as false for a minor, without dropping the claim', () => {
++    // `false` is a legitimate value; treating it as absent would silently turn a
++    // "not over 18" assertion into no assertion at all.
++    const { claims, missing } = resolveRegistryClaims({
++      properties: ['age_over_18'],
++      required: ['age_over_18'],
++      sources: sources({ subject: { ...subject, dateOfBirth: '2020-01-01' } }),
++      birthDateField: DOB,
++    });
++    expect(claims.age_over_18).toBe(false);
++    expect(missing).toEqual([]);
++  });
++
++  it('flags a derived claim as missing when its input is absent', () => {
++    const { claims, missing } = resolveRegistryClaims({
++      properties: ['age_over_18'],
++      required: ['age_over_18'],
++      sources: sources({ subject: { farmerId: 'FRM-1', name: 'No DOB' }, parcel: undefined, crop: undefined }),
++      birthDateField: DOB,
++    });
++    expect(claims).not.toHaveProperty('age_over_18');
++    expect(missing).toEqual(['age_over_18']);
++  });
++
++  it('does not derive an age claim when no birth-date field is configured', () => {
++    // Guessing a field name here would be a way to mint an age assertion from
++    // whatever date happened to be on the record.
++    const { claims, missing } = resolveRegistryClaims({
++      properties: ['age_over_18'],
++      required: ['age_over_18'],
++      sources: sources(),
++    });
++    expect(claims).not.toHaveProperty('age_over_18');
++    expect(missing).toEqual(['age_over_18']);
++  });
++
++  it('does not treat an unparseable date of birth as over 18', () => {
++    // Failing open here would let a bad record mint a false age assertion.
++    const { claims, missing } = resolveRegistryClaims({
++      properties: ['age_over_18'],
++      required: ['age_over_18'],
++      sources: sources({ subject: { ...subject, dateOfBirth: 'not-a-date' } }),
++      birthDateField: DOB,
++    });
++    expect(claims).not.toHaveProperty('age_over_18');
++    expect(missing).toEqual(['age_over_18']);
++  });
++
++  // --- value fidelity ------------------------------------------------------
++
++  it('keeps a zero-valued number, which is falsy but meaningful', () => {
++    const { claims, missing } = resolveRegistryClaims({
++      properties: ['landAreaAcres'],
++      required: ['landAreaAcres'],
++      sources: sources({ parcel: { ...parcel, landAreaAcres: 0 } }),
++    });
++    expect(claims.landAreaAcres).toBe(0);
++    expect(missing).toEqual([]);
++  });
++
++  it('resolves against the record it is given, not the first one on the registry', () => {
++    // Staff choose which parcel a credential describes; the resolver must honour
++    // that choice rather than reaching for a default.
++    const { claims } = resolveRegistryClaims({
++      properties: ['landRecordRef', 'landAreaAcres', 'ownershipType'],
++      sources: sources({
++        parcel: { landRecordRef: 'LR-KA-77-2202', landAreaAcres: 1.75, ownershipType: 'Leased' },
++      }),
++    });
++    expect(claims).toEqual({
++      landRecordRef: 'LR-KA-77-2202',
++      landAreaAcres: 1.75,
++      ownershipType: 'Leased',
++    });
++  });
++});
+diff --git a/services/oid4vc-service/src/oid4vci/registry-claims.util.ts b/services/oid4vc-service/src/oid4vci/registry-claims.util.ts
+new file mode 100644
+index 00000000..dbb5da84
+--- /dev/null
++++ b/services/oid4vc-service/src/oid4vci/registry-claims.util.ts
+@@ -0,0 +1,170 @@
++/**
++ * Resolves a credential's claims from registry records — for ANY credential type,
++ * over ANY registry entities.
++ *
++ * This file contains no domain knowledge. It does not know what a farmer, a crop
++ * or a qualification is, and adding a credential type that issues over new
++ * entities requires no change here. Three rules, in order, decide where a claim's
++ * value comes from:
++ *
++ *   1. `age_over_NN` (any NN) is derived from the configured date-of-birth field.
++ *   2. A configured alias maps the attribute to a field, optionally qualified by
++ *      the entity it must come from (`Crop.cropName`).
++ *   3. Otherwise the attribute name IS the field name, looked for on the subject
++ *      record first and then on each related record in configured precedence
++ *      order.
++ *
++ * Rule 3 is what makes a new credential type work with no configuration at all:
++ * a schema whose property names match the registry's field names simply resolves.
++ * Aliases exist only for the cases where a schema is obliged to use a different
++ * name — a standardised claim like `birthdate`, say, over a registry field called
++ * `dateOfBirth`.
++ *
++ * Attribute names are matched case-insensitively with separators stripped, so
++ * `land_area_acres`, `landAreaAcres` and `LandAreaAcres` are one key: schemas in
++ * a registry are authored at different times and are rarely consistent.
++ *
++ * KNOWN COUPLING: the issuer portal resolves claims the same way for the
++ * staff-initiated path, in `issuer-portal/bff/claim-mapping.mjs`. Both are now
++ * driven by the same declarative configuration, so they agree by construction
++ * rather than by two tables being maintained in step — but the algorithms are
++ * still two implementations, and a change to one belongs in both.
++ */
++
++const normalise = (attr: string) => attr.toLowerCase().replace(/[^a-z0-9]/g, '');
++
++/** `age_over_18`, `ageOver21`, `age_over_65` — any threshold, not an enumeration. */
++const AGE_OVER = /^ageover(\d{1,3})$/;
++
++function isOlderThan(isoDate: string, years: number): boolean | undefined {
++  const dob = new Date(isoDate);
++  if (Number.isNaN(dob.getTime())) return undefined;
++  // Calendar comparison, not elapsed milliseconds: a leap-year birthday
++  // otherwise flips a day early or late.
++  const threshold = new Date(dob.getFullYear() + years, dob.getMonth(), dob.getDate());
++  return new Date() >= threshold;
++}
++
++/** One candidate record, with the name used for provenance and alias qualifying. */
++export interface ClaimSource {
++  /** Entity name, e.g. `LandParcel`. Also what an alias may qualify with. */
++  entity: string;
++  record?: Record<string, any>;
++}
++
++export interface ResolvedClaims {
++  claims: Record<string, any>;
++  /** Where each resolved claim came from, keyed by attribute. For display/audit. */
++  sources: Record<string, string>;
++  /** Required attributes that could not be filled. */
++  missing: string[];
++}
++
++/**
++ * Finds a field on a record, matching the name loosely.
++ *
++ * Returns the raw value, or undefined. A record whose own key differs only in
++ * case or separators still matches, so the registry and the schema need not
++ * agree on a convention.
++ */
++function pick(record: Record<string, any> | undefined, field: string): unknown {
++  if (!record) return undefined;
++  if (record[field] !== undefined) return record[field];
++  const want = normalise(field);
++  for (const [k, v] of Object.entries(record)) {
++    if (normalise(k) === want) return v;
++  }
++  return undefined;
++}
++
++const filled = (v: unknown) => v !== undefined && v !== null && v !== '';
++
++/**
++ * Builds the claim set for one credential type.
++ *
++ * `sources` are ordered by precedence: the subject record should come first, then
++ * supporting records. The order is what makes resolution deterministic when two
++ * entities carry a field of the same name.
++ *
++ * Required attributes that cannot be filled are REPORTED rather than omitted:
++ * issuing without them fails downstream in credentials-service with an opaque
++ * 500 whose real reason only reaches that service's log, so the caller is told up
++ * front which value is absent.
++ */
++export function resolveRegistryClaims(opts: {
++  properties: string[];
++  required?: string[];
++  /** Candidate records in precedence order. */
++  sources: ClaimSource[];
++  /** Attribute -> field, optionally `Entity.field`. */
++  aliases?: Record<string, string>;
++  /** Field holding date of birth; empty disables `age_over_NN`. */
++  birthDateField?: string;
++}): ResolvedClaims {
++  const { properties, required = [], sources, aliases = {}, birthDateField = '' } = opts;
++
++  // Normalise the alias keys once, so callers may write them in any style.
++  const aliasByKey = new Map<string, string>(
++    Object.entries(aliases).map(([k, v]) => [normalise(k), v]),
++  );
++
++  const claims: Record<string, any> = {};
++  const provenance: Record<string, string> = {};
++  const missing: string[] = [];
++
++  for (const attr of properties) {
++    const key = normalise(attr);
++    let value: unknown;
++    let from: string | undefined;
++
++    const ageOver = AGE_OVER.exec(key);
++    if (ageOver && birthDateField) {
++      const years = Number(ageOver[1]);
++      // Date of birth is looked up through the same precedence chain, so it may
++      // live on the subject or on a supporting record.
++      for (const s of sources) {
++        const dob = pick(s.record, birthDateField);
++        if (filled(dob)) {
++          value = isOlderThan(String(dob), years);
++          from = `Derived from ${s.entity}.${birthDateField}`;
++          break;
++        }
++      }
++      if (from === undefined) from = `Needs ${birthDateField}`;
++    } else {
++      const alias = aliasByKey.get(key);
++      // An alias may pin the entity (`Crop.cropName`) when a field name is
++      // ambiguous across sources.
++      const [aliasEntity, aliasField] = alias?.includes('.')
++        ? [alias.slice(0, alias.indexOf('.')), alias.slice(alias.indexOf('.') + 1)]
++        : [undefined, alias];
++      const field = aliasField || attr;
++
++      for (const s of sources) {
++        if (aliasEntity && normalise(s.entity) !== normalise(aliasEntity)) continue;
++        const v = pick(s.record, field);
++        if (filled(v)) {
++          value = v;
++          from = `${s.entity}.${field}`;
++          break;
++        }
++      }
++      if (from === undefined) {
++        from = aliasEntity ? `Needs ${aliasEntity}.${field}` : `No ${field} on any record`;
++      }
++    }
++
++    // `false` and `0` are legitimate claim values. Treating them as absent would
++    // silently turn "not over 18" into no assertion at all, and a zero-acre
++    // parcel into a missing one.
++    if (filled(value)) {
++      claims[attr] = value;
++      provenance[attr] = from;
++    } else {
++      provenance[attr] = from;
++      if (required.includes(attr)) missing.push(attr);
++    }
++  }
++
++  return { claims, sources: provenance, missing };
++}
+diff --git a/services/oid4vc-service/src/oid4vci/token.service.keycloak.spec.ts b/services/oid4vc-service/src/oid4vci/token.service.keycloak.spec.ts
+new file mode 100644
+index 00000000..ccd1c2ee
+--- /dev/null
++++ b/services/oid4vc-service/src/oid4vci/token.service.keycloak.spec.ts
+@@ -0,0 +1,236 @@
++import { UnauthorizedException } from '@nestjs/common';
++import { createServer, Server } from 'node:http';
++import * as jose from 'jose';
++import { TokenService } from './token.service';
++
++// Verifies Keycloak token acceptance against a REAL JWK set served over HTTP,
++// rather than by stubbing jose. That matters because the thing most likely to be
++// wrong here is not the happy path but the plumbing around it: which URL the keys
++// are fetched from, which `iss` is expected, and whether a token that is merely
++// well-formed gets in.
++//
++// The public/internal URL split is exercised deliberately — `iss` is checked
++// against the browser-facing URL while keys are fetched from the in-cluster one,
++// and conflating those is the classic Keycloak-behind-a-gateway failure.
++describe('TokenService Keycloak validation', () => {
++  const ORIGINAL_ENV = process.env;
++  const REALM = 'sunbird-rc';
++  // The browser-facing base, as published in issuer metadata. Intentionally NOT
++  // the address the keys are served from.
++  const PUBLIC_BASE = 'https://issuer.example/auth';
++  const ISSUER = `${PUBLIC_BASE}/realms/${REALM}`;
++
++  let server: Server;
++  let internalBase: string;
++  let signKey: jose.KeyLike;
++  let otherKey: jose.KeyLike;
++  let identity: any;
++
++  beforeAll(async () => {
++    const pair = await jose.generateKeyPair('RS256');
++    signKey = pair.privateKey;
++    const jwk = await jose.exportJWK(pair.publicKey);
++    jwk.kid = 'realm-key-1';
++    jwk.alg = 'RS256';
++    jwk.use = 'sig';
++
++    // A second, unrelated key — used to sign a token that must NOT be accepted
++    // even though it is otherwise perfectly formed.
++    const rogue = await jose.generateKeyPair('RS256');
++    otherKey = rogue.privateKey;
++
++    // Serve the realm's certs endpoint at the path the service actually requests.
++    server = createServer((req, res) => {
++      if (req.url === `/realms/${REALM}/protocol/openid-connect/certs`) {
++        res.writeHead(200, { 'content-type': 'application/json' });
++        res.end(JSON.stringify({ keys: [jwk] }));
++        return;
++      }
++      res.writeHead(404).end();
++    });
++    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
++    const addr = server.address();
++    const port = typeof addr === 'object' && addr ? addr.port : 0;
++    internalBase = `http://127.0.0.1:${port}`;
++  });
++
++  afterAll(async () => {
++    await new Promise<void>((resolve) => server.close(() => resolve()));
++  });
++
++  beforeEach(() => {
++    process.env = { ...ORIGINAL_ENV };
++    process.env.PUBLIC_URL = 'https://issuer.example';
++    process.env.KEYCLOAK_PUBLIC_URL = PUBLIC_BASE;
++    process.env.KEYCLOAK_INTERNAL_URL = internalBase;
++    process.env.KEYCLOAK_REALM = REALM;
++    process.env.ISSUER_DID = 'did:web:issuer.example:authority';
++    // Set explicitly: there is no default subject claim, because the field name
++    // belongs to the deployment's realm rather than to this service. Individual
++    // tests override it to prove the name really is configurable.
++    process.env.KEYCLOAK_SUBJECT_CLAIM = 'farmerId';
++    // A pre-auth token would be verified through identity-service; these tests
++    // only need it to be reachable and to say "no".
++    identity = {
++      verifyJwt: jest.fn().mockResolvedValue({ verified: false, error: 'not a preauth token' }),
++      generateDID: jest.fn(),
++    };
++  });
++
++  afterEach(() => {
++    process.env = ORIGINAL_ENV;
++  });
++
++  const makeService = () => new TokenService(identity);
++
++  /** Mints a realm-style access token. */
++  async function mint(
++    claims: Record<string, unknown> = {},
++    opts: { key?: jose.KeyLike; iss?: string; expSeconds?: number } = {},
++  ) {
++    const now = Math.floor(Date.now() / 1000);
++    return new jose.SignJWT({
++      realm_access: { roles: ['citizen'] },
++      farmerId: 'FRM-000123',
++      ...claims,
++    })
++      .setProtectedHeader({ alg: 'RS256', kid: 'realm-key-1', typ: 'JWT' })
++      .setIssuer(opts.iss ?? ISSUER)
++      .setSubject('kc-user-1')
++      .setAudience('account')
++      .setIssuedAt(now)
++      .setExpirationTime(now + (opts.expSeconds ?? 300))
++      .sign(opts.key ?? signKey);
++  }
++
++  it('accepts a realm-signed token and extracts the subject claim and roles', async () => {
++    const service = makeService();
++    const token = await mint();
++
++    const result = await service.validateAccessToken(`Bearer ${token}`);
++
++    expect(result.source).toBe('keycloak');
++    // This is the value the credential endpoint uses to pick a registry record —
++    // the single input that decides whose credential gets issued.
++    expect(result.subjectId).toBe('FRM-000123');
++    expect(result.roles).toEqual(['citizen']);
++    expect(result.payload.sub).toBe('kc-user-1');
++  });
++
++  it('reads the subject from a configurable claim name', async () => {
++    process.env.KEYCLOAK_SUBJECT_CLAIM = 'registryId';
++    const service = makeService();
++    const token = await mint({ registryId: 'REG-42', farmerId: 'FRM-000123' });
++
++    const result = await service.validateAccessToken(`Bearer ${token}`);
++    expect(result.subjectId).toBe('REG-42');
++  });
++
++  it('reports no subject when the claim is absent, rather than guessing', async () => {
++    // The credential endpoint turns this into an explicit "your account is not
++    // linked to a record" message. Falling back to `sub` here would silently look
++    // up a registry record keyed by a Keycloak user id and fail confusingly.
++    const service = makeService();
++    const token = await mint({ farmerId: undefined });
++
++    const result = await service.validateAccessToken(`Bearer ${token}`);
++    expect(result.source).toBe('keycloak');
++    expect(result.subjectId).toBeUndefined();
++  });
++
++  it('rejects a token signed by a key the realm does not publish', async () => {
++    // The core forgery case: correct issuer, correct shape, wrong key.
++    const service = makeService();
++    const token = await mint({}, { key: otherKey });
++
++    await expect(service.validateAccessToken(`Bearer ${token}`)).rejects.toThrow(
++      UnauthorizedException,
++    );
++  });
++
++  it('rejects a token from a different issuer', async () => {
++    // An attacker-controlled realm must not be able to mint tokens we accept,
++    // even if its own signature checks out.
++    const service = makeService();
++    const token = await mint({}, { iss: 'https://evil.example/auth/realms/sunbird-rc' });
++
++    await expect(service.validateAccessToken(`Bearer ${token}`)).rejects.toThrow(
++      UnauthorizedException,
++    );
++  });
++
++  it('rejects an expired token', async () => {
++    const service = makeService();
++    const token = await mint({}, { expSeconds: -60 });
++
++    await expect(service.validateAccessToken(`Bearer ${token}`)).rejects.toThrow(
++      UnauthorizedException,
++    );
++  });
++
++  it('enforces the audience only when one is configured', async () => {
++    // Keycloak's default access token carries aud=account, so an unconditional
++    // audience check would reject every real token. Opt-in, and effective.
++    const token = await mint();
++    await expect(makeService().validateAccessToken(`Bearer ${token}`)).resolves.toMatchObject({
++      source: 'keycloak',
++    });
++
++    process.env.KEYCLOAK_AUDIENCE = 'oid4vc-service';
++    await expect(makeService().validateAccessToken(`Bearer ${token}`)).rejects.toThrow(
++      UnauthorizedException,
++    );
++  });
++
++  it('does not treat realm tokens as trusted when Keycloak is not configured', async () => {
++    // Without KEYCLOAK_PUBLIC_URL the feature is off, so a realm token must fall
++    // through to pre-auth validation — which rejects it — rather than being
++    // accepted by a half-enabled code path.
++    delete process.env.KEYCLOAK_PUBLIC_URL;
++    delete process.env.KEYCLOAK_INTERNAL_URL;
++    const service = makeService();
++    const token = await mint();
++
++    await expect(service.validateAccessToken(`Bearer ${token}`)).rejects.toThrow(
++      UnauthorizedException,
++    );
++    // It was routed to the pre-auth verifier, confirming the switch is the URL.
++    expect(identity.verifyJwt).toHaveBeenCalled();
++  });
++
++  it('rejects a missing or malformed Authorization header', async () => {
++    const service = makeService();
++    await expect(service.validateAccessToken(undefined)).rejects.toThrow(UnauthorizedException);
++    await expect(service.validateAccessToken('Basic abc')).rejects.toThrow(UnauthorizedException);
++    await expect(service.validateAccessToken('Bearer not.a.jwt')).rejects.toThrow(
++      UnauthorizedException,
++    );
++  });
++
++  it('advertises the realm first in authorization_servers', async () => {
++    // Wallets pick the first authorization server they can use, and the realm is
++    // the only one of the two implementing authorization_code.
++    const service = makeService();
++    expect(service.authorizationServers()).toEqual([ISSUER, 'https://issuer.example']);
++  });
++
++  it('advertises only itself when Keycloak is not configured', async () => {
++    delete process.env.KEYCLOAK_PUBLIC_URL;
++    expect(makeService().authorizationServers()).toEqual(['https://issuer.example']);
++  });
++
++  it('fetches keys from the internal URL while trusting the public issuer', async () => {
++    // The split is the point: if `iss` were compared against the internal URL,
++    // every real token would be rejected; if keys were fetched from the public
++    // URL, the request would leave the cluster unnecessarily. A token issued by
++    // the PUBLIC issuer, verified with keys from the INTERNAL server, proves both
++    // halves are wired the right way round.
++    const service = makeService();
++    const token = await mint();
++    await expect(service.validateAccessToken(`Bearer ${token}`)).resolves.toMatchObject({
++      source: 'keycloak',
++    });
++    expect(ISSUER.startsWith('https://issuer.example')).toBe(true);
++    expect(internalBase.startsWith('http://127.0.0.1')).toBe(true);
++  });
++});
+diff --git a/services/oid4vc-service/src/oid4vci/token.service.ts b/services/oid4vc-service/src/oid4vci/token.service.ts
+index 4e94fd98..007efce3 100644
+--- a/services/oid4vc-service/src/oid4vci/token.service.ts
++++ b/services/oid4vc-service/src/oid4vci/token.service.ts
+@@ -3,18 +3,61 @@ import { IdentityClient } from '../clients/identity.client';
+ import { loadConfig } from '../config/configuration';
+ import * as jose from 'jose';
+ 
++/** A validated access token, plus where it came from. */
++export interface ValidatedToken {
++  payload: any;
++  /**
++   * `preauth` — minted by this service for a pre-authorized_code offer; `sub` is
++   * the offer id and the claims were fixed when the offer was created.
++   * `keycloak` — issued by the external authorization server for a signed-in
++   * holder; `sub` is a Keycloak user and NOTHING about the credential's contents
++   * has been decided yet, so claims must be sourced from the registry.
++   */
++  source: 'preauth' | 'keycloak';
++  /** Keycloak only: the subject's registry key, from the configured claim. */
++  subjectId?: string;
++  /** Keycloak only: realm roles, for the staff gate on offer creation. */
++  roles?: string[];
++}
++
+ // Mints and validates the façade's OAuth access tokens for the
+ // pre-authorized_code grant. The signing key is NOT held here — signing is
+ // delegated to identity-service (keys stay in Vault). Validation uses the
+ // issuer DID's published JWK (via identity-service JWKS / DID resolution).
++//
++// It ALSO validates Keycloak-issued tokens, which is what lets a holder's wallet
++// authenticate directly against the realm: Keycloak is the authorization server,
++// this service is a resource server. Doing it that way means no /authorize
++// endpoint, no PKCE implementation and no consent UI of our own.
+ @Injectable()
+ export class TokenService implements OnModuleInit {
+   private readonly logger = new Logger(TokenService.name);
+   private readonly config = loadConfig();
+   private issuerDid: string;
++  private keycloakJwks?: ReturnType<typeof jose.createRemoteJWKSet>;
+ 
+   constructor(private readonly identity: IdentityClient) {}
+ 
++  private get keycloakIssuer(): string {
++    return `${this.config.keycloak.publicUrl}/realms/${this.config.keycloak.realm}`;
++  }
++
++  /**
++   * Cached remote JWK set for the realm. `createRemoteJWKSet` handles its own
++   * caching and cooldown, so a token signed with an unknown `kid` triggers at
++   * most one refetch rather than one per request — which would otherwise be a
++   * trivial way to have us hammer Keycloak.
++   */
++  private get keycloakKeys() {
++    if (!this.keycloakJwks) {
++      const base = this.config.keycloak.internalUrl || this.config.keycloak.publicUrl;
++      const url = `${base}/realms/${this.config.keycloak.realm}/protocol/openid-connect/certs`;
++      this.keycloakJwks = jose.createRemoteJWKSet(new URL(url));
++      this.logger.log(`Keycloak JWKS: ${url}`);
++    }
++    return this.keycloakJwks;
++  }
++
+   async onModuleInit() {
+     this.issuerDid = this.config.issuerDid;
+     if (!this.issuerDid) {
+@@ -54,12 +97,35 @@ export class TokenService implements OnModuleInit {
+     return this.identity.signJwt(this.issuerDid, payload, { typ: 'at+jwt' });
+   }
+ 
+-  // Validates a bearer access token minted by this service.
+-  async validateAccessToken(authHeader?: string): Promise<any> {
++  /**
++   * Validates a bearer access token from either authorization server.
++   *
++   * Which one is decided by the token's own `iss`, read WITHOUT verifying — that
++   * is safe because it only routes to a verifier; the chosen verifier then
++   * checks the signature and re-checks `iss` against what it expects, so a forged
++   * `iss` merely picks a verifier that rejects it.
++   */
++  async validateAccessToken(authHeader?: string): Promise<ValidatedToken> {
+     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+       throw new UnauthorizedException('Missing bearer token');
+     }
+     const token = authHeader.substring(7);
++
++    let unverifiedIss: string | undefined;
++    try {
++      unverifiedIss = jose.decodeJwt(token).iss;
++    } catch {
++      throw new UnauthorizedException('Malformed access token');
++    }
++
++    if (this.config.keycloak.enabled && unverifiedIss === this.keycloakIssuer) {
++      return this.validateKeycloakToken(token);
++    }
++    return this.validatePreauthToken(token);
++  }
++
++  /** A token this service minted for a pre-authorized_code offer. */
++  private async validatePreauthToken(token: string): Promise<ValidatedToken> {
+     try {
+       // Signature check via the issuer DID (delegated).
+       const res = await this.identity.verifyJwt(token, this.issuerDid);
+@@ -71,13 +137,72 @@ export class TokenService implements OnModuleInit {
+       if (payload.iss !== this.config.publicUrl) {
+         throw new Error('bad issuer');
+       }
+-      return payload;
++      return { payload, source: 'preauth' };
+     } catch (err) {
+       this.logger.warn(`Access token validation failed: ${err}`);
+       throw new UnauthorizedException('Invalid access token');
+     }
+   }
+ 
++  /**
++   * A token issued by the Keycloak realm to a signed-in holder (or to portal
++   * staff). Verified against the realm's published keys; `exp`/`nbf` are checked
++   * by jwtVerify itself.
++   */
++  private async validateKeycloakToken(token: string): Promise<ValidatedToken> {
++    try {
++      const { payload } = await jose.jwtVerify(token, this.keycloakKeys, {
++        issuer: this.keycloakIssuer,
++        // Keycloak's default access token carries aud: 'account', so an audience
++        // check is opt-in via KEYCLOAK_AUDIENCE rather than assumed. Left unset,
++        // any token from this realm is accepted — acceptable because the realm is
++        // ours and the roles below are what actually authorise.
++        ...(this.config.keycloak.audience ? { audience: this.config.keycloak.audience } : {}),
++      });
++
++      const subjectId = this.findSubjectClaim(payload);
++      const roles = (payload as any).realm_access?.roles ?? [];
++      return {
++        payload,
++        source: 'keycloak',
++        subjectId: subjectId === undefined ? undefined : String(subjectId),
++        roles,
++      };
++    } catch (err: any) {
++      this.logger.warn(`Keycloak token validation failed: ${err?.message ?? err}`);
++      throw new UnauthorizedException('Invalid access token');
++    }
++  }
++
++
++  /**
++   * The holder's registry key from the token, tolerant of naming style.
++   *
++   * The configured claim name is tried first. Failing that, claims are matched
++   * with separators stripped and case ignored, because the same concept is
++   * written `farmerId` in some realms and `farmer_id` in others — the deployed
++   * realm uses snake_case while this service defaults to camelCase, and an exact
++   * lookup silently yields "your account is not linked to a record" for a user
++   * who is perfectly well linked.
++   */
++  private findSubjectClaim(payload: Record<string, any>): unknown {
++    // Unconfigured is not "look harder": with an empty name the normalised
++    // comparison below reduces to '' and would match any claim whose key is all
++    // punctuation. Callers that actually need a subject report the missing
++    // variable themselves — see buildSelfServiceSession.
++    if (!this.config.keycloak.subjectClaim) return undefined;
++
++    const configured = payload[this.config.keycloak.subjectClaim];
++    if (configured !== undefined && configured !== null && configured !== '') return configured;
++
++    const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, '');
++    const want = norm(this.config.keycloak.subjectClaim);
++    for (const [k, v] of Object.entries(payload)) {
++      if (norm(k) === want && v !== undefined && v !== null && v !== '') return v;
++    }
++    return undefined;
++  }
++
+   // OAuth 2.0 AS metadata so the Java registry's JwtIssuerAuthenticationManager
+   // Resolver can trust our tokens config-only.
+   asMetadata() {
+@@ -85,12 +210,30 @@ export class TokenService implements OnModuleInit {
+       issuer: this.config.publicUrl,
+       token_endpoint: `${this.config.publicUrl}/oid4vc/token`,
+       jwks_uri: `${this.config.publicUrl}/.well-known/jwks.json`,
++      // This document describes THIS service's own AS role, which only ever
++      // supports the pre-authorized_code grant. The authorization_code grant is
++      // Keycloak's, and issuer metadata points wallets at the realm's own
++      // metadata for it (see issuerMetadata's authorization_servers) rather than
++      // advertising a grant this token endpoint does not implement.
+       grant_types_supported: ['urn:ietf:params:oauth:grant-type:pre-authorized_code'],
+       response_types_supported: ['token'],
+       token_endpoint_auth_methods_supported: ['none'],
+     };
+   }
+ 
++  /**
++   * Authorization servers to advertise in issuer metadata.
++   *
++   * With Keycloak configured, the realm is listed FIRST: a wallet offered an
++   * `authorization_code` grant picks the first entry it can use, and the realm is
++   * the only one of the two that implements that grant.
++   */
++  authorizationServers(): string[] {
++    return this.config.keycloak.enabled
++      ? [this.keycloakIssuer, this.config.publicUrl]
++      : [this.config.publicUrl];
++  }
++
+   // Proxy the issuer's public JWKS (keys live in identity-service).
+   async jwks() {
+     try {

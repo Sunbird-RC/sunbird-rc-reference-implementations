@@ -1,0 +1,229 @@
+From c8beec279cfa63fd98eefdf04a063eb9040f4a9f Mon Sep 17 00:00:00 2001
+From: Kartheek Palla <kartheek@sanketika.in>
+Date: Wed, 2 Sep 2026 10:50:58 +0530
+Subject: [PATCH 7/7] fix(oid4vc-service): the over-disclosure check was never
+ reached in practice
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+extractCredentials() produced disclosedNames and the matcher consumed it, but
+the one place that connects them — the multi-credential keyed vp_token branch,
+which is the path every SD-JWT presentation in this deployment takes — built
+its `presented` entry without it. So the check silently did nothing against a
+live stack while all eight unit tests passed, because each of them hands the
+matcher a fixture written by hand.
+
+Three tests now drive the matcher from a real SD-JWT built the way a wallet
+builds one, through the actual extractCredentials(), with no fixture in the
+middle. That is the shape of test that would have caught this.
+
+Also fixes the cross-issuer refusal message for a vct-only request. Each
+instance normalises a RELATIVE schema vct against its own PUBLIC_URL, so the
+school renders the college's type as `<host>/school/vct/<slug>` while the
+wallet asks for `<host>/college/vct/<slug>`; comparing whole vcts across
+instances is therefore always false, and the refusal fell back to "could not
+determine the credential type" — which sends an operator looking for a schema
+that is present and simply belongs to somebody else. Compared on the type slug
+via a new vctSlug() helper, with the reason for it written down where the next
+person will hit it.
+---
+ .../src/oid4vci/oid4vci.service.ts            |  12 +-
+ .../oid4vc-service/src/oid4vci/vct.util.ts    |  16 +++
+ .../src/oid4vp/oid4vp.service.ts              |   8 ++
+ .../src/oid4vp/unrequested-disclosure.spec.ts | 103 ++++++++++++++++++
+ 4 files changed, 137 insertions(+), 2 deletions(-)
+
+diff --git a/services/oid4vc-service/src/oid4vci/oid4vci.service.ts b/services/oid4vc-service/src/oid4vci/oid4vci.service.ts
+index 796361a8..0d75ef0a 100644
+--- a/services/oid4vc-service/src/oid4vci/oid4vci.service.ts
++++ b/services/oid4vc-service/src/oid4vci/oid4vci.service.ts
+@@ -15,7 +15,7 @@ import { TokenService, ValidatedToken } from './token.service';
+ import { PopService } from './pop.service';
+ import { loadConfig } from '../config/configuration';
+ import { digestMultibase } from '../utils/multibase.util';
+-import { normalizeVct, slugifyVct, isAbsoluteHttpUri } from './vct.util';
++import { normalizeVct, slugifyVct, isAbsoluteHttpUri, vctSlug } from './vct.util';
+ import { ClaimSourceFactory } from '../claims/claim-source.factory';
+ import {
+   ClaimSourceNotConfiguredError,
+@@ -826,7 +826,15 @@ export class Oid4vciService {
+                 c.formats.some((f) => `${c.schemaId}_${f}` === requestedId))) ||
+             (body?.vct &&
+               c.formats.includes('vc+sd-jwt') &&
+-              normalizeVct(c.vct, this.config.publicUrl) === body.vct),
++              // By type SLUG, not by the whole normalised vct. Every instance
++              // normalises a RELATIVE schema vct against its OWN publicUrl, so
++              // this instance renders another issuer's type as
++              // `<host>/<my-path>/vct/<slug>` while the wallet asks for
++              // `<host>/<their-path>/vct/<slug>`. Comparing the full URLs here
++              // therefore never matched, and the refusal fell through to
++              // "could not determine the credential type" — the exact unhelpful
++              // message this branch exists to replace.
++              vctSlug(normalizeVct(c.vct, this.config.publicUrl)) === vctSlug(body.vct)),
+         );
+         if (elsewhere) {
+           this.logger.warn(
+diff --git a/services/oid4vc-service/src/oid4vci/vct.util.ts b/services/oid4vc-service/src/oid4vci/vct.util.ts
+index 67644720..1de8e49c 100644
+--- a/services/oid4vc-service/src/oid4vci/vct.util.ts
++++ b/services/oid4vc-service/src/oid4vci/vct.util.ts
+@@ -39,3 +39,19 @@ export function normalizeVct(rawVct: string, publicUrl: string): string {
+   if (!slug) return rawVct; // nothing sluggable (e.g. all punctuation) — leave as-is
+   return `${publicUrl.replace(/\/+$/, '')}/vct/${slug}`;
+ }
++
++/**
++ * The last path segment of a vct, which is the part that identifies the TYPE
++ * rather than the instance that published it.
++ *
++ * Needed because normalizeVct() resolves a relative schema vct against the
++ * calling instance's own publicUrl: with several path-scoped issuers on one host
++ * the same credential type reads as `<host>/school/vct/x` from one and
++ * `<host>/college/vct/x` from another. Comparing full vcts across instances is
++ * therefore always false, which is not obvious from either value.
++ */
++export function vctSlug(vct?: string): string | undefined {
++  if (!vct) return undefined;
++  const trimmed = String(vct).replace(/\/+$/, '');
++  return trimmed.split('/').pop() || undefined;
++}
+diff --git a/services/oid4vc-service/src/oid4vp/oid4vp.service.ts b/services/oid4vc-service/src/oid4vp/oid4vp.service.ts
+index fc66cebb..f77595a3 100644
+--- a/services/oid4vc-service/src/oid4vp/oid4vp.service.ts
++++ b/services/oid4vc-service/src/oid4vp/oid4vp.service.ts
+@@ -338,6 +338,14 @@ export class Oid4vpService {
+             format: cq.format,
+             claims: parsed.claims,
+             algs: this.presentationAlgs(entry),
++            // Carried through, not recomputed: the over-disclosure check needs
++            // what the holder actually revealed in the `~` segments, and
++            // `claims` is a merged view that also contains the signed payload's
++            // registered claims. Omitting this silently disabled the check on
++            // this path — the multi-credential SD-JWT path every Education
++            // presentation takes — while the unit tests, which call evaluate()
++            // directly, went on passing.
++            disclosedNames: parsed.disclosedNames,
+           });
+           continue;
+         }
+diff --git a/services/oid4vc-service/src/oid4vp/unrequested-disclosure.spec.ts b/services/oid4vc-service/src/oid4vp/unrequested-disclosure.spec.ts
+index 64c45947..347f3af4 100644
+--- a/services/oid4vc-service/src/oid4vp/unrequested-disclosure.spec.ts
++++ b/services/oid4vc-service/src/oid4vp/unrequested-disclosure.spec.ts
+@@ -6,7 +6,18 @@
+ // party and not of the protocol boundary.
+ //
+ // These assertions are about which of those two guarantees the service makes.
++// oid4vp.service.ts transitively imports @auth0/mdl for the mso_mdoc path,
++// whose cose-kit dependency uses a Node "imports" subpath jest cannot resolve.
++// Stubbed the same way oid4vp.service.spec.ts does — nothing here goes near
++// mdoc, and the alternative is pulling the whole COSE/CBOR chain into a test
++// about SD-JWT disclosures.
++jest.mock('@auth0/mdl', () => ({ Verifier: class {} }), { virtual: true });
++jest.mock('@auth0/mdl/lib/cbor', () => ({ cborEncode: jest.fn(), DataItem: {} }), {
++  virtual: true,
++});
++
+ import { DcqlService } from './dcql.service';
++import { Oid4vpService } from './oid4vp.service';
+ 
+ describe('rejecting disclosures the request did not ask for', () => {
+   const dcql = new DcqlService();
+@@ -172,4 +183,96 @@ describe('rejecting disclosures the request did not ask for', () => {
+     expect(result.satisfied).toBe(true);
+     expect(result.matched.c).toEqual({ 'address.city': 'Bengaluru' });
+   });
++
++  // The check above is only as good as the value it is given, and the first
++  // build of this feature got that wrong: extractCredentials() populated
++  // disclosedNames, the matcher consumed it, and the ONE place that connects
++  // them — the multi-credential keyed vp_token branch every Education
++  // presentation takes — did not pass it on. Every test in this file still
++  // passed, because they all hand the matcher a fixture written by hand.
++  //
++  // So this one builds an SD-JWT the way a wallet does, runs it through the real
++  // extractCredentials(), and feeds THAT to the matcher. No fixture in the
++  // middle.
++  describe('driven by what extractCredentials actually produces', () => {
++    const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
++
++    /** An SD-JWT+KB presentation, in the wire shape identity-service emits. */
++    const sdJwt = (disclosures: Array<[string, unknown]>) =>
++      [
++        `${b64({ alg: 'ES256', typ: 'vc+sd-jwt' })}.${b64({
++          iss: 'did:web:issuer.example:school',
++          iat: 1756700000,
++          sub: 'did:key:holder',
++          vct: 'https://issuer.example/school/vct/school-record-credential',
++          cnf: { jwk: {} },
++          _sd: [],
++          _sd_alg: 'sha-256',
++        })}.signature`,
++        ...disclosures.map(([name, value]) => b64(['salt', name, value])),
++        // The trailing Key Binding JWT, which is not a disclosure and must not
++        // be counted as one.
++        `${b64({ alg: 'ES256', typ: 'kb+jwt' })}.${b64({ nonce: 'n', aud: 'a' })}.signature`,
++      ].join('~');
++
++    const extract = (presentation: string) => {
++      const service: any = Object.create(Oid4vpService.prototype);
++      const [parsed] = service.extractCredentials({ verifiableCredential: [presentation] });
++      return {
++        types: parsed.types,
++        vct: parsed.vct,
++        format: 'vc+sd-jwt',
++        claims: parsed.claims,
++        disclosedNames: parsed.disclosedNames,
++      };
++    };
++
++    it('reads the disclosed names off the wire and not out of the payload', () => {
++      const parsed = extract(
++        sdJwt([
++          ['learnerId', 'EDU-L-006733'],
++          ['completionStatus', 'COMPLETED'],
++        ]),
++      );
++      expect(parsed.disclosedNames).toEqual(['learnerId', 'completionStatus']);
++      // Not the registered claims, and not the Key Binding JWT.
++      expect(parsed.disclosedNames).not.toContain('iss');
++      expect(parsed.disclosedNames).not.toContain('nonce');
++    });
++
++    it('accepts exactly what was asked for, end to end', () => {
++      const result = dcql.evaluate(
++        QUERY,
++        [
++          extract(
++            sdJwt([
++              ['learnerId', 'EDU-L-006733'],
++              ['completionStatus', 'COMPLETED'],
++            ]),
++          ),
++        ],
++        { rejectUnrequestedDisclosures: true },
++      );
++      expect(result.satisfied).toBe(true);
++    });
++
++    it('refuses a surplus disclosure, end to end', () => {
++      const result = dcql.evaluate(
++        QUERY,
++        [
++          extract(
++            sdJwt([
++              ['learnerId', 'EDU-L-006733'],
++              ['completionStatus', 'COMPLETED'],
++              ['percentage', 7250],
++            ]),
++          ),
++        ],
++        { rejectUnrequestedDisclosures: true },
++      );
++      expect(result.satisfied).toBe(false);
++      expect(result.reason).toContain('percentage');
++      expect(result.reason).not.toContain('7250');
++    });
++  });
+ });

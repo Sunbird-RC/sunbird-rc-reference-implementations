@@ -1,0 +1,280 @@
+From 9caf3c2b44a5ebf5d0b94f6a0d2718a7be32ff8a Mon Sep 17 00:00:00 2001
+From: Kartheek Palla <palla.kartheekreddy@gmail.com>
+Date: Fri, 28 Aug 2026 15:46:07 +0530
+Subject: [PATCH 5/7] feat(oid4vc-service): let an issuer advertise only its
+ own credentials
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+credential-schema's /oid4vci-configs is deployment-wide: it returns every
+published config and takes no filter. With one issuer that is invisible. With two
+issuers sharing a schema service it is wrong — each one's metadata lists the
+other's credentials, so a wallet's issuer directory shows the same credential
+under whichever issuer the holder happened to open, and an issuer appears to offer
+credentials it cannot actually issue.
+
+Found while standing up two registries against one deployment: both advertised
+all three published credentials, including the unrelated one belonging to a third
+issuer.
+
+A schema already carries the DID that authored it — the same value this service
+already uses as the per-schema issuer DID when creating an offer — so an issuer can
+recognise its own without any new concept. ADVERTISE_OWN_CREDENTIALS_ONLY filters
+on it.
+
+Off by default. A single-issuer deployment upgrading to this build sees no change
+at all, which is the only reason it is a flag rather than the behaviour.
+
+It also requires ISSUER_DID to be set: filtering on an empty DID would advertise
+nothing, which is a worse failure than advertising too much because it looks
+exactly like the schema service being down. When the flag is on and nothing
+matches, the service warns and names the mismatch rather than going quiet — an
+issuer advertising no credentials is otherwise indistinguishable from a broken
+dependency.
+---
+ .../src/config/configuration.ts               |  14 ++
+ .../src/oid4vci/oid4vci.service.ts            |  31 +++-
+ .../src/oid4vci/own-credentials.spec.ts       | 156 ++++++++++++++++++
+ 3 files changed, 200 insertions(+), 1 deletion(-)
+ create mode 100644 services/oid4vc-service/src/oid4vci/own-credentials.spec.ts
+
+diff --git a/services/oid4vc-service/src/config/configuration.ts b/services/oid4vc-service/src/config/configuration.ts
+index 8af05d50..7962ac29 100644
+--- a/services/oid4vc-service/src/config/configuration.ts
++++ b/services/oid4vc-service/src/config/configuration.ts
+@@ -165,6 +165,19 @@ export interface Oid4vcConfig {
+   sessionStore: 'memory' | 'redis';
+   redisUrl: string;
+   issuerDid: string;
++  /**
++   * Advertise only the credentials this issuer authored.
++   *
++   * `credential-schema`'s /oid4vci-configs returns every published config in the
++   * deployment, so an issuer metadata document built from it lists other
++   * issuers' credentials too. Harmless with one issuer; wrong as soon as there
++   * are two, because a wallet's issuer directory then shows the same credential
++   * under whichever issuer the holder happened to open.
++   *
++   * Off by default: a single-issuer deployment behaves exactly as before, and
++   * nothing changes for anyone who has not asked for it.
++   */
++  advertiseOwnCredentialsOnly: boolean;
+   oid4vpEnabled: boolean;
+   draft13CompatMode: boolean;
+   vpSignRequest: boolean;
+@@ -304,6 +317,7 @@ export const loadConfig = (): Oid4vcConfig => ({
+   sessionStore: process.env.SESSION_STORE === 'redis' ? 'redis' : 'memory',
+   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+   issuerDid: process.env.ISSUER_DID || '',
++  advertiseOwnCredentialsOnly: process.env.ADVERTISE_OWN_CREDENTIALS_ONLY === 'true',
+   oid4vpEnabled: process.env.OID4VP_ENABLED !== 'false',
+   draft13CompatMode: process.env.DRAFT13_COMPAT_MODE === 'true',
+   // OID4VP request-object mode. Legacy implies unsigned (the `redirect_uri`
+diff --git a/services/oid4vc-service/src/oid4vci/oid4vci.service.ts b/services/oid4vc-service/src/oid4vci/oid4vci.service.ts
+index cf1d7601..70d5056f 100644
+--- a/services/oid4vc-service/src/oid4vci/oid4vci.service.ts
++++ b/services/oid4vc-service/src/oid4vci/oid4vci.service.ts
+@@ -83,10 +83,39 @@ export class Oid4vciService {
+     private readonly claimSources: ClaimSourceFactory,
+   ) {}
+ 
++  /**
++   * Published OID4VCI configs, optionally narrowed to the ones this issuer
++   * authored.
++   *
++   * credential-schema's /oid4vci-configs is deployment-wide and takes no filter,
++   * so with several issuers sharing one schema service each of them would
++   * otherwise advertise all of the others' credentials. A schema already carries
++   * the DID that authored it — the same value used as the per-schema issuer DID
++   * when creating an offer — so the issuer can recognise its own without any new
++   * concept.
++   *
++   * Requires ISSUER_DID to be set as well as the flag: filtering on an empty DID
++   * would advertise nothing at all, which is a worse failure than advertising too
++   * much and would look like the schema service being down.
++   */
++  private async ownConfigs() {
++    const configs = await this.schema.getOid4vciConfigs();
++    if (!this.config.advertiseOwnCredentialsOnly || !this.config.issuerDid) return configs;
++    const own = configs.filter((cfg) => cfg.author === this.config.issuerDid);
++    if (own.length === 0) {
++      this.logger.warn(
++        `ADVERTISE_OWN_CREDENTIALS_ONLY is set and ISSUER_DID is ${this.config.issuerDid}, but no ` +
++          `published schema is authored by it — this issuer will advertise no credentials. Check ` +
++          `that the schema's author matches ISSUER_DID.`,
++      );
++    }
++    return own;
++  }
++
+   // --- Metadata ------------------------------------------------------------
+ 
+   async issuerMetadata() {
+-    const configs = await this.schema.getOid4vciConfigs();
++    const configs = await this.ownConfigs();
+     const supported: Record<string, any> = {};
+     for (const cfg of configs) {
+       for (const format of cfg.formats) {
+diff --git a/services/oid4vc-service/src/oid4vci/own-credentials.spec.ts b/services/oid4vc-service/src/oid4vci/own-credentials.spec.ts
+new file mode 100644
+index 00000000..b3f9124c
+--- /dev/null
++++ b/services/oid4vc-service/src/oid4vci/own-credentials.spec.ts
+@@ -0,0 +1,156 @@
++// credential-schema's /oid4vci-configs is deployment-wide: it returns every
++// published config and takes no filter. With one issuer that is invisible. With
++// two sharing a schema service, each issuer's metadata lists the other's
++// credentials, and a wallet's issuer directory then shows the same credential
++// under whichever issuer the holder happened to open.
++//
++// These assertions are about what a wallet would list.
++describe('advertising only an issuer\'s own credentials', () => {
++  const ORIGINAL_ENV = process.env;
++
++  afterEach(() => {
++    process.env = ORIGINAL_ENV;
++    jest.resetModules();
++  });
++
++  const FARMER = 'did:web:issuer.example:farmer';
++  const LAND = 'did:web:issuer.example:land';
++
++  const CONFIGS = [
++    {
++      schemaId: 'did:schema:farmer',
++      version: '1.0.0',
++      name: 'Farmer Identity Credential',
++      type: 'https://w3c-ccg.github.io/vc-json-schemas/',
++      tags: ['agriculture'],
++      formats: ['vc+sd-jwt'],
++      vct: 'farmer-identity-credential',
++      display: [{ name: 'Farmer Identity Credential', locale: 'en-US' }],
++      schema: { properties: {}, required: [] },
++      author: FARMER,
++    },
++    {
++      schemaId: 'did:schema:land',
++      version: '1.0.0',
++      name: 'Land Ownership Credential',
++      type: 'https://w3c-ccg.github.io/vc-json-schemas/',
++      tags: ['agriculture'],
++      formats: ['vc+sd-jwt'],
++      vct: 'land-ownership-credential',
++      display: [{ name: 'Land Ownership Credential', locale: 'en-US' }],
++      schema: { properties: {}, required: [] },
++      author: LAND,
++    },
++  ];
++
++  /** The service reads configuration at construction, so env is set first. */
++  async function advertisedNames(env: Record<string, string>) {
++    process.env = { ...ORIGINAL_ENV, PUBLIC_URL: 'https://issuer.example', ...env };
++    jest.resetModules();
++
++    const { Oid4vciService } = await import('./oid4vci.service');
++    const { MemoryStoreService } = await import('../session/memory-store.service');
++
++    const schema = { getOid4vciConfigs: jest.fn().mockResolvedValue(CONFIGS) } as any;
++    const tokens = {
++      authorizationServers: () => ['https://issuer.example'],
++      getIssuerDid: () => FARMER,
++    } as any;
++
++    const service = new Oid4vciService(
++      new MemoryStoreService() as any,
++      {} as any,
++      schema,
++      tokens,
++      {} as any,
++      {} as any,
++    );
++    const metadata = (await service.issuerMetadata()) as Record<string, any>;
++    return Object.values(metadata.credential_configurations_supported as Record<string, any>).map(
++      (c: any) => c.display[0].name,
++    );
++  }
++
++  it('advertises every published credential by default, as it always has', async () => {
++    // The flag is opt-in precisely so that a single-issuer deployment upgrading to
++    // this build sees no change at all.
++    const names = await advertisedNames({ ISSUER_DID: FARMER });
++    expect(names).toEqual(['Farmer Identity Credential', 'Land Ownership Credential']);
++  });
++
++  it('advertises only its own once asked to', async () => {
++    const names = await advertisedNames({
++      ISSUER_DID: FARMER,
++      ADVERTISE_OWN_CREDENTIALS_ONLY: 'true',
++    });
++    expect(names).toEqual(['Farmer Identity Credential']);
++  });
++
++  it('the other issuer sees only its own, from the same schema service', async () => {
++    process.env = {
++      ...ORIGINAL_ENV,
++      PUBLIC_URL: 'https://issuer.example',
++      ISSUER_DID: LAND,
++      ADVERTISE_OWN_CREDENTIALS_ONLY: 'true',
++    };
++    jest.resetModules();
++    const { Oid4vciService } = await import('./oid4vci.service');
++    const { MemoryStoreService } = await import('../session/memory-store.service');
++    const service = new Oid4vciService(
++      new MemoryStoreService() as any,
++      {} as any,
++      { getOid4vciConfigs: jest.fn().mockResolvedValue(CONFIGS) } as any,
++      { authorizationServers: () => ['https://issuer.example'], getIssuerDid: () => LAND } as any,
++      {} as any,
++      {} as any,
++    );
++    const metadata = (await service.issuerMetadata()) as Record<string, any>;
++    const names = Object.values(
++      metadata.credential_configurations_supported as Record<string, any>,
++    ).map((c: any) => c.display[0].name);
++    expect(names).toEqual(['Land Ownership Credential']);
++  });
++
++  it('ignores the flag when no issuer DID is configured', async () => {
++    // Filtering on an empty DID would advertise nothing, which is a worse failure
++    // than advertising too much: it looks exactly like the schema service being
++    // down, and there would be nothing in the metadata to say otherwise.
++    const names = await advertisedNames({ ADVERTISE_OWN_CREDENTIALS_ONLY: 'true' });
++    expect(names).toEqual(['Farmer Identity Credential', 'Land Ownership Credential']);
++  });
++
++  it('warns rather than going quiet when nothing matches', async () => {
++    process.env = {
++      ...ORIGINAL_ENV,
++      PUBLIC_URL: 'https://issuer.example',
++      ISSUER_DID: 'did:web:issuer.example:nobody',
++      ADVERTISE_OWN_CREDENTIALS_ONLY: 'true',
++    };
++    jest.resetModules();
++
++    // The spy has to be taken from the SAME module registry the service will
++    // import from. Spying before resetModules() patches a Logger the service
++    // never sees, and the assertion then fails for a reason that has nothing to
++    // do with the behaviour under test.
++    const { Logger } = await import('@nestjs/common');
++    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
++
++    const { Oid4vciService } = await import('./oid4vci.service');
++    const { MemoryStoreService } = await import('../session/memory-store.service');
++    const service = new Oid4vciService(
++      new MemoryStoreService() as any,
++      {} as any,
++      { getOid4vciConfigs: jest.fn().mockResolvedValue(CONFIGS) } as any,
++      { authorizationServers: () => ['https://issuer.example'], getIssuerDid: () => FARMER } as any,
++      {} as any,
++      {} as any,
++    );
++    const metadata = (await service.issuerMetadata()) as Record<string, any>;
++
++    expect(Object.keys(metadata.credential_configurations_supported as object)).toEqual([]);
++    // An issuer advertising nothing is indistinguishable from a broken schema
++    // service unless it says why.
++    expect(warn).toHaveBeenCalledWith(expect.stringContaining('no published schema is authored by it'));
++    warn.mockRestore();
++  });
++});
