@@ -10,7 +10,7 @@ in its own order, against the evidence that closes it.
 | **V** — the demonstration video, by part | [`Education-Employment-Showcase-01Sep.mp4`](Education-Employment-Showcase-01Sep.mp4) |
 | **F** — the purpose follow-up segment, 26 s | [`Education-Purpose-Followup-02Sep.mp4`](Education-Purpose-Followup-02Sep.mp4) |
 | **U** — unit suite, 175 passed | [`runs/test-unit.txt`](runs/test-unit.txt) |
-| **E** — end-to-end suite, 150 passed, against the deployment | [`runs/test-e2e.txt`](runs/test-e2e.txt) |
+| **E** — end-to-end suite, 150 passed, against the local stack | [`runs/test-e2e.txt`](runs/test-e2e.txt) |
 | **C** — `verify.sh --no-tests`, 109 passed / 0 failed / 2 skipped | [`runs/verify.txt`](runs/verify.txt) |
 | **R** — Age + Agriculture regression, 98 e2e | [`runs/regression-01-02.txt`](runs/regression-01-02.txt) |
 | **cfg** — version-controlled configuration | paths given inline |
@@ -138,7 +138,7 @@ here and in [Known deviations](#known-deviations) — or **NOT MET**, stated pla
 | Automated positive, negative, privacy, trust, algorithm, holder, tampering, replay and percentage-boundary tests | **U** 167, of which 62 are Education · **E** 145, of which 48 are Education | MET |
 | Exact component, wallet, fork, image, profile and configuration versions | [`README.md`](README.md) | MET |
 | Clean-checkout setup, test and demo instructions | [`../../../README.md`](../../../README.md), [`../../../iterations/03-education/IMPLEMENTATION.md`](../../../iterations/03-education/IMPLEMENTATION.md) | MET |
-| Captured Age and Agriculture regression results | **R** 97 passed, 0 failed, on the same deployment | MET |
+| Captured Age and Agriculture regression results | **R** 98 passed, 0 failed, on the same stack as **E** and **C** | MET |
 | A line-by-line table mapping every requirement to committed evidence | this document | MET |
 
 ---

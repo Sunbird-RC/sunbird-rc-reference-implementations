@@ -21,6 +21,24 @@ trust and verification-gate suites. Of the 150 end-to-end tests **52 are
 Education**: 35 in `tests/e2e/education.test.mjs` and 17 in
 `tests/e2e/flow3-education-issuance.test.mjs`.
 
+## Read this before testing against the demo host
+
+The demo deployment at `https://135.235.192.9.sslip.io` **does not yet run the
+protocol fixes these runs cover.** Its `oid4vc-*` containers are still on
+`v2.1.0-authcode.9caf3c2b`, the 1 September image; the two fixes are in fork
+commits `1147b904` and `c8beec27`, which came after it. Only the **verifier** was
+rebuilt there, which is why the request purpose does work on the host and was
+confirmed on a device against it.
+
+So a run pointed at that host today will report failures on
+*a claim the job portal never asked for is refused* and on
+*an institution issues only its own credential type* — because the host is not
+running them, not because they do not hold. The same suites pass against the
+local stack, which runs `c8beec27`, and those are the runs committed here.
+
+Finishing the host needs the image moved over ssh (`docker save | ssh docker
+load`, ~547 MB) and the nine `oid4vc-*` services recreated. Not done yet.
+
 ## These were re-captured for Anand's review, on the LOCAL stack
 
 The 1 September captures ran against the demo deployment over HTTPS. These ran

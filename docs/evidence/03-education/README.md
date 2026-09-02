@@ -68,9 +68,9 @@ worth checking if three separate authorities asserted it.
 | Suite | Result | Where |
 |---|---|---|
 | Unit | **175 passed, 0 failed** (54 in the three Education files) | [`runs/test-unit.txt`](runs/test-unit.txt) |
-| End-to-end, against the deployment | **150 passed, 0 failed** (52 Education) | [`runs/test-e2e.txt`](runs/test-e2e.txt) |
+| End-to-end, against the local stack | **150 passed, 0 failed** (52 Education) | [`runs/test-e2e.txt`](runs/test-e2e.txt) |
 | `verify.sh --no-tests`, against the local stack | **109 passed, 0 failed, 2 skipped** | [`runs/verify.txt`](runs/verify.txt) |
-| Age + Agriculture regression, same deployment | **98 passed, 0 failed** | [`runs/regression-01-02.txt`](runs/regression-01-02.txt) |
+| Age + Agriculture regression, same stack | **98 passed, 0 failed** | [`runs/regression-01-02.txt`](runs/regression-01-02.txt) |
 | `sunbird-rc-core` fork jest | **154 passed, 0 failed** | run by `verify.sh` |
 
 ## What the review sent back, and what closed it
