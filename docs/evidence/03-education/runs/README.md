@@ -12,7 +12,7 @@ headers.
 | [`test-unit.txt`](test-unit.txt) | `npm run test:unit` | checkout only | **175 passed, 0 failed** |
 | [`test-e2e.txt`](test-e2e.txt) | `npm run test:e2e` | local stack, HTTP | **150 passed, 0 failed** |
 | [`regression-01-02.txt`](regression-01-02.txt) | Iteration 01 and 02 suites only | local stack, HTTP | **98 passed, 0 failed** |
-| [`verify.txt`](verify.txt) | `./scripts/verify.sh --no-tests` | local stack, HTTP | see the file's own summary |
+| [`verify.txt`](verify.txt) | `./scripts/verify.sh --no-tests` | local stack, HTTP | **109 passed, 0 failed, 2 skipped** |
 | [`test-fork.txt`](test-fork.txt) | `npx jest` in the fork's `oid4vc-service` | checkout only | **154 passed, 0 failed** |
 
 Of the 175 unit tests, **54 are in the three Education files** — 30 decision, 12
@@ -48,6 +48,20 @@ Age gained one end-to-end test (the control for its rewritten over-disclosure
 case) and its over-disclosure test now asserts a refusal instead of a filtered
 decision. Iteration 01 got stronger from an Iteration 03 fix to the shared
 service.
+
+## The two skips, and how verify.txt was captured
+
+`verify.sh` is captured with its own `--no-tests` flag, which is one of the two
+skips. The other is **wallet trust pinning**: the vendored wallet is built for the
+demo host, and this capture ran against `localhost`, so the check declines to
+compare a pinned DID against a deployment it was not built for rather than
+reporting a false pass or a false failure. Against the demo host it runs and
+passes — see the 1 September capture.
+
+It is also written to a path **outside** the working tree and moved in afterwards.
+Writing it in place makes check 1, *working tree clean*, fail on the file being
+written — which is how the first attempt at this capture reported one failure that
+was an artefact of capturing it.
 
 ## Why `verify.sh` was captured with `--no-tests`
 

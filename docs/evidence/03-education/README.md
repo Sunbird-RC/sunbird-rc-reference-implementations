@@ -68,7 +68,7 @@ worth checking if three separate authorities asserted it.
 |---|---|---|
 | Unit | **175 passed, 0 failed** (54 in the three Education files) | [`runs/test-unit.txt`](runs/test-unit.txt) |
 | End-to-end, against the deployment | **150 passed, 0 failed** (52 Education) | [`runs/test-e2e.txt`](runs/test-e2e.txt) |
-| `verify.sh --no-tests`, against the deployment | **111 passed, 0 failed** | [`runs/verify.txt`](runs/verify.txt) |
+| `verify.sh --no-tests`, against the local stack | **109 passed, 0 failed, 2 skipped** | [`runs/verify.txt`](runs/verify.txt) |
 | Age + Agriculture regression, same deployment | **98 passed, 0 failed** | [`runs/regression-01-02.txt`](runs/regression-01-02.txt) |
 | `sunbird-rc-core` fork jest | **154 passed, 0 failed** | run by `verify.sh` |
 

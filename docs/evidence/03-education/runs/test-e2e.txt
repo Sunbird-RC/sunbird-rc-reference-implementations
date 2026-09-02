@@ -1,13 +1,14 @@
 # Captured run — test-e2e.txt
 #
 # Command      npm run test:e2e
-# Environment  the demo deployment over HTTPS (https://135.235.192.9.sslip.io), operator port forwarded
+# Environment  the LOCAL stack over HTTP — ssh to the demo host is still not answering
 # Branch       iteration/education-03-employment
-# Commit       1ae7e50fbbf5ebb14161c44e4ebfdaba4dbae523   (clean working tree)
+# Commit       d7fdd1424110a5d392da335a6c6008d10d0b60f2   (clean working tree)
 # Node         v22.16.0
-# oid4vc image sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b
+# oid4vc image sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27
+# Fork tip     c8beec27 — 7 commits off v2.1.0
 # Wallet fork  vendored at tip 82b1def
-# Captured     2026-09-01 16:03 UTC
+# Captured     2026-09-02 05:36 UTC
 
 === output ===
 
@@ -19,1158 +20,1195 @@ TAP version 13
     # Subtest: an adult is APPROVED, with every verification check passing
     ok 1 - an adult is APPROVED, with every verification check passing
       ---
-      duration_ms: 647.202667
+      duration_ms: 463.736458
       type: 'test'
       ...
     # Subtest: the credential is holder-bound to the wallet key that requested it
     ok 2 - the credential is holder-bound to the wallet key that requested it
       ---
-      duration_ms: 254.058833
+      duration_ms: 214.809541
       type: 'test'
       ...
     1..2
 ok 1 - positive flow
   ---
-  duration_ms: 1333.576791
+  duration_ms: 1139.817958
   type: 'suite'
   ...
 # Subtest: issuer-side backend
     # Subtest: the offer is a standards OpenID4VCI offer, and carries no QR
     ok 1 - the offer is a standards OpenID4VCI offer, and carries no QR
       ---
-      duration_ms: 49.811958
+      duration_ms: 43.977167
       type: 'test'
       ...
     # Subtest: the response never carries claim VALUES
     ok 2 - the response never carries claim VALUES
       ---
-      duration_ms: 44.745167
+      duration_ms: 35.999541
       type: 'test'
       ...
     # Subtest: an unknown citizen is refused
     ok 3 - an unknown citizen is refused
       ---
-      duration_ms: 40.774625
+      duration_ms: 19.996792
       type: 'test'
       ...
     # Subtest: a caller cannot dictate the claims that get issued
     ok 4 - a caller cannot dictate the claims that get issued
       ---
-      duration_ms: 213.666
+      duration_ms: 133.865292
       type: 'test'
       ...
     1..4
 ok 2 - issuer-side backend
   ---
-  duration_ms: 349.604042
+  duration_ms: 234.606458
   type: 'suite'
   ...
 # Subtest: privacy and minimum disclosure
     # Subtest: the verifier asks for one claim only
     ok 1 - the verifier asks for one claim only
       ---
-      duration_ms: 27.920459
+      duration_ms: 2.27725
       type: 'test'
       ...
     # Subtest: the credential CAN disclose more, and the holder does not
     ok 2 - the credential CAN disclose more, and the holder does not
       ---
-      duration_ms: 456.135708
+      duration_ms: 181.184125
       type: 'test'
       ...
     # Subtest: the verifier surfaces only the requested claim, and never the holder identifier
     ok 3 - the verifier surfaces only the requested claim, and never the holder identifier
       ---
-      duration_ms: 358.246125
+      duration_ms: 393.815291
       type: 'test'
       ...
-    # Subtest: over-disclosure by the wallet never reaches the decision or the page
-    ok 4 - over-disclosure by the wallet never reaches the decision or the page
+    # Subtest: over-disclosure by the wallet is refused outright
+    ok 4 - over-disclosure by the wallet is refused outright
       ---
-      duration_ms: 489.6055
+      duration_ms: 226.2095
       type: 'test'
       ...
-    1..4
+    # Subtest: and the same wallet is accepted when it discloses only what was asked
+    ok 5 - and the same wallet is accepted when it discloses only what was asked
+      ---
+      duration_ms: 279.7095
+      type: 'test'
+      ...
+    1..5
 ok 3 - privacy and minimum disclosure
   ---
-  duration_ms: 1332.758834
+  duration_ms: 1083.919042
   type: 'suite'
   ...
 # Subtest: domain decision
     # Subtest: a minor is DENIED — verified, not failed
     ok 1 - a minor is DENIED — verified, not failed
       ---
-      duration_ms: 451.656084
+      duration_ms: 206.557792
       type: 'test'
       ...
     # Subtest: the boundary fixtures decide correctly
     ok 2 - the boundary fixtures decide correctly
       ---
-      duration_ms: 810.275084
+      duration_ms: 552.071708
       type: 'test'
       ...
     # Subtest: the boundary fixtures still straddle the 18th birthday
     ok 3 - the boundary fixtures still straddle the 18th birthday
       ---
-      duration_ms: 104.899333
+      duration_ms: 28.433042
       type: 'test'
       ...
     # Subtest: a leap-day date of birth is handled
     ok 4 - a leap-day date of birth is handled
       ---
-      duration_ms: 409.879292
+      duration_ms: 210.913125
       type: 'test'
       ...
     1..4
 ok 4 - domain decision
   ---
-  duration_ms: 1777.180417
+  duration_ms: 998.524541
   type: 'suite'
   ...
 # Subtest: negative flows
     # Subtest: a tampered disclosure value is rejected
     ok 1 - a tampered disclosure value is rejected
       ---
-      duration_ms: 367.413292
+      duration_ms: 202.283291
       type: 'test'
       ...
     # Subtest: a tampered issuer signature is rejected
     ok 2 - a tampered issuer signature is rejected
       ---
-      duration_ms: 398.101083
+      duration_ms: 152.203459
       type: 'test'
       ...
     # Subtest: a valid credential from an issuer outside the allowlist is rejected
     ok 3 - a valid credential from an issuer outside the allowlist is rejected
       ---
-      duration_ms: 367.310875
+      duration_ms: 136.224958
       type: 'test'
       ...
     # Subtest: a presentation signed by the wrong holder key is rejected
     ok 4 - a presentation signed by the wrong holder key is rejected
       ---
-      duration_ms: 651.69125
+      duration_ms: 173.610417
       type: 'test'
       ...
     # Subtest: a wrong nonce is rejected
     ok 5 - a wrong nonce is rejected
       ---
-      duration_ms: 377.828583
+      duration_ms: 146.753917
       type: 'test'
       ...
     # Subtest: a presentation bound to a different audience is rejected
     ok 6 - a presentation bound to a different audience is rejected
       ---
-      duration_ms: 420.216333
+      duration_ms: 197.338042
       type: 'test'
       ...
     # Subtest: replaying a verified presentation is rejected
     ok 7 - replaying a verified presentation is rejected
       ---
-      duration_ms: 388.680416
+      duration_ms: 180.487625
       type: 'test'
       ...
     # Subtest: an unknown or expired transaction state is rejected
     ok 8 - an unknown or expired transaction state is rejected
       ---
-      duration_ms: 243.283334
+      duration_ms: 125.313792
       type: 'test'
       ...
     # Subtest: a pre-authorised code cannot be redeemed twice
     ok 9 - a pre-authorised code cannot be redeemed twice
       ---
-      duration_ms: 299.437208
+      duration_ms: 106.969333
       type: 'test'
       ...
     # Subtest: a holder who never responds produces no claims and no approval
     ok 10 - a holder who never responds produces no claims and no approval
       ---
-      duration_ms: 89.29025
+      duration_ms: 27.394333
       type: 'test'
       ...
     # Subtest: a holder who declines is reported as declined, not as a failure
     ok 11 - a holder who declines is reported as declined, not as a failure
       ---
-      duration_ms: 147.348417
+      duration_ms: 33.408583
       type: 'test'
       ...
     1..11
 ok 5 - negative flows
   ---
-  duration_ms: 3751.618125
+  duration_ms: 1482.89075
   type: 'suite'
   ...
 # Subtest: the credential artefact
     # Subtest: what the issuer returns is an SD-JWT VC, holder-bound and selectively disclosable
     ok 1 - what the issuer returns is an SD-JWT VC, holder-bound and selectively disclosable
       ---
-      duration_ms: 303.391459
+      duration_ms: 111.374125
       type: 'test'
       ...
     1..1
 ok 6 - the credential artefact
   ---
-  duration_ms: 303.53175
+  duration_ms: 111.555
   type: 'suite'
   ...
 # Subtest: the customer-facing issuer directory
     # Subtest: the issuer advertises exactly one credential
     ok 1 - the issuer advertises exactly one credential
       ---
-      duration_ms: 33.770958
+      duration_ms: 6.521958
       type: 'test'
       ...
     1..1
 ok 7 - the customer-facing issuer directory
   ---
-  duration_ms: 33.892625
+  duration_ms: 6.646208
   type: 'suite'
   ...
 # Subtest: session lifecycle
     # Subtest: a cancelled check stays cancelled, even if a valid presentation arrives afterwards
     ok 1 - a cancelled check stays cancelled, even if a valid presentation arrives afterwards
       ---
-      duration_ms: 478.81525
+      duration_ms: 174.423375
       type: 'test'
       ...
     # Subtest: cancelling a session the verifier does not hold is reported expired, not cancelled
     ok 2 - cancelling a session the verifier does not hold is reported expired, not cancelled
       ---
-      duration_ms: 29.057625
+      duration_ms: 1.603417
       type: 'test'
       ...
     # Subtest: a session the verifier no longer holds is expired, and never decided
     ok 3 - a session the verifier no longer holds is expired, and never decided
       ---
-      duration_ms: 80.265583
+      duration_ms: 36.148084
       type: 'test'
       ...
     1..3
 ok 8 - session lifecycle
   ---
-  duration_ms: 588.387958
+  duration_ms: 212.450542
   type: 'suite'
   ...
 # Subtest: what a real wallet needs in order to name us
     # Subtest: the verifier identifies itself with a bare did:web under the deployment host
     ok 1 - the verifier identifies itself with a bare did:web under the deployment host
       ---
-      duration_ms: 46.906166
+      duration_ms: 31.398458
       type: 'test'
       ...
     # Subtest: the issuer identifies itself with the deployment origin, and its logo resolves
     ok 2 - the issuer identifies itself with the deployment origin, and its logo resolves
       ---
-      duration_ms: 93.068375
+      duration_ms: 11.20175
       type: 'test'
       ...
     1..2
 ok 9 - what a real wallet needs in order to name us
   ---
-  duration_ms: 140.174125
+  duration_ms: 42.859208
   type: 'suite'
   ...
 # Subtest: what the bank asks for
     # Subtest: one request, two credentials, and only the permitted claims
     ok 1 - one request, two credentials, and only the permitted claims
       ---
-      duration_ms: 32.944625
+      duration_ms: 4.635458
       type: 'test'
       ...
     # Subtest: the two credential types are pinned to different issuers
     ok 2 - the two credential types are pinned to different issuers
       ---
-      duration_ms: 165.089458
+      duration_ms: 4.691291
       type: 'test'
       ...
     # Subtest: the lending policy the bank publishes is the committed one
     ok 3 - the lending policy the bank publishes is the committed one
       ---
-      duration_ms: 29.192916
+      duration_ms: 1.79275
       type: 'test'
       ...
     1..3
 ok 10 - what the bank asks for
   ---
-  duration_ms: 453.628292
+  duration_ms: 44.895958
   type: 'suite'
   ...
 # Subtest: the two issuers are independent
     # Subtest: each advertises only its own credential
     ok 1 - each advertises only its own credential
       ---
-      duration_ms: 70.81625
+      duration_ms: 69.47475
       type: 'test'
       ...
     # Subtest: each names itself, so a wallet can label the entry
     ok 2 - each names itself, so a wallet can label the entry
       ---
-      duration_ms: 82.0815
+      duration_ms: 25.157625
       type: 'test'
       ...
     # Subtest: both point the wallet at the agriculture realm
     ok 3 - both point the wallet at the agriculture realm
       ---
-      duration_ms: 68.06925
+      duration_ms: 15.07775
       type: 'test'
       ...
     1..3
 ok 11 - the two issuers are independent
   ---
-  duration_ms: 221.429958
+  duration_ms: 110.056833
   type: 'suite'
   ...
 # Subtest: the credentials
     # Subtest: both are SD-JWT VCs bound to the same wallet key
     ok 1 - both are SD-JWT VCs bound to the same wallet key
       ---
-      duration_ms: 604.314084
+      duration_ms: 324.779916
       type: 'test'
       ...
     # Subtest: they are signed by two different issuers
     ok 2 - they are signed by two different issuers
       ---
-      duration_ms: 685.363417
+      duration_ms: 281.78775
       type: 'test'
       ...
     # Subtest: neither credential carries the National ID
     ok 3 - neither credential carries the National ID
       ---
-      duration_ms: 641.227333
+      duration_ms: 185.8095
       type: 'test'
       ...
     # Subtest: the land credential can disclose more than the bank asks for
     ok 4 - the land credential can disclose more than the bank asks for
       ---
-      duration_ms: 583.406458
+      duration_ms: 193.568041
       type: 'test'
       ...
     1..4
 ok 12 - the credentials
   ---
-  duration_ms: 2515.123416
+  duration_ms: 987.004209
   type: 'suite'
   ...
 # Subtest: an eligible farmer
     # Subtest: paddy: ELIGIBLE, with the loan computed from verified acreage
     ok 1 - paddy: ELIGIBLE, with the loan computed from verified acreage
       ---
-      duration_ms: 903.294792
+      duration_ms: 328.528667
       type: 'test'
       ...
     # Subtest: wheat: a different crop gives a different rate and amount
     ok 2 - wheat: a different crop gives a different rate and amount
       ---
-      duration_ms: 737.39125
+      duration_ms: 289.806666
       type: 'test'
       ...
     # Subtest: both issuers are named in the answer
     ok 3 - both issuers are named in the answer
       ---
-      duration_ms: 876.255875
+      duration_ms: 255.313417
       type: 'test'
       ...
     1..3
 ok 13 - an eligible farmer
   ---
-  duration_ms: 2517.378334
+  duration_ms: 873.956
   type: 'suite'
   ...
 # Subtest: privacy: what actually travelled
     # Subtest: exactly the requested claims reach the bank, and nothing else
     ok 1 - exactly the requested claims reach the bank, and nothing else
       ---
-      duration_ms: 876.373125
+      duration_ms: 238.818875
       type: 'test'
       ...
     1..1
 ok 14 - privacy: what actually travelled
   ---
-  duration_ms: 876.550667
+  duration_ms: 238.992292
   type: 'suite'
   ...
 # Subtest: verified business answers: NOT ELIGIBLE
     # Subtest: ownership that is not active
     ok 1 - ownership that is not active
       ---
-      duration_ms: 783.887542
+      duration_ms: 280.830542
       type: 'test'
       ...
     # Subtest: a crop the policy does not fund
     ok 2 - a crop the policy does not fund
       ---
-      duration_ms: 781.98
+      duration_ms: 273.211333
       type: 'test'
       ...
     # Subtest: a farmer the registry does not list as registered
     ok 3 - a farmer the registry does not list as registered
       ---
-      duration_ms: 800.243792
+      duration_ms: 297.934375
       type: 'test'
       ...
     1..3
 ok 15 - verified business answers: NOT ELIGIBLE
   ---
-  duration_ms: 2366.485208
+  duration_ms: 852.248959
   type: 'suite'
   ...
 # Subtest: verification failures: REJECTED / UNABLE TO VERIFY
     # Subtest: two credentials naming different farmers
     ok 1 - two credentials naming different farmers
       ---
-      duration_ms: 1305.518208
+      duration_ms: 569.510042
       type: 'test'
       ...
     # Subtest: two credentials held by different wallets
     ok 2 - two credentials held by different wallets
       ---
-      duration_ms: 891.875166
+      duration_ms: 301.1415
       type: 'test'
       ...
     # Subtest: only one of the two credentials presented
     ok 3 - only one of the two credentials presented
       ---
-      duration_ms: 847.8805
+      duration_ms: 254.624625
       type: 'test'
       ...
     # Subtest: the land credential in the farmer slot
     ok 4 - the land credential in the farmer slot
       ---
-      duration_ms: 776.732334
+      duration_ms: 361.1915
       type: 'test'
       ...
     1..4
 ok 16 - verification failures: REJECTED / UNABLE TO VERIFY
   ---
-  duration_ms: 3822.49575
+  duration_ms: 1486.856625
   type: 'suite'
   ...
 # Subtest: no data shared
     # Subtest: a farmer who declines is reported as declined, not as a failure
     ok 1 - a farmer who declines is reported as declined, not as a failure
       ---
-      duration_ms: 228.555333
+      duration_ms: 30.843
       type: 'test'
       ...
     # Subtest: a cancelled application stays cancelled, even if a valid presentation arrives
     ok 2 - a cancelled application stays cancelled, even if a valid presentation arrives
       ---
-      duration_ms: 687.749209
+      duration_ms: 377.615666
       type: 'test'
       ...
     1..2
 ok 17 - no data shared
   ---
-  duration_ms: 916.533417
+  duration_ms: 408.817
   type: 'suite'
   ...
 # Subtest: the endpoints the bank page itself uses
     # Subtest: the page's polling URL returns the decision, not a 404
     ok 1 - the page's polling URL returns the decision, not a 404
       ---
-      duration_ms: 716.003625
+      duration_ms: 1408.624542
       type: 'test'
       ...
     # Subtest: the page's cancel URL actually cancels
     ok 2 - the page's cancel URL actually cancels
       ---
-      duration_ms: 202.458333
+      duration_ms: 77.638416
       type: 'test'
       ...
     # Subtest: a session is readable through either namespace
     ok 3 - a session is readable through either namespace
       ---
-      duration_ms: 121.313209
+      duration_ms: 65.516208
       type: 'test'
       ...
     # Subtest: an unknown use-case prefix is not a route
     ok 4 - an unknown use-case prefix is not a route
       ---
-      duration_ms: 75.024167
+      duration_ms: 56.591625
       type: 'test'
       ...
     1..4
 ok 18 - the endpoints the bank page itself uses
   ---
-  duration_ms: 1115.142084
+  duration_ms: 1608.862792
   type: 'suite'
   ...
 # Subtest: trust: a valid credential from an issuer outside the allowlist
     # Subtest: an unlisted farmer issuer is refused, though its signature is valid
     ok 1 - an unlisted farmer issuer is refused, though its signature is valid
       ---
-      duration_ms: 1182.766917
+      duration_ms: 658.109916
       type: 'test'
       ...
     # Subtest: an unlisted land issuer is refused, though its signature is valid
     ok 2 - an unlisted land issuer is refused, though its signature is valid
       ---
-      duration_ms: 1418.510375
+      duration_ms: 522.734625
       type: 'test'
       ...
     1..2
 ok 19 - trust: a valid credential from an issuer outside the allowlist
   ---
-  duration_ms: 2601.560042
+  duration_ms: 1181.080333
   type: 'suite'
   ...
 # Subtest: the approved-algorithm policy is enforced
     # Subtest: the bank publishes which algorithms it approves
     ok 1 - the bank publishes which algorithms it approves
       ---
-      duration_ms: 28.18375
+      duration_ms: 3.23575
       type: 'test'
       ...
     # Subtest: an ES256 presentation is accepted, and the check is reported
     ok 2 - an ES256 presentation is accepted, and the check is reported
       ---
-      duration_ms: 1019.504542
+      duration_ms: 335.883458
       type: 'test'
       ...
     # Subtest: an unapproved algorithm is rejected, though every signature verifies
     ok 3 - an unapproved algorithm is rejected, though every signature verifies
       ---
-      duration_ms: 937.917125
+      duration_ms: 507.401
       type: 'test'
       ...
     # Subtest: an algorithm rejection is distinct from an untrusted issuer
     ok 4 - an algorithm rejection is distinct from an untrusted issuer
       ---
-      duration_ms: 770.864667
+      duration_ms: 339.912375
       type: 'test'
       ...
     1..4
 ok 20 - the approved-algorithm policy is enforced
   ---
-  duration_ms: 3054.072042
+  duration_ms: 1230.614042
   type: 'suite'
   ...
 # Subtest: Age data lives in the showcase database, in its own entity tables
 ok 21 - Age data lives in the showcase database, in its own entity tables
   ---
-  duration_ms: 670.323959
+  duration_ms: 917.499125
   type: 'test'
   ...
 # Subtest: there is exactly one database holding use-case data
 ok 22 - there is exactly one database holding use-case data
   ---
-  duration_ms: 211.925041
+  duration_ms: 222.582792
   type: 'test'
   ...
 # Subtest: there is no shared cross-domain person table
 ok 23 - there is no shared cross-domain person table
   ---
-  duration_ms: 294.792333
+  duration_ms: 241.755417
   type: 'test'
   ...
 # Subtest: use-case tables do not overlap
 ok 24 - use-case tables do not overlap
   ---
-  duration_ms: 3642.617917
+  duration_ms: 3608.726542
   type: 'test'
   ...
 # Subtest: each Education institution keeps its own national-id mapping
 ok 25 - each Education institution keeps its own national-id mapping
   ---
-  duration_ms: 587.731
+  duration_ms: 717.614667
   type: 'test'
   ...
 # Subtest: each Agriculture registry keeps its own national-id mapping
 ok 26 - each Agriculture registry keeps its own national-id mapping
   ---
-  duration_ms: 500.767292
+  duration_ms: 383.858125
   type: 'test'
   ...
 # Subtest: the protocol services keep their own stores, separate from domain data
 ok 27 - the protocol services keep their own stores, separate from domain data
   ---
-  duration_ms: 565.105166
+  duration_ms: 666.437209
   type: 'test'
   ...
 # Subtest: domain data is reachable only through the registry API, not a shared login
 ok 28 - domain data is reachable only through the registry API, not a shared login
   ---
-  duration_ms: 384.472958
+  duration_ms: 424.820625
   type: 'test'
   ...
 # Subtest: what each portal asks for
     # Subtest: both portals pin three credential types to three different issuers
     ok 1 - both portals pin three credential types to three different issuers
       ---
-      duration_ms: 124.531167
+      duration_ms: 9.50425
       type: 'test'
       ...
     # Subtest: the job portal does not ask for the school or college percentage
     ok 2 - the job portal does not ask for the school or college percentage
       ---
-      duration_ms: 30.917708
+      duration_ms: 2.43825
       type: 'test'
       ...
     # Subtest: the master's portal asks for all three percentages, and neither asks for identity
     ok 3 - the master's portal asks for all three percentages, and neither asks for identity
       ---
-      duration_ms: 164.850125
+      duration_ms: 9.495458
       type: 'test'
       ...
     # Subtest: both portals publish the committed thresholds, not something the page invented
     ok 4 - both portals publish the committed thresholds, not something the page invented
       ---
-      duration_ms: 63.006458
+      duration_ms: 2.820208
       type: 'test'
       ...
     1..4
 ok 29 - what each portal asks for
   ---
-  duration_ms: 614.407167
+  duration_ms: 112.02925
   type: 'suite'
   ...
 # Subtest: one learner, one wallet, two answers
     # Subtest: a 65% degree is shortlisted for interview but not eligible for the Master's
     ok 1 - a 65% degree is shortlisted for interview but not eligible for the Master's
       ---
-      duration_ms: 1712.840875
+      duration_ms: 1057.009792
       type: 'test'
       ...
     # Subtest: a learner who meets both rules gets both answers, each in the right words
     ok 2 - a learner who meets both rules gets both answers, each in the right words
       ---
-      duration_ms: 1337.203125
+      duration_ms: 546.476708
       type: 'test'
       ...
     # Subtest: the two portals are two different parties to the wallet
     ok 3 - the two portals are two different parties to the wallet
       ---
-      duration_ms: 231.7705
+      duration_ms: 56.036833
       type: 'test'
       ...
     1..3
 ok 30 - one learner, one wallet, two answers
   ---
-  duration_ms: 3282.429709
+  duration_ms: 1660.395167
   type: 'suite'
   ...
 # Subtest: the thresholds, at and around the boundary
     # Subtest: exactly on 60.00 / 60.00 / 70.00 is eligible, because both rules are >=
     ok 1 - exactly on 60.00 / 60.00 / 70.00 is eligible, because both rules are >=
       ---
-      duration_ms: 1146.018083
+      duration_ms: 416.740833
       type: 'test'
       ...
     # Subtest: a school percentage below 60 is NOT ELIGIBLE, and names the one number
     ok 2 - a school percentage below 60 is NOT ELIGIBLE, and names the one number
       ---
-      duration_ms: 1428.400959
+      duration_ms: 434.2085
       type: 'test'
       ...
     # Subtest: a college percentage below 60 is NOT ELIGIBLE for the master's only
     ok 3 - a college percentage below 60 is NOT ELIGIBLE for the master's only
       ---
-      duration_ms: 1272.573209
+      duration_ms: 509.545709
       type: 'test'
       ...
     # Subtest: a university percentage below 60 fails both rules
     ok 4 - a university percentage below 60 fails both rules
       ---
-      duration_ms: 1446.005458
+      duration_ms: 393.409958
       type: 'test'
       ...
     1..4
 ok 31 - the thresholds, at and around the boundary
   ---
-  duration_ms: 5293.988834
+  duration_ms: 1754.425917
   type: 'suite'
   ...
 # Subtest: business answers that are not threshold failures
     # Subtest: an unfinished degree is NOT ELIGIBLE with the status named
     ok 1 - an unfinished degree is NOT ELIGIBLE with the status named
       ---
-      duration_ms: 1397.678542
+      duration_ms: 474.311875
       type: 'test'
       ...
     # Subtest: a field of study neither policy accepts is NOT ELIGIBLE, not a verification failure
     ok 2 - a field of study neither policy accepts is NOT ELIGIBLE, not a verification failure
       ---
-      duration_ms: 1772.648584
+      duration_ms: 388.727125
       type: 'test'
       ...
     1..2
 ok 32 - business answers that are not threshold failures
   ---
-  duration_ms: 3170.747
+  duration_ms: 863.271541
   type: 'suite'
   ...
 # Subtest: what the portals must refuse
     # Subtest: three credentials naming different learners are REJECTED, not answered
     ok 1 - three credentials naming different learners are REJECTED, not answered
       ---
-      duration_ms: 1674.313375
+      duration_ms: 421.303375
       type: 'test'
       ...
     # Subtest: a credential presented in the wrong role slot is REJECTED
     ok 2 - a credential presented in the wrong role slot is REJECTED
       ---
-      duration_ms: 1395.679666
+      duration_ms: 335.140084
       type: 'test'
       ...
     # Subtest: a credential collected by a different holder is REJECTED
     ok 3 - a credential collected by a different holder is REJECTED
       ---
-      duration_ms: 1256.298
+      duration_ms: 436.437791
       type: 'test'
       ...
     # Subtest: a presentation missing one of the three credentials is REJECTED
     ok 4 - a presentation missing one of the three credentials is REJECTED
       ---
-      duration_ms: 1767.84975
+      duration_ms: 437.174459
       type: 'test'
       ...
-    # Subtest: a claim the job portal never asked for does not reach it
-    ok 5 - a claim the job portal never asked for does not reach it
+    # Subtest: a claim the job portal never asked for is refused, not quietly dropped
+    ok 5 - a claim the job portal never asked for is refused, not quietly dropped
       ---
-      duration_ms: 1544.452041
+      duration_ms: 453.515458
+      type: 'test'
+      ...
+    # Subtest: the refusal names the unrequested claim and never its value
+    ok 6 - the refusal names the unrequested claim and never its value
+      ---
+      duration_ms: 434.034875
+      type: 'test'
+      ...
+    # Subtest: the same three credentials are accepted when nothing extra is disclosed
+    ok 7 - the same three credentials are accepted when nothing extra is disclosed
+      ---
+      duration_ms: 955.076125
       type: 'test'
       ...
     # Subtest: a learner who declines discloses nothing and gets no decision
-    ok 6 - a learner who declines discloses nothing and gets no decision
+    ok 8 - a learner who declines discloses nothing and gets no decision
       ---
-      duration_ms: 245.481583
+      duration_ms: 75.318375
       type: 'test'
       ...
-    1..6
+    1..8
 ok 33 - what the portals must refuse
   ---
-  duration_ms: 7884.537625
+  duration_ms: 3548.849208
   type: 'suite'
   ...
 # Subtest: a valid credential from an issuer outside the allowlist
     # Subtest: school: valid signature, correct vct, untrusted issuer — REJECTED
     ok 1 - school: valid signature, correct vct, untrusted issuer — REJECTED
       ---
-      duration_ms: 1596.181792
+      duration_ms: 791.061125
       type: 'test'
       ...
     # Subtest: college: valid signature, correct vct, untrusted issuer — REJECTED
     ok 2 - college: valid signature, correct vct, untrusted issuer — REJECTED
       ---
-      duration_ms: 1535.123542
+      duration_ms: 492.209
       type: 'test'
       ...
     # Subtest: university: valid signature, correct vct, untrusted issuer — REJECTED
     ok 3 - university: valid signature, correct vct, untrusted issuer — REJECTED
       ---
-      duration_ms: 1568.954
+      duration_ms: 389.296833
       type: 'test'
       ...
     1..3
 ok 34 - a valid credential from an issuer outside the allowlist
   ---
-  duration_ms: 4802.941209
+  duration_ms: 1686.695042
   type: 'suite'
   ...
 # Subtest: what a portal never receives
     # Subtest: no National ID or Student ID reaches either verifier, in any outcome
     ok 1 - no National ID or Student ID reaches either verifier, in any outcome
       ---
-      duration_ms: 1723.635417
+      duration_ms: 423.887292
       type: 'test'
       ...
     # Subtest: the job portal never receives the school or college percentage on the wire
     ok 2 - the job portal never receives the school or college percentage on the wire
       ---
-      duration_ms: 1046.243958
+      duration_ms: 343.484083
       type: 'test'
       ...
     1..2
 ok 35 - what a portal never receives
   ---
-  duration_ms: 2770.160791
+  duration_ms: 767.603042
   type: 'suite'
   ...
 # Subtest: tampering and replay, over three credentials
     # Subtest: a forged percentage is refused outright, not merely found ineligible
     ok 1 - a forged percentage is refused outright, not merely found ineligible
       ---
-      duration_ms: 1135.299708
+      duration_ms: 739.558792
       type: 'test'
       ...
     # Subtest: a forged completion status on one credential of three is refused
     ok 2 - a forged completion status on one credential of three is refused
       ---
-      duration_ms: 1262.26375
+      duration_ms: 436.436208
       type: 'test'
       ...
     # Subtest: a tampered issuer signature on the school credential is refused
     ok 3 - a tampered issuer signature on the school credential is refused
       ---
-      duration_ms: 1239.498417
+      duration_ms: 394.508708
       type: 'test'
       ...
     # Subtest: a verified three-credential presentation cannot be replayed
     ok 4 - a verified three-credential presentation cannot be replayed
       ---
-      duration_ms: 1272.6715
+      duration_ms: 390.898166
       type: 'test'
       ...
     # Subtest: a presentation made to the other portal is not accepted here
     ok 5 - a presentation made to the other portal is not accepted here
       ---
-      duration_ms: 1180.787709
+      duration_ms: 445.145625
       type: 'test'
       ...
     1..5
 ok 36 - tampering and replay, over three credentials
   ---
-  duration_ms: 6090.978
+  duration_ms: 2406.975125
   type: 'suite'
   ...
 # Subtest: the approved-algorithm policy, on both Education portals
     # Subtest: both portals publish which algorithms they approve
     ok 1 - both portals publish which algorithms they approve
       ---
-      duration_ms: 57.7345
+      duration_ms: 3.01125
       type: 'test'
       ...
     # Subtest: an ES256 presentation is accepted and the check is reported
     ok 2 - an ES256 presentation is accepted and the check is reported
       ---
-      duration_ms: 1296.2425
+      duration_ms: 475.6535
       type: 'test'
       ...
     # Subtest: an unapproved algorithm is rejected, though every signature verifies
     ok 3 - an unapproved algorithm is rejected, though every signature verifies
       ---
-      duration_ms: 1201.022083
+      duration_ms: 717.071458
       type: 'test'
       ...
     # Subtest: an algorithm rejection is distinguishable from every other refusal
     ok 4 - an algorithm rejection is distinguishable from every other refusal
       ---
-      duration_ms: 1408.756041
+      duration_ms: 419.052459
       type: 'test'
       ...
     1..4
 ok 37 - the approved-algorithm policy, on both Education portals
   ---
-  duration_ms: 3964.596959
+  duration_ms: 1615.134542
   type: 'suite'
   ...
 # Subtest: Flow 1 — the citizen signs in and the wallet fetches the credential
     # Subtest: the account is linked to exactly one citizen, and Keycloak says which
     ok 1 - the account is linked to exactly one citizen, and Keycloak says which
       ---
-      duration_ms: 250.978
+      duration_ms: 237.559375
       type: 'test'
       ...
     # Subtest: the credential is built from that citizen’s own registry record
     ok 2 - the credential is built from that citizen’s own registry record
       ---
-      duration_ms: 405.4585
+      duration_ms: 455.258541
       type: 'test'
       ...
     # Subtest: the credential is bound to the wallet key that asked for it
     ok 3 - the credential is bound to the wallet key that asked for it
       ---
-      duration_ms: 360.173042
+      duration_ms: 223.254583
       type: 'test'
       ...
     # Subtest: the credential the wallet fetched is one the verifier accepts
     ok 4 - the credential the wallet fetched is one the verifier accepts
       ---
-      duration_ms: 710.731042
+      duration_ms: 299.875375
       type: 'test'
       ...
     1..4
 ok 38 - Flow 1 — the citizen signs in and the wallet fetches the credential
   ---
-  duration_ms: 2009.034958
+  duration_ms: 1294.541209
   type: 'suite'
   ...
 # Subtest: Flow 1 — cross-citizen protection (answer 8)
     # Subtest: a different citizen receives their own credential, not the first one’s
     ok 1 - a different citizen receives their own credential, not the first one’s
       ---
-      duration_ms: 857.040667
+      duration_ms: 426.682375
       type: 'test'
       ...
     # Subtest: naming another citizen in the request does not reach their record
     ok 2 - naming another citizen in the request does not reach their record
       ---
-      duration_ms: 373.938583
+      duration_ms: 242.0805
       type: 'test'
       ...
     1..2
 ok 39 - Flow 1 — cross-citizen protection (answer 8)
   ---
-  duration_ms: 1231.940958
+  duration_ms: 669.303959
   type: 'suite'
   ...
 # Subtest: Flow 1 — refusals
     # Subtest: the wrong password yields no code and no token
     ok 1 - the wrong password yields no code and no token
       ---
-      duration_ms: 230.342917
+      duration_ms: 155.378333
       type: 'test'
       ...
     # Subtest: an account with no linked citizen is refused, without inventing a record
     ok 2 - an account with no linked citizen is refused, without inventing a record
       ---
-      duration_ms: 262.253458
+      duration_ms: 138.646417
       type: 'test'
       ...
     # Subtest: a credential type the issuer does not publish is refused
     ok 3 - a credential type the issuer does not publish is refused
       ---
-      duration_ms: 292.600958
+      duration_ms: 132.78075
       type: 'test'
       ...
     # Subtest: a random bearer token is not accepted as a signed-in citizen
     ok 4 - a random bearer token is not accepted as a signed-in citizen
       ---
-      duration_ms: 63.721916
+      duration_ms: 23.367
       type: 'test'
       ...
     1..4
 ok 40 - Flow 1 — refusals
   ---
-  duration_ms: 849.893042
+  duration_ms: 450.849167
   type: 'suite'
   ...
 # Subtest: Flow 1 — the authorization server accepts what the issuer advertises
     # Subtest: every scope in issuer metadata is a scope Keycloak will grant
     ok 1 - every scope in issuer metadata is a scope Keycloak will grant
       ---
-      duration_ms: 259.7715
+      duration_ms: 139.791541
       type: 'test'
       ...
     1..1
 ok 41 - Flow 1 — the authorization server accepts what the issuer advertises
   ---
-  duration_ms: 260.235584
+  duration_ms: 139.948625
   type: 'suite'
   ...
 # Subtest: Flow 1 — the other grant still works (regression)
     # Subtest: pre-authorised issuance is unaffected by Keycloak being enabled
     ok 1 - pre-authorised issuance is unaffected by Keycloak being enabled
       ---
-      duration_ms: 321.3175
+      duration_ms: 158.985042
       type: 'test'
       ...
     1..1
 ok 42 - Flow 1 — the other grant still works (regression)
   ---
-  duration_ms: 321.542583
+  duration_ms: 159.279334
   type: 'suite'
   ...
 # Subtest: Flow 2 — the farmer signs in and the wallet fetches from both registries
     # Subtest: the account is linked to exactly one national id, and Keycloak says which
     ok 1 - the account is linked to exactly one national id, and Keycloak says which
       ---
-      duration_ms: 184.936958
+      duration_ms: 114.101625
       type: 'test'
       ...
     # Subtest: one sign-in yields both credentials, each from its own registry
     ok 2 - one sign-in yields both credentials, each from its own registry
       ---
-      duration_ms: 538.621834
+      duration_ms: 374.301209
       type: 'test'
       ...
     # Subtest: each credential is built from that farmer’s own registry record
     ok 3 - each credential is built from that farmer’s own registry record
       ---
-      duration_ms: 631.918209
+      duration_ms: 332.614625
       type: 'test'
       ...
     # Subtest: the two registries sign with different keys
     ok 4 - the two registries sign with different keys
       ---
-      duration_ms: 387.916459
+      duration_ms: 402.466542
       type: 'test'
       ...
     # Subtest: the national id is never a claim in either credential
     ok 5 - the national id is never a claim in either credential
       ---
-      duration_ms: 491.217959
+      duration_ms: 1346.718375
       type: 'test'
       ...
     # Subtest: a second farmer gets their own records, not the first farmer’s
     ok 6 - a second farmer gets their own records, not the first farmer’s
       ---
-      duration_ms: 362.434542
+      duration_ms: 302.232917
       type: 'test'
       ...
     1..6
 ok 43 - Flow 2 — the farmer signs in and the wallet fetches from both registries
   ---
-  duration_ms: 2976.466541
+  duration_ms: 2963.259917
   type: 'suite'
   ...
 # Subtest: Flow 2 — what the registries refuse
     # Subtest: an account with no registry record receives no credential
     ok 1 - an account with no registry record receives no credential
       ---
-      duration_ms: 329.353708
+      duration_ms: 126.744
       type: 'test'
       ...
     # Subtest: an account with no national id claim receives no credential
     ok 2 - an account with no national id claim receives no credential
       ---
-      duration_ms: 274.049917
+      duration_ms: 140.691958
       type: 'test'
       ...
     # Subtest: a farmer with no land gets the farmer credential and no land credential
     ok 3 - a farmer with no land gets the farmer credential and no land credential
       ---
-      duration_ms: 430.51025
+      duration_ms: 316.905416
       type: 'test'
       ...
     # Subtest: a token from the Age realm buys nothing from a registry
     ok 4 - a token from the Age realm buys nothing from a registry
       ---
-      duration_ms: 244.693083
+      duration_ms: 144.597875
       type: 'test'
       ...
     # Subtest: a registry refuses to issue the other registry’s credential
     ok 5 - a registry refuses to issue the other registry’s credential
       ---
-      duration_ms: 307.987625
+      duration_ms: 184.446875
       type: 'test'
       ...
     1..5
 ok 44 - Flow 2 — what the registries refuse
   ---
-  duration_ms: 1587.65575
+  duration_ms: 914.505416
   type: 'suite'
   ...
 # Subtest: Flow 2 — a mismatched pair, collected by the wallet itself
     # Subtest: two farmers, one wallet, and the bank refuses the combination
     ok 1 - two farmers, one wallet, and the bank refuses the combination
       ---
-      duration_ms: 1014.581791
+      duration_ms: 579.806083
       type: 'test'
       ...
     1..1
 ok 45 - Flow 2 — a mismatched pair, collected by the wallet itself
   ---
-  duration_ms: 1014.865208
+  duration_ms: 580.496667
   type: 'suite'
   ...
 # Subtest: Flow 3 — the learner signs in once and the wallet fetches all three
     # Subtest: the account is linked to exactly one national id, and Keycloak says which
     ok 1 - the account is linked to exactly one national id, and Keycloak says which
       ---
-      duration_ms: 251.032041
+      duration_ms: 110.357291
       type: 'test'
       ...
     # Subtest: one sign-in yields all three credentials, each from its own institution
     ok 2 - one sign-in yields all three credentials, each from its own institution
       ---
-      duration_ms: 760.406875
+      duration_ms: 582.106666
       type: 'test'
       ...
     # Subtest: each credential is built from that institution’s own registry record
     ok 3 - each credential is built from that institution’s own registry record
       ---
-      duration_ms: 770.201792
+      duration_ms: 512.7795
       type: 'test'
       ...
     # Subtest: the three institutions sign with three different keys
     ok 4 - the three institutions sign with three different keys
       ---
-      duration_ms: 730.888083
+      duration_ms: 436.46375
       type: 'test'
       ...
     # Subtest: all three credentials bind to the ONE holder key the wallet used
     ok 5 - all three credentials bind to the ONE holder key the wallet used
       ---
-      duration_ms: 655.480083
+      duration_ms: 465.234542
       type: 'test'
       ...
     # Subtest: the national id and the student ids are never claims in any credential
     ok 6 - the national id and the student ids are never claims in any credential
       ---
-      duration_ms: 585.112667
+      duration_ms: 378.503625
       type: 'test'
       ...
     # Subtest: a second learner gets their own records, not the first learner’s
     ok 7 - a second learner gets their own records, not the first learner’s
       ---
-      duration_ms: 389.8005
+      duration_ms: 178.339542
       type: 'test'
       ...
     1..7
 ok 46 - Flow 3 — the learner signs in once and the wallet fetches all three
   ---
-  duration_ms: 4560.080584
+  duration_ms: 2807.657542
   type: 'suite'
   ...
 # Subtest: Flow 3 — what the institutions refuse
     # Subtest: an account with no registry record receives no credential
     ok 1 - an account with no registry record receives no credential
       ---
-      duration_ms: 486.169625
+      duration_ms: 171.566125
       type: 'test'
       ...
     # Subtest: an account with no national id claim receives no credential
     ok 2 - an account with no national id claim receives no credential
       ---
-      duration_ms: 444.446833
+      duration_ms: 122.170875
       type: 'test'
       ...
     # Subtest: a learner with no university record gets two credentials and not a third
     ok 3 - a learner with no university record gets two credentials and not a third
       ---
-      duration_ms: 538.47275
+      duration_ms: 357.70675
       type: 'test'
       ...
     # Subtest: a token from the Agriculture realm buys nothing from an institution
     ok 4 - a token from the Agriculture realm buys nothing from an institution
       ---
-      duration_ms: 473.288375
+      duration_ms: 166.837583
       type: 'test'
       ...
-    # Subtest: an institution can be made to sign another institution’s credential type
-    ok 5 - an institution can be made to sign another institution’s credential type
-      ---
-      duration_ms: 663.562375
-      type: 'test'
-      ...
-    # Subtest: and that credential cannot be presented to either portal
-    ok 6 - and that credential cannot be presented to either portal
-      ---
-      duration_ms: 1300.742167
-      type: 'test'
-      ...
-    1..6
+    1..4
 ok 47 - Flow 3 — what the institutions refuse
   ---
-  duration_ms: 3907.726042
+  duration_ms: 819.285292
   type: 'suite'
   ...
 # Subtest: Flow 3 — a mismatched set, collected by the wallet itself
     # Subtest: ONE sign-in is enough: the college record names a different learner
     ok 1 - ONE sign-in is enough: the college record names a different learner
       ---
-      duration_ms: 1087.70825
+      duration_ms: 729.019959
       type: 'test'
       ...
     # Subtest: two learners, one wallet, and both portals refuse the combination
     ok 2 - two learners, one wallet, and both portals refuse the combination
       ---
-      duration_ms: 1368.884958
+      duration_ms: 668.018667
       type: 'test'
       ...
     1..2
 ok 48 - Flow 3 — a mismatched set, collected by the wallet itself
   ---
-  duration_ms: 2456.822
+  duration_ms: 1397.570167
   type: 'suite'
   ...
-1..48
-# tests 145
-# suites 40
-# pass 145
+# Subtest: Flow 3 — an institution issues only its own credential type
+    # Subtest: each institution issues its own type
+    ok 1 - each institution issues its own type
+      ---
+      duration_ms: 495.93375
+      type: 'test'
+      ...
+    # Subtest: and refuses another institution's, by configuration id
+    ok 2 - and refuses another institution's, by configuration id
+      ---
+      duration_ms: 336.825708
+      type: 'test'
+      ...
+    # Subtest: and refuses it by vct too, which is the shape a wallet sends
+    ok 3 - and refuses it by vct too, which is the shape a wallet sends
+      ---
+      duration_ms: 295.228
+      type: 'test'
+      ...
+    # Subtest: a refused cross-issuer request leaks no registry data
+    ok 4 - a refused cross-issuer request leaks no registry data
+      ---
+      duration_ms: 152.555334
+      type: 'test'
+      ...
+    1..4
+ok 49 - Flow 3 — an institution issues only its own credential type
+  ---
+  duration_ms: 1281.142583
+  type: 'suite'
+  ...
+1..49
+# tests 150
+# suites 41
+# pass 150
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 97143.200417
+# duration_ms 50567.463084

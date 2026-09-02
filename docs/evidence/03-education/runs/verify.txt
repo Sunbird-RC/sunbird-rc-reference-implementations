@@ -1,16 +1,20 @@
 # Captured run — verify.txt
 #
 # Command      ./scripts/verify.sh --no-tests
-# Environment  the demo deployment over HTTPS. --no-tests because ssh to the operator port dropped after the three suites above were captured; those results are in their own files and all passed on this commit
+# Environment  the LOCAL stack over HTTP — ssh to the demo host is still not answering
 # Branch       iteration/education-03-employment
-# Commit       1ae7e50fbbf5ebb14161c44e4ebfdaba4dbae523   (clean working tree)
+# Commit       d7fdd1424110a5d392da335a6c6008d10d0b60f2   (clean working tree)
 # Node         v22.16.0
-# oid4vc image sunbird-rc-oid4vc-service:v2.1.0-authcode.9caf3c2b
+# oid4vc image sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27
+# Fork tip     c8beec27 — 7 commits off v2.1.0
 # Wallet fork  vendored at tip 82b1def
-# Captured     2026-09-01 16:03 UTC
+# Captured     2026-09-02 05:38 UTC
+#
+# Captured to a path OUTSIDE the working tree and moved in afterwards: writing it
+# in place makes check 1 ("working tree clean") fail on the file being written.
 
 === output ===
-Iteration 01 verification — 2026-09-01 15:47 UTC
+Iteration 01 verification — 2026-09-02 05:38 UTC
 repo: /Users/kartheek/Documents/Workspace/Sunbird/Sunbird_RC/Fork/sunbird-rc-reference-implementations
 fork: /Users/kartheek/Documents/Workspace/Sunbird/Sunbird_RC/Fork/sunbird-rc-reference-implementations/../sunbird-rc-core
 
@@ -65,6 +69,7 @@ fork: /Users/kartheek/Documents/Workspace/Sunbird/Sunbird_RC/Fork/sunbird-rc-ref
   PASS  the committed Education thresholds are the ones served
   PASS  one trusted issuer per Education role
   PASS  the two Education portals sign as two different parties
+  PASS  each Education request tells the wallet why it is asking
   PASS  both Education portal pages are served
   PASS  the two Education pages share one front end
   PASS  the wallet trust logos are served
@@ -118,8 +123,68 @@ fork: /Users/kartheek/Documents/Workspace/Sunbird/Sunbird_RC/Fork/sunbird-rc-ref
 9. Fork: the prepared oid4vc-service port
   PASS  fork main is untouched (== origin/main)
   PASS  fork main sits on the v2.1.0 tag
-  PASS  port branch is 5 commits off v2.1.0 (port, alg, narrowing, issuer display, own credentials)
+  PASS  port branch is 7 commits off v2.1.0 (port, alg, narrowing, issuer display, own credentials, own issuance + disclosure, wiring)
   PASS  the image compose pins is actually built
+  PASS  an issuer is restricted to its own credential type
+  PASS  an unrequested disclosure is refused, not dropped
   PASS  the ported build is pinned by source commit in its tag
 
 10. Committed secrets
+  PASS  the generated demo password is absent from every tracked file
+  PASS  the realm import carries no credentials
+  PASS  no demo password of any known shape is committed
+
+11. The vendored wallet
+  PASS  the wallet is vendored, not a sibling checkout
+  PASS  no wallet .git came along
+  PASS  upstream's Apache-2.0 licence is retained
+  PASS  NOTICE states that files were modified, and by whom
+  PASS  the change index names the upstream commit we forked from
+  PASS  no Expo prebuild output is tracked
+  PASS  no build output, APK or keystore is tracked
+  PASS  the vendored tree stays source-only (under 20 MB tracked)
+  PASS  Animo's release identity is not carried
+  PASS  building the wallet is a script, not a runbook
+  PASS  the importer is re-runnable for the next upstream bump
+  SKIP  wallet trust pinning  (the wallet is built for 135.235.192.9.sslip.io; this deploy/.env describes localhost)
+  PASS  the pinned wallet tip exists in the fork
+  PASS  the vendored copy matches the fork, apart from the recorded adaptation
+
+12. Test suites
+  SKIP  test suites  (--no-tests)
+
+NOT DONE — the three mandatory journeys
+  The charter's three journeys, and exactly how far each is evidenced. A green
+  run above proves the stack; it does not by itself prove a journey, because a
+  journey has to be seen on the real applications.
+
+  Flow 1  authenticated wallet-driven issuance, no QR
+          RUN ON A REAL DEVICE (Samsung SM-A055F, Android 15): the wallet listed
+          the issuer, signed the citizen in at Keycloak, and fetched the
+          credential. Covered end to end by tests/e2e/flow1-wallet-issuance.test.mjs,
+          including the credential scope a real wallet actually asks for, and
+          recorded for the demo video, including a cold-restart persistence
+          take: swiped out of recents, restarted, same card and issue date.
+  Flow 2  cross-device web QR — RUN ON A REAL DEVICE, laptop verifier page and
+          phone wallet, with APPROVED, DENIED and the neutral NO DATA SHARED all
+          recorded. Cancellation is enforced server side, not drawn by the page.
+  Flow 3  same-device deep link from an INSTALLED mobile verifier app —
+          services/verifier-mobile is built and installed (package
+          id.sunbird.ageverifier), the round trip has been run on the device,
+          and both outcomes are recorded with the return to the app on screen:
+          APPROVED for the adult, DENIED for the minor.
+
+  Trust identity: the wallet names the issuer and the verifier instead of
+  reporting an unknown organization, confirmed on the device and on camera. This
+  needed a fix in the wallet fork's SDK, not only configuration — see
+  docs/design/COMPATIBILITY.md. A refusal now also reaches the verifier from the
+  wallet itself, so NO DATA SHARED appears within about two seconds without
+  anyone cancelling the check.
+
+  Evidence for a reviewer: docs/evidence/01-age/README.md, the line-by-line
+  status in docs/evidence/01-age/VALIDATION.md, and captured runs under
+  docs/evidence/01-age/runs/.
+
+Summary
+  109 passed, 0 failed, 2 skipped
+  RESULT: the deployment is intact. See the journeys above for what is evidenced on real devices and what is still missing.
