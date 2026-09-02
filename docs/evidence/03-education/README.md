@@ -5,6 +5,7 @@ needed to run it if you want to.
 
 - **The line-by-line acceptance table:** [`ACCEPTANCE.md`](ACCEPTANCE.md)
 - **The demonstration video:** [`Education-Employment-Showcase-01Sep.mp4`](Education-Employment-Showcase-01Sep.mp4)
+- **The purpose follow-up segment, 26 s:** [`Education-Purpose-Followup-02Sep.mp4`](Education-Purpose-Followup-02Sep.mp4)
 - **Captured runs:** [`runs/`](runs/)
 - **Implementation log, with the reasoning:** [`../../../iterations/03-education/IMPLEMENTATION.md`](../../../iterations/03-education/IMPLEMENTATION.md)
 
@@ -82,18 +83,47 @@ five things. Four are closed here; the fifth is closed in the request and
 |---|---|---|
 | 1 | Commit the captured test evidence | closed at `8c7949d`, refreshed here |
 | 2 | Apply the issuer restriction to the credential endpoint, with positive and negative tests | **closed** — 7 fork tests, 4 end-to-end, 1 `verify.sh` check |
-| 3 | Send the request purpose so the wallet displays it | **closed in the request**; the consent screen is not yet re-filmed |
+| 3 | Send the request purpose so the wallet displays it | **closed**, and confirmed on the device — see the follow-up segment |
 | 4 | Reject an unrequested disclosure at the protocol boundary | **closed** — refused, not dropped |
 | 5 | Make the acceptance table and this README accurate | this document and [`ACCEPTANCE.md`](ACCEPTANCE.md) |
 
-Item 3 changes what a holder sees, so it needs the short replacement segment
-Anand asked for. No device was attached when the change landed, so that segment
-is **outstanding** and the committed film still shows the old warning screen.
+Item 3 changes what a holder sees, so it comes with the short replacement segment
+Anand asked for: [`Education-Purpose-Followup-02Sep.mp4`](Education-Purpose-Followup-02Sep.mp4),
+26 s, the same screen before and after from real captures. The 5:32 film is **not**
+re-cut — one review item changed one screen, and re-rendering the whole film would
+throw away a frame-by-frame check already done twice. The film still shows the old
+warning, which is correct for the build it was recorded from.
+
+## The purpose, on the device
+
+Confirmed on the Samsung SM-A055F against the demo deployment on 2 September 2026.
+The review screen's *"No information was provided on the purpose of the data
+request. Be cautious"* is gone, replaced by a **PURPOSE** panel reading
+*"Master's admission eligibility (Computer Science)"* — the exact string
+`/api/verifier/education/masters/policy` publishes.
+
+The employer screen is **asserted but not filmed**: its purpose differs, the same
+`verify.sh` check covers it, and the phone was disconnected before that capture
+could be taken. A same-device deep link cannot substitute, for the reason in
+finding 19 below.
 
 Of the four deviations recorded on 1 September, **three are now closed** and are
 kept in [`ACCEPTANCE.md`](ACCEPTANCE.md#known-deviations) with what changed rather
-than deleted. What remains: part eight's rendered caption, and the unfilmed
-purpose screen above.
+than deleted. Part eight's rendered caption remains, and one new finding turned up
+while confirming this work:
+
+**Finding 19 — a same-device deep link crashes the wallet for some verifiers.**
+The wallet base64-encodes its post-unlock redirect path unpadded and decodes it
+strictly, so the route survives only when the payload length is a multiple of 4.
+Measured, not guessed: the Master's link is 392 characters and worked on every
+attempt, the employer link is 390 and failed on every attempt. **No Education
+journey is affected** — `DEMO.md` specifies cross-device QR, which does not go
+through that code, and part 9's installed app uses the length that works, which is
+why two iterations never hit it. The fix is one word in the vendored wallet and is
+deliberately not applied: it only takes effect in a rebuilt APK, and every
+recorded artefact in all three iterations was produced with the installed `1.20.3`
+build, so rebuilding means re-verifying the trust screens on a device before the
+evidence can be trusted again. That is a decision, not a tidy-up.
 
 ## Versions and configuration
 
@@ -147,8 +177,9 @@ customer journey, which is wallet-driven issuance on a real device.
   app is supporting evidence.
 - **Inji interoperability is not demonstrated**, and is out of programme scope per
   [`../../reviews/DECISION-03-wallet-scope.md`](../../reviews/DECISION-03-wallet-scope.md).
-- **The wallet's consent screen showing the request purpose is not filmed.** The
-  request carries it and two suites assert that, including one that decodes the
-  signed request object — but the screen has not been re-observed on a device, and
-  the committed film shows the old "no purpose provided" warning. Stated in
+- **The employer portal's purpose panel is not filmed.** The admissions one is,
+  and both are asserted on the signed request object by `verify.sh`. Stated in
   [`ACCEPTANCE.md`](ACCEPTANCE.md#known-deviations) as deviation 1.
+- **A same-device deep link is not a working channel for every verifier.** See
+  finding 19 above. Education's charter journey is cross-device QR, which is
+  unaffected.

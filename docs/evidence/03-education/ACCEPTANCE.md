@@ -8,6 +8,7 @@ in its own order, against the evidence that closes it.
 | Source | Where |
 |---|---|
 | **V** — the demonstration video, by part | [`Education-Employment-Showcase-01Sep.mp4`](Education-Employment-Showcase-01Sep.mp4) |
+| **F** — the purpose follow-up segment, 26 s | [`Education-Purpose-Followup-02Sep.mp4`](Education-Purpose-Followup-02Sep.mp4) |
 | **U** — unit suite, 175 passed | [`runs/test-unit.txt`](runs/test-unit.txt) |
 | **E** — end-to-end suite, 150 passed, against the deployment | [`runs/test-e2e.txt`](runs/test-e2e.txt) |
 | **C** — `verify.sh --no-tests`, 109 passed / 0 failed / 2 skipped | [`runs/verify.txt`](runs/verify.txt) |
@@ -73,7 +74,7 @@ here and in [Known deviations](#known-deviations) — or **NOT MET**, stated pla
 | Requirement | Evidence | Status |
 |---|---|---|
 | Starts a cross-device QR request for all three credentials | **V** part 4 — laptop QR, phone camera, one consent · **C** "both Education portal pages are served" | MET |
-| Shows institution, purpose, credentials, claims and consent in the wallet | **V** part 4 (institution, credentials, claims, consent) · **C** "each Education request tells the wallet why it is asking" — the purpose, asserted on the signed request object · **U** `wallet-trust.test.mjs`, the field the SDK reads | MET for the request; the rendered purpose is **not yet filmed** (deviation 1) |
+| Shows institution, purpose, credentials, claims and consent in the wallet | **V** part 4 (institution, credentials, claims, consent) · **F** the PURPOSE panel on the device · **C** "each Education request tells the wallet why it is asking" — asserted on the signed request object for both portals · **U** `wallet-trust.test.mjs`, the field the SDK reads | MET |
 | Receives only policy-required disclosures | **E** "no National ID or Student ID reaches either verifier, in any outcome" | MET |
 | Validates transaction and credentials before applying the rule | **U** `verification-gate.test.mjs` · **C** "it is checked before the domain decision" | MET |
 | Applies 60 / 60 / 70, completed credentials, Bachelor degree, accepted field | **V** parts 4 and 6 · **U** 30 decision tests · **E** boundary tests | MET |
@@ -145,19 +146,17 @@ here and in [Known deviations](#known-deviations) — or **NOT MET**, stated pla
 ## Known deviations
 
 **Three of the four recorded on 1 September 2026 are now closed**, at Anand's
-instruction, in the commit this table is captured at. They are kept below with
-what changed rather than deleted, because the review asked for them and a table
-that simply stopped mentioning them would be harder to check than one that says
-what happened.
+instruction. They are kept below with what changed rather than deleted, because
+the review asked for them and a table that simply stopped mentioning them would
+be harder to check than one that says what happened.
 
-One remains open, and one closure is **partial** — the request now carries a
-purpose and that is asserted on the signed request object, but the wallet screen
-that displays it has not been re-observed on a device.
+One remains: part eight's rendered caption. A new one was found while confirming
+this work on the device and is recorded as **finding 19** — it affects a
+same-device deep link, which is not an Education journey, and is stated below.
 
-**1. The wallet showed no purpose string. CLOSED in the request, NOT YET
-CONFIRMED on the device.** The review screen read *"No information was provided on
-the purpose of the data request. Be cautious."* — accurate, because the verifier
-sent no purpose anywhere.
+**1. The wallet showed no purpose string. CLOSED, and confirmed on the device.**
+The review screen read *"No information was provided on the purpose of the data
+request. Be cautious."* — accurate, because the verifier sent no purpose anywhere.
 
 `client_metadata` was the wrong place, and trying it there first is why this took
 a second attempt: it describes the client and the wallet SDK does not read a
@@ -166,14 +165,24 @@ purpose from it. The field the wallet consults is OpenID4VP 1.0's
 same string `/policy` publishes and the result page prints, so the consent screen
 and the published policy cannot disagree.
 
-Verified as far as it can be without hardware: `verify.sh` decodes the **signed
-request object** and asserts its purpose equals the published one, and
+Confirmed on the Samsung SM-A055F against the demo deployment on 2 September
+2026: the warning is gone and the review screen carries a **PURPOSE** panel
+reading *"Master's admission eligibility (Computer Science)"*. Before and after
+are in **F**, from real captures — the "before" is part four of the committed
+film at 2:08.
+
+Held by more than the recording: `verify.sh` decodes the **signed request
+object** for both portals and asserts its purpose equals the published one, and
 `wallet-trust.test.mjs` asserts the verifier fills the field the vendored SDK
-reads. What is **not** verified is that the screen renders it — no device was
-attached. Recorded as **finding 18** in
-[`../../design/COMPATIBILITY.md`](../../design/COMPATIBILITY.md). Anand asked for a
-short replacement segment if the consent screen visibly changes; it should, and
-that segment is outstanding.
+reads. Recorded as **finding 18** in
+[`../../design/COMPATIBILITY.md`](../../design/COMPATIBILITY.md).
+
+**The employer screen is asserted but not filmed.** Its purpose differs —
+*"Software Engineer interview eligibility (round one)"* — and it is covered by
+the same `verify.sh` check and the same unit and end-to-end tests, but no device
+capture of it exists: the phone was disconnected before that run, and a
+same-device deep link to that portal cannot be used to get one because of
+**finding 19**.
 
 **2. Over-disclosure was filtered upstream, not refused. CLOSED.** A wallet that
 revealed a claim the request did not ask for used to get a DECIDED answer: DCQL
@@ -218,6 +227,20 @@ values are not on screen anywhere in the recordings — checked frame by frame. 
 are shown as a caption carrying the values exactly as the three registries hold
 them, and the narration says so in as many words. Agriculture's part seven was sent
 back as unclear for the weaker version of this problem.
+
+**5. A same-device deep link crashes the wallet for some verifiers.** Found on
+2 September while confirming deviation 1. The wallet base64-encodes the
+post-unlock redirect path unpadded and decodes it strictly, so the route survives
+only when the payload length is a multiple of 4: the Master's link is 392
+characters and works, the employer link is 390 and fails every time with
+*"Something went wrong."* **Not an Education journey** — `DEMO.md` specifies
+cross-device QR, which does not go through that code, and part 9's installed app
+happens to use the length that works. The fix is one word in the vendored wallet
+and is deliberately not applied, because it only takes effect in a rebuilt APK
+and every recorded artefact in all three iterations was produced with the
+installed `1.20.3` build. Recorded as **finding 19** in
+[`../../design/COMPATIBILITY.md`](../../design/COMPATIBILITY.md), with the fix and
+what rebuilding would cost.
 
 ## Not claimed
 
