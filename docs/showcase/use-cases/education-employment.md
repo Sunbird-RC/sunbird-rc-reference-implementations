@@ -244,7 +244,9 @@ Successful verification does not itself mean admission or employment.
 
 - [Sunbird RC documentation](https://docs.sunbirdrc.dev/)
 - [Reference implementation repository](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations)
-- [Education application inputs](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/iteration/education-03-employment/iterations/03-education)
-
-The reference implementation and public demonstration links will be added after
-the application is completed and accepted.
+- [Education Product, requirements, design and implementation](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/docs/sunbird-rc-showcase-v1/iterations/03-education)
+- [Education Registry schemas](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/docs/sunbird-rc-showcase-v1/registry-schemas)
+- [Line-by-line acceptance evidence](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/blob/docs/sunbird-rc-showcase-v1/docs/evidence/03-education/ACCEPTANCE.md)
+- [Education evidence and reproducible test results](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/docs/sunbird-rc-showcase-v1/docs/evidence/03-education)
+- [Complete Education and Employment demonstration](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/blob/docs/sunbird-rc-showcase-v1/docs/evidence/03-education/Education-Employment-Showcase-01Sep.mp4)
+- [Purpose-display follow-up evidence](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/blob/docs/sunbird-rc-showcase-v1/docs/evidence/03-education/Education-Purpose-Followup-02Sep.mp4)
