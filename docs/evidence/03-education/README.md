@@ -87,7 +87,17 @@ five things. Four are closed here; the fifth is closed in the request and
 | 4 | Reject an unrequested disclosure at the protocol boundary | **closed** — refused, not dropped |
 | 5 | Make the acceptance table and this README accurate | this document and [`ACCEPTANCE.md`](ACCEPTANCE.md) |
 
-Item 3 changes what a holder sees, so it comes with the short replacement segment
+A second round of review on 2 September asked for four more closures. Three are
+done; the fourth needs a decision.
+
+| # | Asked for | Status |
+|---|---|---|
+| 1 | Publish the fork commits, or commit reproducible patches with instructions | **closed** — [`patches/oid4vc-service/`](../../../patches/oid4vc-service/), seven patches that reproduce the authored tree exactly |
+| 2 | Let a reviewer rebuild the `c8beec27` image from shared source | **closed** — shared base is the upstream `v2.1.0` tag; exact build recipe and five `verify.sh` checks |
+| 3 | Move the public deployment to the corrected image and re-verify there | **closed** — all nine `oid4vc-*` services on `c8beec27`, both fixes verified against the public deployment |
+| 4 | Correct the stale 167 unit / 145 E2E line | **closed** — 175 and 150, recounted from the suites |
+
+The **first** round's item 3 changes what a holder sees, so it comes with the short replacement segment
 Anand asked for: [`Education-Purpose-Followup-02Sep.mp4`](Education-Purpose-Followup-02Sep.mp4),
 39 s, the same screen before and after from real captures, plus the employer's. The 5:32 film is **not**
 re-cut — one review item changed one screen, and re-rendering the whole film would
@@ -116,6 +126,8 @@ than deleted. Part eight's rendered caption remains, and one new finding turned 
 while confirming this work:
 
 **Finding 19 — a same-device deep link crashes the wallet for some verifiers.**
+**Ruled a wallet backlog item by Anand on 2 September 2026: it does not block this
+iteration**, because the required Education journey is cross-device QR.
 The wallet base64-encodes its post-unlock redirect path unpadded and decodes it
 strictly, so the route survives only when the payload length is a multiple of 4.
 Measured, not guessed: the Master's link is 392 characters and worked on every

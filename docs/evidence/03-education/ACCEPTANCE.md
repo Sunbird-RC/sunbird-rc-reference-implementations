@@ -230,7 +230,9 @@ are shown as a caption carrying the values exactly as the three registries hold
 them, and the narration says so in as many words. Agriculture's part seven was sent
 back as unclear for the weaker version of this problem.
 
-**5. A same-device deep link crashes the wallet for some verifiers.** Found on
+**5. A same-device deep link crashes the wallet for some verifiers — a wallet
+backlog item, not an Education blocker.** So ruled by Anand on 2 September 2026,
+because the required Education journey is cross-device QR. Found on
 2 September while confirming deviation 1. The wallet base64-encodes the
 post-unlock redirect path unpadded and decodes it strictly, so the route survives
 only when the payload length is a multiple of 4: the Master's link is 392

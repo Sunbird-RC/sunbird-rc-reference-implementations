@@ -21,25 +21,58 @@ trust and verification-gate suites. Of the 150 end-to-end tests **52 are
 Education**: 35 in `tests/e2e/education.test.mjs` and 17 in
 `tests/e2e/flow3-education-issuance.test.mjs`.
 
-## Read this before testing against the demo host
+## The public deployment now runs the corrected image
 
-The demo deployment at `https://135.235.192.9.sslip.io` **does not yet run the
-protocol fixes these runs cover.** Its `oid4vc-*` containers are still on
-`v2.1.0-authcode.9caf3c2b`, the 1 September image; the two fixes are in fork
-commits `1147b904` and `c8beec27`, which came after it. Only the **verifier** was
-rebuilt there, which is why the request purpose does work on the host and was
-confirmed on a device against it.
+Anand's item 3. Done on 2 September 2026: all nine `oid4vc-*` services at
+`https://135.235.192.9.sslip.io` run `v2.1.0-authcode.c8beec27`, all healthy, and
+the two fixes were verified **against that deployment** rather than only locally.
 
-So a run pointed at that host today will report failures on
-*a claim the job portal never asked for is refused* and on
-*an institution issues only its own credential type* — because the host is not
-running them, not because they do not hold. The same suites pass against the
-local stack, which runs `c8beec27`, and those are the runs committed here.
+```
+oid4vc-service  oid4vc-bank  oid4vc-farmer  oid4vc-land  oid4vc-university-vp
+oid4vc-employer-vp  oid4vc-school  oid4vc-college  oid4vc-university   -> c8beec27
+```
 
-Finishing the host needs the image moved over ssh (`docker save | ssh docker
-load`, ~547 MB) and the nine `oid4vc-*` services recreated. Not done yet.
+Verified there, not inferred:
 
-## These were re-captured for Anand's review, on the LOCAL stack
+| Test | Result |
+|---|---|
+| *a claim the job portal never asked for is refused, not quietly dropped* | pass |
+| *the refusal names the unrequested claim and never its value* | pass |
+| *the same three credentials are accepted when nothing extra is disclosed* | pass |
+| *and refuses another institution's, by configuration id* | pass |
+| *and refuses it by vct too, which is the shape a wallet sends* | pass |
+| *a refused cross-issuer request leaks no registry data* | pass |
+
+So the local stack is **not** proposed as the accepted environment. The public
+deployment is, and it is the one these results come from.
+
+### The one thing that made this harder than it should be
+
+Bumping the tag in `deploy/docker-compose.yml` did **not** move the deployment.
+The host's generated `deploy/.env` carried its own
+`OID4VC_IMAGE=…authcode.9caf3c2b` at line 64, which overrides the compose
+default, so the services were recreated with the new environment and the **old
+image** — and reported healthy while doing it. `verify.sh` already warns that this
+file silently overrides both the compose default and `env.example`; this is that
+warning coming true. The line was updated in place, with the file backed up first
+and its line count checked before and after.
+
+### Two artefacts in these runs, neither a defect
+
+- **Keycloak brute-force protection.** The realm sets `failureFactor: 20` and
+  `waitIncrementSeconds: 30`. Driving several full suites through the same demo
+  accounts inside a few minutes trips a temporary lockout, which surfaces as
+  *"Keycloak refused the advertised scope … login not accepted (HTTP 200)"* in
+  Flow 1. It is the protection working. Space the runs, or expect one suite to
+  need a second pass.
+- **ssh to the host is intermittent.** Port 22 is restricted by an Azure network
+  rule to a specific source network while 80/443 are open to the internet, so it
+  comes and goes with the operator's address while the deployment itself stays up
+  — `/admissions/` and `/employer/` answered 200 throughout. Every drop in this
+  session was that, not an outage. Use `ServerAliveInterval`; an earlier capture
+  lost its tunnel mid-run and produced forty spurious `fetch failed` errors.
+
+## About the earlier local-stack captures
 
 The 1 September captures ran against the demo deployment over HTTPS. These ran
 against the local stack over HTTP, because **ssh to the demo host is still not
