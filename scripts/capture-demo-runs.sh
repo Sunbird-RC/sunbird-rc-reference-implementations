@@ -72,18 +72,44 @@ sleep 3
 curl -fsS -o /dev/null --max-time 10 "http://127.0.0.1:$OPS_PORT/health" \
   || die "the tunnel is up but the operator endpoint did not answer"
 
+# The env file is under deploy/ in a normal checkout, but DEMO_DIR is the sort of
+# thing that gets passed either way. Resolve it once and say which was found,
+# rather than reporting "could not read AGE_ISSUER_DID" for what is really a path
+# that is one directory off — the first run of this script did exactly that.
+ENV_FILE=""
+for candidate in "$DIR/deploy/.env" "$DIR/.env"; do
+  if "${SSH[@]}" "$HOST" "test -f $candidate" 2>/dev/null; then ENV_FILE="$candidate"; break; fi
+done
+[ -n "$ENV_FILE" ] || die "no .env under $DIR (looked in deploy/.env and .env)"
+echo "   env: $ENV_FILE"
+
 # Read into this process only. Never echoed, never written to a file: verify.sh
 # asserts no password of any shape we have used is committed.
-val() { "${SSH[@]}" "$HOST" "grep -E \"^$1=\" $DIR/.env | cut -d= -f2- | tr -d '\r' | tail -1"; }
+val() { "${SSH[@]}" "$HOST" "grep -E \"^$1=\" $ENV_FILE | cut -d= -f2- | tr -d '\r' | tail -1"; }
 export BASE="$ORIGIN" PUBLIC_URL="$ORIGIN" OPS_URL="http://127.0.0.1:$OPS_PORT"
 export AGE_ISSUER_DID="$(val AGE_ISSUER_DID)"
 export VERIFIER_DID="$(val VERIFIER_DID)"
 export UNTRUSTED_ISSUER_DID="$(val UNTRUSTED_ISSUER_DID)"
 export DEMO_CITIZEN_PASSWORD="$(val DEMO_CITIZEN_PASSWORD)"
 [ -n "$AGE_ISSUER_DID" ] && [ -n "$DEMO_CITIZEN_PASSWORD" ] \
-  || die "could not read AGE_ISSUER_DID / DEMO_CITIZEN_PASSWORD from $DIR/.env"
+  || die "could not read AGE_ISSUER_DID / DEMO_CITIZEN_PASSWORD from $ENV_FILE"
 
-say "4. refreshing the boundary fixtures"
+# Some checks are local no matter where BASE points: data-isolation.test.mjs
+# reaches the database with `docker compose exec psql`, and five verify.sh checks
+# inspect local containers and images. With no local stack they FAIL rather than
+# skip, which reads exactly like a regression in the deployment — a wiped Docker
+# once turned a clean run into 8 e2e and 6 verify failures that had nothing to do
+# with the deployment at all. Say so up front instead.
+say "4. the local stack, which some checks need regardless of BASE"
+if [ "$(docker ps -q 2>/dev/null | wc -l | tr -d ' ')" = "0" ]; then
+  printf '   \033[33m! no local containers: data-isolation (8 tests) and five verify.sh\n'
+  printf '     checks will FAIL, not skip. Bring the local stack up first if you\n'
+  printf "     want those to mean anything.\033[0m\n"
+else
+  echo "   $(docker ps -q | wc -l | tr -d ' ') local containers running"
+fi
+
+say "5. refreshing the boundary fixtures"
 # BASE, not OPS_URL: seed-age-citizens.sh addresses the registry through the
 # operator listener and reads BASE. Passing OPS_URL instead silently seeds
 # whatever is on localhost — which is how the local stack got re-seeded while
@@ -113,7 +139,7 @@ EOF
 # defect — so the suites are spaced rather than run back to back.
 run() {
   local name="$1" cmd="$2"; shift 2
-  say "5. $name"
+  say "6. $name"
   header "$name" "$cmd" > "$OUT/$name"
   if "$@" >> "$OUT/$name" 2>&1; then
     printf '   \033[32m✓\033[0m %s\n' "$(grep -E '^# pass|^  [0-9]+ passed' "$OUT/$name" | tail -1)"

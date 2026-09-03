@@ -54,6 +54,15 @@ as `ok`, among them Age (suites 1–9), Agriculture (10–18), the untrusted-iss
 set (19), the algorithm policy (20), data isolation (21–28), Flow 1 (38–42) and
 Flow 2 (43–45).
 
+**Eight of those 98 are local, and saying otherwise would overstate the run.**
+`data-isolation.test.mjs` reaches the database with
+`docker compose exec … psql` rather than over HTTP, so its eight tests inspect
+whichever stack is on *this* machine no matter where `BASE` points — they are
+about table separation inside the shared Postgres, which has no public route by
+design. So of the 150, **142 exercised the deployment** and 8 inspected the local
+database; of the 98-test regression subset, 90 and 8 respectively. The same
+distinction applies to `verify.sh` and is written into its capture header.
+
 Worth noting: suite **41**, *Flow 1 — the authorization server accepts what the
 issuer advertises*, passes in that capture. It is the one that failed when the
 subset was run separately minutes later, which confirms that failure was
