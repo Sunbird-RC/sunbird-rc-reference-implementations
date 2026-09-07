@@ -20,6 +20,13 @@ So the commits travel as patches on this branch instead — the alternative Anan
 review offered. They are not a summary or a rewrite: applying them to the upstream
 tag reproduces the authored tree exactly, which the check at the bottom proves.
 
+## Licence
+
+These patches are derivative work of `Sunbird-RC/sunbird-rc-core`, which is
+**MIT** licensed ("Copyright (c) 2018 Project Sunbird"), and they are offered
+under the same MIT licence and the same copyright — see this repository's root
+[`LICENSE`](../../LICENSE), which is byte-identical to upstream's.
+
 ## The shared base
 
 | | |
@@ -94,19 +101,41 @@ The two review fixes are covered by `src/oid4vci/own-credentials-issuance.spec.t
 
 ## Checking you got the same source we did
 
-The patches reproduce the authored tree exactly, not approximately. After
-`git am`:
+The patches reproduce the authored **tree** exactly. Compare the tree, not the
+commit id — `git am` records a new committer and date, so the commit hashes will
+differ from ours even though the content is identical:
 
 ```bash
-git rev-parse HEAD          # c8beec279cfa63fd98eefdf04a063eb9040f4a9f
-git rev-parse HEAD^{tree}   # must equal the tree we built from
+git rev-parse HEAD^{tree}   # 561448f3104acb668bc801a7f51cc391b1962c1b
+                            # the tree the image was built from
+git rev-parse HEAD          # WILL DIFFER from c8beec27 — see below
 ```
+
+`c8beec279cfa63fd98eefdf04a063eb9040f4a9f` is the commit id in the authoring
+checkout, and it is what the image tag names. A fresh `git am` of this series
+produces the same tree under a different commit id, because a commit hashes its
+committer identity and timestamps as well as its content. An earlier version of
+this file told you to expect `c8beec27` from `git rev-parse HEAD`, which is only
+true if you happen to reproduce the committer too.
 
 Verified on 2 September 2026 by applying this series to a pristine `v2.1.0`
 worktree and comparing `HEAD^{tree}` against the authoring checkout's branch tip:
 **identical.** `scripts/verify.sh` re-checks the cheap half of this on every run —
 that the series is present, that its length matches, and that patch `0007`'s
 commit is the one `deploy/docker-compose.yml` pins.
+
+## Authorship, here versus in the upstream pull request
+
+These patch files preserve authorship as committed: `0001`–`0005` carry
+`palla.kartheekreddy@gmail.com`, `0006`–`0007` carry `kartheek@sanketika.in`.
+They are left as they were because the image tag and the whole evidence chain are
+pinned to this exact series.
+
+The **upstream pull request** unifies all seven to the work address, since commit
+metadata contributed to Sunbird RC becomes permanent public record. Same content,
+same trees, one identity. Nothing else about the commits changes except the
+subject of `0003`, which named an individual reviewer and now reads "narrow the
+port to the approved controls".
 
 ## If a patch ever stops applying
 

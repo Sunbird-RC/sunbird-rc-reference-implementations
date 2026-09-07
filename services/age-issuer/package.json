@@ -1,6 +1,7 @@
 {
   "name": "@sunbird-rc-age/age-issuer",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "description": "National Identity Authority issuer counter: registry record -> derived age claims -> OpenID4VCI offer",

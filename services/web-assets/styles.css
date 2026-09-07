@@ -15,7 +15,9 @@
  * scale used here.
  *
  * Rubik is self-hosted from the same woff2 the Spark portal ships. No CDN — the
- * stack has to work on a laptop with no network.
+ * stack has to work on a laptop with no network. It is SIL Open Font License
+ * 1.1, NOT this repository's MIT: see fonts/README.md for the notice the OFL
+ * requires to travel with it.
  */
 
 @font-face {
