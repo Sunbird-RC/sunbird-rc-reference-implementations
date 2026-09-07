@@ -90,6 +90,14 @@ services:
       - ./registry.env
     environment:
       - connectionInfo_uri=${AGE_REGISTRY_JDBC:-jdbc:postgresql://db:5432/registry}
+      # Sunbird RC's own setting, used when the registry provisions Keycloak
+      # users. This showcase does not use that path — `registry_base_apis_enable`
+      # is false and the three realms are imported by bootstrap.sh — so the
+      # default is a placeholder, not a credential. Kept out of registry.env
+      # because env_file takes literals only, and a hardcoded password literal in
+      # a tracked file is the first thing a secret scanner reports on a public
+      # repository — quoting the old value here would defeat the point.
+      - sunbird_keycloak_user_password=${REGISTRY_KEYCLOAK_USER_PASSWORD:-local-dev-placeholder}
       - authentication_enabled=${REGISTRY_AUTH_ENABLED:-false}
     healthcheck:
       # wget, not curl: the registry image ships wget but no curl, so a

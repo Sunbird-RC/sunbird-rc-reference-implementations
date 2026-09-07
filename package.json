@@ -1,9 +1,10 @@
 {
   "name": "sunbird-rc-age-showcase",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
-  "description": "Iteration 01 — Age Verification: Sunbird RC issuance, wallet, selective disclosure and web verification",
+  "description": "Iteration 01 \u2014 Age Verification: Sunbird RC issuance, wallet, selective disclosure and web verification",
   "workspaces": [
     "services/age-issuer",
     "services/verifier"

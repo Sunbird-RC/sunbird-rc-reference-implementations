@@ -27,7 +27,7 @@ Across these use cases, the showcase uses the established customized open-source
   see the [formal sign-off](docs/reviews/ITERATION-02-SIGNOFF.md) and
   [evidence](docs/evidence/02-agriculture/README.md).
 - **ITERATION 03 — EDUCATION / EMPLOYMENT:** accepted and merged to `main` in
-  [`7f18e75`](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/commit/7f18e756d7d82bfd5e73dad1dbe3947fa0e89f3f);
+  [`7f18e75`](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/commit/7f18e756d7d82bfd5e73dad1dbe3947fa0e89f3f);
   every requirement is **MET** in the
   [line-by-line acceptance record](docs/evidence/03-education/ACCEPTANCE.md).
 
