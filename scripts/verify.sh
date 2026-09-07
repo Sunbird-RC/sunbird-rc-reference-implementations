@@ -23,9 +23,15 @@ ok()   { PASS=$((PASS+1)); printf '  PASS  %s\n' "$1"; }
 no()   { FAIL=$((FAIL+1)); printf '  FAIL  %s\n' "$1"; }
 skip() { SKIP=$((SKIP+1)); printf '  SKIP  %s  (%s)\n' "$1" "$2"; }
 head_() { printf '\n%s\n' "$1"; }
-check() { if eval "$2" >/dev/null 2>&1; then ok "$1"; else no "$1"; fi; }
+# Each body runs in a SUBSHELL, so an `exit` inside one cannot terminate this
+# script. That trap had bitten three times: the third was the logo check below,
+# whose `for … || exit 1` loop killed the run at check 41 when one PNG 404ed, so
+# sixty later checks never ran and no summary was printed. A subshell turns that
+# into one FAIL, which is what it always should have been. The `no `exit` in a
+# check body' rule noted further down is now belt as well as braces.
+check() { if ( eval "$2" ) >/dev/null 2>&1; then ok "$1"; else no "$1"; fi; }
 # Inverted check: passes when the thing is ABSENT.
-gone()  { if eval "$2" >/dev/null 2>&1; then no "$1"; else ok "$1"; fi; }
+gone()  { if ( eval "$2" ) >/dev/null 2>&1; then no "$1"; else ok "$1"; fi; }
 
 printf 'Iteration 01 verification — %s\n' "$(date -u '+%Y-%m-%d %H:%M UTC')"
 printf 'repo: %s\nfork: %s\n' "$ROOT" "$FORK"
@@ -90,19 +96,88 @@ if curl -fsS -o /dev/null --max-time 5 "$BASE/gateway-health" 2>/dev/null; then
   # check that keeps the demo requirement honest: an Age credential appearing in
   # the Agriculture issuer directory is exactly what DEMO.md's quality gate
   # forbids, and it is what happened before ADVERTISE_OWN_CREDENTIALS_ONLY.
-  for who in farmer land; do
+  # Five path-scoped issuers now share one host, so the failure this guards
+  # against is five times likelier: the directory a learner reads is built from
+  # every published schema, and without ADVERTISE_OWN_CREDENTIALS_ONLY the
+  # university would offer a farmer credential.
+  for who in farmer land school college university; do
     check "the $who issuer advertises only its own credential" 'curl -s --max-time 8 "$BASE/'"$who"'/.well-known/openid-credential-issuer" | python3 -c "
 import json,sys
 d = json.load(sys.stdin)
 configs = d[\"credential_configurations_supported\"]
 names = [c[\"display\"][0][\"name\"] for c in configs.values()]
-want = {\"farmer\": \"Farmer Identity Credential\", \"land\": \"Land Ownership Credential\"}[\"'"$who"'\"]
+want = {
+    \"farmer\": \"Farmer Identity Credential\",
+    \"land\": \"Land Ownership Credential\",
+    \"school\": \"School Record Credential\",
+    \"college\": \"College Record Credential\",
+    \"university\": \"University Record Credential\",
+}[\"'"$who"'\"]
 raise SystemExit(0 if names == [want] else 1)"'
   done
 
+  # --- Iteration 03 ----------------------------------------------------------
+  #
+  # The two portals must ask DIFFERENT things of the same three cards and sign as
+  # DIFFERENT parties. Both are the kind of property that fails silently: a shared
+  # signer still produces a working demo, it just names the wrong organisation on
+  # the learner's phone, which only a person holding the phone would notice.
+  check "both Education portals publish a policy" 'for p in masters job; do curl -sf --max-time 8 -o /dev/null "$BASE/api/verifier/education/$p/policy" || exit 1; done'
+  check "the job portal does not request the school or college percentage" 'curl -s --max-time 8 "$BASE/api/verifier/education/job/policy" | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+r = d[\"requestedClaims\"]
+raise SystemExit(0 if \"percentage\" not in r[\"school\"] and \"percentage\" not in r[\"college\"] and \"percentage\" in r[\"university\"] else 1)"'
+  check "the committed Education thresholds are the ones served" 'curl -s --max-time 8 "$BASE/api/verifier/education/masters/policy" | python3 -c "
+import json,sys
+raise SystemExit(0 if json.load(sys.stdin)[\"thresholds\"] == {\"school\": 60, \"college\": 60, \"university\": 70} else 1)"'
+  check "one trusted issuer per Education role" 'curl -s --max-time 8 "$BASE/api/verifier/education/masters/policy" | python3 -c "
+import json,sys
+roles = [r for i in json.load(sys.stdin)[\"trustedIssuers\"] for r in (i.get(\"roles\") or [])]
+edu = sorted(r for r in roles if r in (\"school\", \"college\", \"university\"))
+raise SystemExit(0 if edu == [\"college\", \"school\", \"university\"] else 1)"'
+  check "the two Education portals sign as two different parties" 'python3 -c "
+import json, urllib.request, urllib.parse
+ids = []
+for policy in (\"masters\", \"job\"):
+    req = urllib.request.Request(\"$BASE/api/verifier/education/%s/sessions\" % policy, method=\"POST\")
+    with urllib.request.urlopen(req, timeout=10) as r:
+        qr = json.load(r)[\"qrData\"]
+    ids.append(urllib.parse.parse_qs(urllib.parse.urlparse(qr.replace(\"openid4vp://\", \"https://x\")).query)[\"client_id\"][0])
+raise SystemExit(0 if len(set(ids)) == 2 and all(i.startswith(\"did:web:\") for i in ids) else 1)"'
+  # The request object the WALLET reads, not the policy the page publishes: the
+  # purpose has to be inside the signed JAR or the holder's consent screen still
+  # says no reason was given. Asserted equal to the published purpose, because
+  # two strings that can differ eventually do.
+  check "each Education request tells the wallet why it is asking" 'python3 -c "
+import json, urllib.request, urllib.parse, base64
+for policy in (\"masters\", \"job\"):
+    with urllib.request.urlopen(\"$BASE/api/verifier/education/%s/policy\" % policy, timeout=10) as r:
+        published = json.load(r)[\"purpose\"]
+    req = urllib.request.Request(\"$BASE/api/verifier/education/%s/sessions\" % policy, method=\"POST\")
+    with urllib.request.urlopen(req, timeout=10) as r:
+        qr = json.load(r)[\"qrData\"]
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(qr.replace(\"openid4vp://\", \"https://x\")).query)
+    with urllib.request.urlopen(query[\"request_uri\"][0], timeout=10) as r:
+        jwt = r.read().decode()
+    payload = jwt.split(\".\")[1]
+    payload += \"=\" * (-len(payload) % 4)
+    sets = json.loads(base64.urlsafe_b64decode(payload))[\"dcql_query\"].get(\"credential_sets\") or []
+    if not sets or sets[0].get(\"purpose\") != published:
+        raise SystemExit(1)
+    # One required set naming all three credentials: splitting them would make a
+    # three-credential request satisfiable by fewer.
+    if not sets[0].get(\"required\") or len(sets[0][\"options\"]) != 1 or len(sets[0][\"options\"][0]) != 3:
+        raise SystemExit(1)
+raise SystemExit(0)"'
+  check "both Education portal pages are served" 'for p in admissions employer; do curl -sf --max-time 8 -o /dev/null "$BASE/$p/" || exit 1; done'
+  # Two pages, one script: the difference between a university and an employer has
+  # to come out of the policy, not out of two separately written front ends.
+  check "the two Education pages share one front end" '[ "$(ls services/education-web/*.js | wc -l | tr -d " ")" = "1" ] && grep -q "data-policy=\"masters\"" services/education-web/masters.html && grep -q "data-policy=\"job\"" services/education-web/job.html'
+
   # The wallet's trust screen renders these. A trusted entity whose logo 404s
   # shows a placeholder, which reads as a half-configured issuer on a demo.
-  check "the wallet trust logos are served" 'for l in national-identity-authority age-check; do curl -sf --max-time 8 -o /dev/null "$BASE/assets/logos/$l.png" || exit 1; done'
+  check "the wallet trust logos are served" 'for l in national-identity-authority age-check farmer-registry land-registry gramin-bank state-school-board polytechnic-college state-university employer; do curl -sf --max-time 8 -o /dev/null "$BASE/assets/logos/$l.png" || exit 1; done'
   gone "no unlisted-issuer credential in the directory" 'curl -s --max-time 8 $BASE/.well-known/openid-credential-issuer | grep -qi unlisted'
 else
   skip "running-stack checks" "stack not up at $BASE — cd deploy && docker compose up -d"
@@ -145,7 +220,12 @@ check "the verifier enforces it, not just loads it" 'grep -q "algPolicy.check(st
 # already run on a presentation we do not accept. Compared by line number, which
 # is crude but readable — the previous attempt nested python inside an eval'd
 # single-quoted string and was wrong in a way that took a run to notice.
-check "it is checked before the domain decision" '[ "$(grep -n "algPolicy.check" services/verifier/src/server.mjs | head -1 | cut -d: -f1)" -lt "$(grep -n "decideFarmCredit({" services/verifier/src/server.mjs | head -1 | cut -d: -f1)" ]'
+# Iteration 03 moved the domain decision behind `useCase.decide(...)`, so this
+# used to compare against `decideFarmCredit({` — which is now a REFERENCE in the
+# use-case map near the top of the file, not the call site. It sat above the
+# algorithm check and the assertion silently inverted. Anchored to the call now,
+# which is the thing the ordering is actually about.
+check "it is checked before the domain decision" '[ "$(grep -n "algPolicy.check" services/verifier/src/server.mjs | head -1 | cut -d: -f1)" -lt "$(grep -n "useCase.decide(" services/verifier/src/server.mjs | head -1 | cut -d: -f1)" ]'
 gone  "no algorithm is silently defaulted in the verifier" 'grep -qE "algs \|\| \[.ES256.\]|alg \|\| .ES256." services/verifier/src/core/algorithms.mjs'
 check "positive and negative algorithm tests exist" '[ -f tests/unit/algorithm-policy.test.mjs ] && [ -f tests/e2e/algorithm-policy.test.mjs ]'
 
@@ -176,17 +256,53 @@ if [ -d "$FORK/.git" ]; then
   # Exact count on purpose: the port is meant to stay narrow, so an unexplained
   # extra commit should show up here rather than in review. Raise it deliberately
   # when the port legitimately grows.
-  # Raised from 4 to 5 deliberately, per the note above. The fifth commit lets an
-  # issuer advertise only the credentials it authored: credential-schema's
-  # /oid4vci-configs is deployment-wide and takes no filter, so with two Agriculture
-  # registries sharing one schema service every issuer advertised all three
-  # published credentials. No configuration could scope it. Recorded as a
-  # compatibility finding with a removal path.
-  check "port branch is 5 commits off v2.1.0 (port, alg, narrowing, issuer display, own credentials)" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "5" ]'
+  # Raised from 4 to 5 deliberately. The fifth commit lets an issuer advertise
+  # only the credentials it authored: credential-schema's /oid4vci-configs is
+  # deployment-wide and takes no filter, so with two Agriculture registries
+  # sharing one schema service every issuer advertised all three published
+  # credentials. No configuration could scope it.
+  #
+  # Raised from 5 to 7 for Anand's Education review. The sixth closes the hole
+  # that fifth one left: it narrowed advertised METADATA only, so the credential
+  # endpoint went on issuing any published type and an institution could be made
+  # to sign another institution's credential. It also refuses a disclosure the
+  # request did not ask for, rather than dropping it downstream. The seventh
+  # fixes the wiring that made the second of those inert on the keyed vp_token
+  # path — see the commit, which explains why the unit tests missed it.
+  check "port branch is 7 commits off v2.1.0 (port, alg, narrowing, issuer display, own credentials, own issuance + disclosure, wiring)" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "7" ]'
   # The tag compose asks for, whatever it currently is: reading it from compose
   # rather than repeating it here is what stops this check drifting into
   # asserting a build nothing uses.
   check "the image compose pins is actually built" 'docker images -q "$(python3 -c "import re,sys; print(re.search(r\"sunbird-rc-oid4vc-service:v2\\.1\\.0-authcode\\.[0-9a-f]+\", open(\"deploy/docker-compose.yml\").read()).group(0))")" | grep -q .'
+  # The two guarantees the Education review sent back, asserted on the RUNNING
+  # containers rather than on the source: both are single flags, and a flag that
+  # is right in the compose file and unset in the container is exactly the
+  # failure this catches.
+  check "an issuer is restricted to its own credential type" 'for c in school college university; do docker compose -f deploy/docker-compose.yml exec -T "oid4vc-$c" printenv ADVERTISE_OWN_CREDENTIALS_ONLY 2>/dev/null | grep -qx true || exit 1; done'
+  check "an unrequested disclosure is refused, not dropped" 'for c in oid4vc-service oid4vc-bank oid4vc-university-vp oid4vc-employer-vp; do docker compose -f deploy/docker-compose.yml exec -T "$c" printenv REJECT_UNREQUESTED_DISCLOSURES 2>/dev/null | grep -qx true || exit 1; done'
+  # Anand's review asked that a reviewer be able to rebuild the pinned image from
+  # shared source. The fork branch cannot be published — its only remote is
+  # upstream Sunbird RC — so the commits travel as patches on this branch, and
+  # these checks are what stop that copy drifting from the image we actually run.
+  check "the oid4vc patch series is committed" '[ "$(ls patches/oid4vc-service/000*.patch 2>/dev/null | wc -l | tr -d " ")" = "7" ]'
+  check "the patch series has apply-and-build instructions" 'grep -q "docker build --platform linux/amd64" patches/oid4vc-service/README.md && grep -q "^git am " patches/oid4vc-service/README.md'
+  # The tag compose pins must BE the last patch's commit, not merely look like a
+  # sha: a patch series that stops one commit short of the running image is the
+  # exact failure this is here to catch, and nothing else would notice it.
+  check "the last patch is the commit the pinned image names" 'python3 -c "
+import glob, re, sys
+last = sorted(glob.glob(\"patches/oid4vc-service/000*.patch\"))[-1]
+sha = None
+for line in open(last, encoding=\"utf-8\", errors=\"replace\"):
+    if line.startswith(\"From \"):
+        sha = line.split()[1]
+        break
+pinned = re.search(r\"v2\.1\.0-authcode\.([0-9a-f]+)\", open(\"deploy/docker-compose.yml\").read()).group(1)
+sys.exit(0 if sha and sha.startswith(pinned) else 1)"'
+  check "the patch series records the shared upstream base" 'grep -q "2ade66c24afc2d5da7d05121e9cbbd082ba83cd1" patches/oid4vc-service/README.md'
+  # Committed patches are source, and source is where a credential gets pasted by
+  # accident. The repo-wide secret backstop does not know this directory exists.
+  gone "no private key or credential value in the patches" 'grep -rqE "BEGIN [A-Z ]*PRIVATE KEY|(password|secret|api[_-]?key)[\"'"'"' ]*[:=][\"'"'"' ]*[A-Za-z0-9+/]{12,}" patches/oid4vc-service/'
   check "the ported build is pinned by source commit in its tag" 'grep -qE "sunbird-rc-oid4vc-service:v2.1.0-authcode\.[0-9a-f]{7,}" deploy/docker-compose.yml'
 else
   skip "fork checks" "no checkout at $FORK — set SUNBIRD_RC_CORE_PATH"
@@ -237,10 +353,14 @@ C="$W/apps/wallet/src/constants.ts"
 # Env first, deploy/.env second — the same override the e2e suite takes, so this
 # can be pointed at the deployment the APK was actually built for rather than
 # only at whatever stack this checkout last bootstrapped.
+# Each falls back INDEPENDENTLY. The earlier `[ -z "$VDID$PURL" ]` meant setting
+# only PUBLIC_URL suppressed the fallback for both, so the DID check failed with
+# "the wallet pins THIS deployment's verifier DID" when the real cause was an
+# unset variable — a failure message pointing at the wrong thing entirely.
 VDID="${VERIFIER_DID:-}"; PURL="${PUBLIC_URL:-}"
-if [ -z "$VDID$PURL" ] && [ -f deploy/.env ]; then
-  VDID="$(grep '^VERIFIER_DID=' deploy/.env | cut -d= -f2-)"
-  PURL="$(grep '^PUBLIC_URL=' deploy/.env | cut -d= -f2-)"
+if [ -f deploy/.env ]; then
+  [ -n "$VDID" ] || VDID="$(grep '^VERIFIER_DID=' deploy/.env | cut -d= -f2-)"
+  [ -n "$PURL" ] || PURL="$(grep '^PUBLIC_URL=' deploy/.env | cut -d= -f2-)"
 fi
 if [ -n "$PURL" ]; then
   # The host the wallet was built for, taken from the logo URLs, which only this
@@ -268,11 +388,19 @@ if [ -d "$WFORK/.git" ]; then
   # terminates verify.sh and every later check is silently skipped. Ask instead
   # whether the filtered difference is empty.
   ADAPTED="NOTICE|SUNBIRD-CHANGES\.md|apps/wallet/(app\.config\.js|base\.app\.config\.js|eas\.json)"
+  # The tip is READ FROM scripts/vendor-wallet.sh, which is the one place it is
+  # pinned. It used to be written out again here, so advancing the fork meant
+  # updating the same constant in two files — and the second one was missed: the
+  # Education trust entries were vendored and committed, the fork was committed,
+  # and this check still compared against the previous tip and reported drift that
+  # had already been closed.
+  WTIP="$(grep -oE '^TIP="[0-9a-f]+"' scripts/vendor-wallet.sh | head -1 | tr -d 'TIP="')"
+  check "the pinned wallet tip exists in the fork" 'git -C "$WFORK" cat-file -e "${WTIP}^{commit}"'
   # ls-tree --format rather than awk: an awk program written inside a string that
   # check() later evals loses its \$3 to the shell, and awk then fails with a
   # syntax error the check reports as drift that does not exist.
   check "the vendored copy matches the fork, apart from the recorded adaptation" \
-    '[ -z "$(diff <(git -C "$WFORK" ls-tree -r --format="%(objectname) %(path)" 6dc0a3c | sort) <(git ls-tree -r --format="%(objectname) %(path)" "HEAD:$W" | sort) | grep -E "^[<>]" | grep -vE "($ADAPTED)$")" ]'
+    '[ -z "$(diff <(git -C "$WFORK" ls-tree -r --format="%(objectname) %(path)" "$WTIP" | sort) <(git ls-tree -r --format="%(objectname) %(path)" "HEAD:$W" | sort) | grep -E "^[<>]" | grep -vE "($ADAPTED)$")" ]'
 else
   skip "wallet drift vs the fork" "no checkout at $WFORK - set WALLET_FORK_PATH"
 fi

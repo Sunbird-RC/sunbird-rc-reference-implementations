@@ -18,6 +18,12 @@ services:
       - ./nginx/routes-denied.conf:/etc/nginx/routes-denied.conf:ro
       - ../services/verifier-web:/usr/share/nginx/html/verifier:ro
       - ../services/bank-web:/usr/share/nginx/html/bank:ro
+      # Iteration 03's two portals. This list REPLACES the base file's rather
+      # than adding to it — Compose merges service keys but not sequences — so a
+      # mount added to docker-compose.yml and not here is silently absent over
+      # HTTPS. That is exactly how /admissions/ and /employer/ 404ed on the demo
+      # host while working locally on plain HTTP.
+      - ../services/education-web:/usr/share/nginx/html/education:ro
       - ../services/web-assets:/usr/share/nginx/html/assets:ro
       # Read-only: nginx serves the certificate, certbot owns it.
       - /etc/letsencrypt:/etc/letsencrypt:ro

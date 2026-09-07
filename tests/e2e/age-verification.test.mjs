@@ -252,23 +252,46 @@ describe('privacy and minimum disclosure', () => {
     assert.equal(/dateOfBirth|1998-04-02/.test(serialised), false, 'no date of birth anywhere in the response');
   });
 
-  test('over-disclosure by the wallet never reaches the decision or the page', async () => {
+  test('over-disclosure by the wallet is refused outright', async () => {
     guard();
-    // A wallet that ignores the request and sends everything. Upstream DCQL is
-    // satisfied (the requested claim IS there), so this is the verifier's own
-    // data-minimisation guard doing the work.
+    // A wallet that ignores the request and sends everything.
+    //
+    // This used to be DECIDED. Upstream DCQL returned only the matched claims,
+    // so the surplus was invisible to the verifier and the decision still stood
+    // on the requested claim alone — contained, and asserted as such here. What
+    // it did not cover is that the values had still left the wallet and reached
+    // the protocol service, so "the verifier never receives it" was true of the
+    // relying party and not of the boundary.
+    //
+    // The DCQL matcher now compares the disclosed claim names against the query
+    // and refuses the credential. Age gains that with Iteration 03's fix to the
+    // shared oid4vc-service, which is why an Iteration 01 test changed: the
+    // guarantee got stronger, not different. Nothing in the Age demonstration
+    // shows this path — it needs a wallet that deliberately over-discloses, and
+    // only this suite has one.
     const { holder, credential } = await walletWithCredential(ADULT);
-    const { result } = await present({
+    const { result, submission } = await present({
       credential,
       holder,
       disclose: ['ageOver18', 'ageOver21', 'name', 'dateOfBirth'],
     });
-    // DCQL returns only matched claims, so the extra disclosures are invisible
-    // to the verifier and the decision still stands on the requested claim.
-    // What must NOT happen is the extra data reaching the decision or the page.
+    assert.equal(submission.status, 403, 'the stack must refuse the presentation outright');
+    assert.equal(result.state, 'rejected');
+    assert.equal(result.decision, undefined, 'and reach no decision');
+    assert.equal(result.disclosed, undefined, 'and disclose nothing to the page');
+    // The refusal names the claims that were not asked for, and none of their
+    // values — the whole point being not to disclose what it just refused.
+    assert.equal(/Meera|1998-04-02/.test(JSON.stringify(result)), false);
+  });
+
+  test('and the same wallet is accepted when it discloses only what was asked', async () => {
+    guard();
+    // The control. Without it the refusal above could come from anything about
+    // this fixture rather than from the surplus disclosure.
+    const { holder, credential } = await walletWithCredential(ADULT);
+    const { result } = await present({ credential, holder, disclose: ['ageOver18'] });
     assert.equal(result.state, 'decided');
     assert.deepEqual(Object.keys(result.disclosed), ['ageOver18']);
-    assert.equal(/dateOfBirth|Meera/.test(JSON.stringify(result)), false);
   });
 });
 

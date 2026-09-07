@@ -239,6 +239,32 @@ export const trustedDidEntities = [
     url: 'https://135.235.192.9.sslip.io/bank/',
     demo: true,
   },
+  // The two Education relying parties (Iteration 03), and they must sit here —
+  // ABOVE the host-scoped fallback below and beside the bank, for the same
+  // reason the bank's entry does. `packages/sdk/src/trust/handlers/did.ts`
+  // resolves with `trustedDidEntities.find((e) => baseDid.startsWith(e.did))`,
+  // a PREFIX match taking the first hit, so the host-scoped entry is a prefix of
+  // every did:web minted on this host and would claim both of these.
+  //
+  // Education is the first iteration where a holder presents to two different
+  // relying parties in one sitting, so a wrong name here is visible in the demo
+  // itself: the employer's consent screen would read "University Admissions".
+  {
+    entityId: 'did:web:135.235.192.9.sslip.io:4f877f7a-512a-420f-80ba-1b919b976ed9',
+    did: 'did:web:135.235.192.9.sslip.io:4f877f7a-512a-420f-80ba-1b919b976ed9',
+    logoUri: 'https://135.235.192.9.sslip.io/assets/logos/state-university.png',
+    name: 'University Admissions',
+    url: 'https://135.235.192.9.sslip.io/admissions/',
+    demo: true,
+  },
+  {
+    entityId: 'did:web:135.235.192.9.sslip.io:78d557eb-607b-4e67-ab84-50c76ac33093',
+    did: 'did:web:135.235.192.9.sslip.io:78d557eb-607b-4e67-ab84-50c76ac33093',
+    logoUri: 'https://135.235.192.9.sslip.io/assets/logos/employer.png',
+    name: 'Employer',
+    url: 'https://135.235.192.9.sslip.io/employer/',
+    demo: true,
+  },
   {
     entityId: 'did:web:135.235.192.9.sslip.io',
     did: 'did:web:135.235.192.9.sslip.io',
@@ -322,6 +348,41 @@ export const trustedOpenId4VciIssuerEntities = [
     logoUri: 'https://135.235.192.9.sslip.io/assets/logos/land-registry.png',
     name: 'Land Registry',
     url: 'https://135.235.192.9.sslip.io/land',
+    demo: true,
+  },
+  // Sunbird RC Education showcase — the three institutions a learner's wallet
+  // lists. Before the host-scoped Age entry below, for exactly the reason the two
+  // Agriculture registries are: matching is `issuer.startsWith(e.issuer)` resolved
+  // by the FIRST hit, so a host-scoped entry above these would claim all three and
+  // a learner collecting a degree would be told the National Identity Authority
+  // issued it.
+  //
+  // Three separate credential issuers, three separate oid4vc-service instances,
+  // three separate signing DIDs — the separation the correlation check depends on.
+  // Path-scoped, so the entries survive a re-bootstrap: the paths are stable, the
+  // minted DIDs are not.
+  {
+    entityId: 'https://135.235.192.9.sslip.io/school',
+    issuer: 'https://135.235.192.9.sslip.io/school',
+    logoUri: 'https://135.235.192.9.sslip.io/assets/logos/state-school-board.png',
+    name: 'State School Board',
+    url: 'https://135.235.192.9.sslip.io/school',
+    demo: true,
+  },
+  {
+    entityId: 'https://135.235.192.9.sslip.io/college',
+    issuer: 'https://135.235.192.9.sslip.io/college',
+    logoUri: 'https://135.235.192.9.sslip.io/assets/logos/polytechnic-college.png',
+    name: 'Regional Polytechnic College',
+    url: 'https://135.235.192.9.sslip.io/college',
+    demo: true,
+  },
+  {
+    entityId: 'https://135.235.192.9.sslip.io/university',
+    issuer: 'https://135.235.192.9.sslip.io/university',
+    logoUri: 'https://135.235.192.9.sslip.io/assets/logos/state-university.png',
+    name: 'State University',
+    url: 'https://135.235.192.9.sslip.io/university',
     demo: true,
   },
   // Sunbird RC Age showcase — the Age credential issuer. Its issuer metadata is

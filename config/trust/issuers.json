@@ -19,7 +19,13 @@
     "the same as being trusted FOR A SLOT: without roles, the Farmer Registry's",
     "credential could arrive in the Agriculture request's land slot and pass, since",
     "its signature is valid and its issuer is allowlisted. An issuer with no roles",
-    "is unconstrained, which is how the single-credential Age request works."
+    "is unconstrained, which is how the single-credential Age request works.",
+    "",
+    "Iteration 03 is where that matters most: SIX issuers are now allowlisted, and",
+    "a learner legitimately holds three Education credentials at once. Without a",
+    "role per institution, a College diploma would satisfy the University slot —",
+    "same holder, valid signature, trusted issuer — and a 70% diploma would be",
+    "accepted as a 70% degree. The three roles below are what make that refusable."
   ],
   "allowedAlgorithms": ["ES256"],
   "issuers": [
@@ -39,6 +45,24 @@
       "did": "${LAND_ISSUER_DID}",
       "credentials": ["Land Ownership Credential"],
       "roles": ["land"]
+    },
+    {
+      "name": "State School Board",
+      "did": "${SCHOOL_ISSUER_DID}",
+      "credentials": ["School Record Credential"],
+      "roles": ["school"]
+    },
+    {
+      "name": "Regional Polytechnic College",
+      "did": "${COLLEGE_ISSUER_DID}",
+      "credentials": ["College Record Credential"],
+      "roles": ["college"]
+    },
+    {
+      "name": "State University",
+      "did": "${UNIVERSITY_ISSUER_DID}",
+      "credentials": ["University Record Credential"],
+      "roles": ["university"]
     }
   ]
 }

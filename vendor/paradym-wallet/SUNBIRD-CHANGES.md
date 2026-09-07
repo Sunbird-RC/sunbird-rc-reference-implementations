@@ -2,7 +2,7 @@
 
 This directory is a copy of [`animo/paradym-wallet`](https://github.com/animo/paradym-wallet)
 at commit `2d68168`, taken from the fork `pallakartheekreddy/paradym-wallet`
-(branch `v1.0.3`), plus eight commits of showcase changes. Apache-2.0; see
+(branch `v1.0.3`), plus nine commits of showcase changes. Apache-2.0; see
 [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 It is here because the showcase depends on changes inside the wallet, and a
@@ -43,7 +43,8 @@ out those five paths, and fails if anything is left over.
 | 6 | `7b5cae9` feat(wallet): recognise the Sunbird RC Age showcase issuer and verifier | Kartheek Palla | 27 Aug 2026 | `apps/wallet/src/constants.ts`. The showcase's issuer and age-restricted service as trusted entities, both `demo: true` |
 | 7 | `cbe9407` feat(openid4vc): tell the verifier when the holder declines | Kartheek Palla | 27 Aug 2026 | `packages/sdk/src/openid4vc/func/declineCredentialRequest.ts`. Declining was purely local, so a verifier could not tell a refusal from a request the holder ignored. Now posts an OpenID4VP Authorization Error Response (`error=access_denied`) for `direct_post` |
 | 8 | `6dc0a3c` feat(showcase): trust entries for the Agriculture registries and the bank | Kartheek Palla | 31 Aug 2026 | `apps/wallet/src/constants.ts`. Two OID4VCI issuer entities (Farmer Registry, Land Registry), path-scoped so they survive a re-bootstrap, and one trusted DID entity for Gramin Bank, which signs presentation requests with its own DID. Also reorders both lists: they are matched by PREFIX with the first hit winning, so a host-scoped entry is a prefix of every DID and issuer URL on that host — the fallback was named "Age Check" and would have claimed the bank and both registries. It now names the deployment rather than a party |
-| 9 | *(this repository)* remove Animo's release identity | Kartheek Palla | 27 Aug 2026 | Not from the fork — made when the code was vendored, so it sits **after** the tree-hash proof above rather than inside it. See below |
+| 9 | `82b1def` feat(showcase): trust entries for the three Education institutions and two verifiers | Kartheek Palla | 1 Sep 2026 | `apps/wallet/src/constants.ts`. Three OID4VCI issuer entities for the Education institutions, path-scoped so they survive a re-bootstrap, and two trusted DID entities for the relying parties — University Admissions and Employer — pinned to the deployment's minted uuids, because a verifier is identified by a `did:web:<host>:<uuid>` with no path to scope on. All five sit ABOVE the host-scoped fallback: matching is by PREFIX with the first hit winning, so listed below it the fallback claims all five and a learner collecting a degree is told the National Identity Authority issued it. Education is the first iteration where a holder presents to two different relying parties in one sitting, so a wrong name here shows up in the demo itself |
+| 10 | *(this repository)* remove Animo's release identity | Kartheek Palla | 27 Aug 2026 | Not from the fork — made when the code was vendored, so it sits **after** the tree-hash proof above rather than inside it. See below |
 
 **Commits 5 and 7 are upstream-shaped fixes**, not showcase-specific glue. Both are
 worth reporting upstream, and both are recorded with a removal path in
@@ -109,7 +110,7 @@ here resolves a path into it: the build and every check operate on this director
 unconditionally, and only the importer accepts `--source`.
 
 ```bash
-# in the sibling: fetch upstream, then rebase the eight commits onto the new point
+# in the sibling: fetch upstream, then rebase the nine commits onto the new point
 git fetch upstream && git rebase upstream/main
 
 # in this repository, on a branch:

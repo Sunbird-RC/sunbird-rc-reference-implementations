@@ -37,16 +37,38 @@ Treat approved Product, Design, and iteration acceptance criteria as controlled 
 4. Translate the iteration charter into a small execution plan and acceptance checklist.
 5. Identify genuine blockers or material decisions; do not ask about normal implementation details.
 
-For Iteration 02, read these branch-specific inputs before any implementation:
+## Iteration 03 — Education Handshake
+
+When the active branch is `iteration/education-03-employment`, read these inputs
+before planning or coding:
+
+1. `iterations/03-education/START.md`
+2. `iterations/03-education/PRODUCT.md`
+3. `iterations/03-education/REQUIREMENTS.md`
+4. `iterations/03-education/DESIGN.md`
+5. `iterations/03-education/DEMO.md`
+
+Do not begin Iteration 03 implementation until Iteration 02 is accepted and
+merged, this branch is synchronized with the resulting `main`, and the Iteration
+03 Product and Design inputs are approved. Keep all questions, decisions,
+implementation, review feedback, and evidence on the same iteration branch.
+
+**Wallet, programme-wide.** Use the established customized Paradym-based wallet.
+Inji is outside the scope of the demo programme — see
+[`docs/reviews/DECISION-03-wallet-scope.md`](docs/reviews/DECISION-03-wallet-scope.md) —
+and must not be introduced as an Iteration 03 requirement, a deferred item, or a
+risk assigned to Education.
+
+### Iteration 02 — Agriculture (complete)
+
+Accepted and merged into `main` on 31 August 2026
+([`docs/reviews/ITERATION-02-SIGNOFF.md`](docs/reviews/ITERATION-02-SIGNOFF.md)).
+Its inputs remain the reference for anything that touches Agriculture code:
 
 1. [`iterations/02-agriculture/PRODUCT.md`](iterations/02-agriculture/PRODUCT.md)
 2. [`iterations/02-agriculture/REQUIREMENTS.md`](iterations/02-agriculture/REQUIREMENTS.md)
 3. [`iterations/02-agriculture/DESIGN.md`](iterations/02-agriculture/DESIGN.md)
 4. [`iterations/02-agriculture/DEMO.md`](iterations/02-agriculture/DEMO.md)
-
-Use the established customized Paradym-based wallet. Inji interoperability is
-outside the scope of the current demo programme and must not be introduced as an
-Iteration 03 requirement.
 
 ## Engineering Rules
 
