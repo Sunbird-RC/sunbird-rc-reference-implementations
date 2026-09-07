@@ -1,6 +1,7 @@
 {
   "name": "@sunbird-rc-age/verifier",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "description": "Reusable verifier service: OID4VP request/response handling, issuer trust allowlist, disclosure policy, and domain decisions",

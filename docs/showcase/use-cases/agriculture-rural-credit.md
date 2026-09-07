@@ -2,7 +2,7 @@
 
 > **Status: completed, accepted and merged to `main` in Iteration 02.** The
 > two-credential rural-credit journey uses synthetic farmer and land data. See the
-> [committed evidence](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/main/docs/evidence/02-agriculture).
+> [committed evidence](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/tree/main/docs/evidence/02-agriculture).
 
 ## The problem
 
@@ -178,7 +178,7 @@ The committed demonstration covers Farmer and Land credential issuance, wallet
 persistence, bank QR verification, minimum disclosure, loan calculation,
 ineligible, mismatched-record and refusal outcomes.
 
-[Watch the committed Agriculture demonstration](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/blob/main/docs/evidence/02-agriculture/Agriculture-Rural-Credit-Showcase-31Aug.mp4)
+[Watch the committed Agriculture demonstration](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/blob/main/docs/evidence/02-agriculture/Agriculture-Rural-Credit-Showcase-31Aug.mp4)
 
 ## Experience demonstrated
 
@@ -243,9 +243,9 @@ The application distinguishes:
 ## Explore the implementation
 
 - [Sunbird RC documentation](https://docs.sunbirdrc.dev/)
-- [Reference implementation repository](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations)
-- [Agriculture implementation](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/main/iterations/02-agriculture)
-- [Agriculture demonstration evidence](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/main/docs/evidence/02-agriculture)
+- [Reference implementation repository](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations)
+- [Agriculture implementation](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/tree/main/iterations/02-agriculture)
+- [Agriculture demonstration evidence](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/tree/main/docs/evidence/02-agriculture)
 
 > Add the public customer demonstration video and live-demo link here when they
 > are ready for external access.

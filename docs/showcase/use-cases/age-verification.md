@@ -2,7 +2,7 @@
 
 > **Status: completed, accepted and merged to `main` in Iteration 01.** The
 > issuance, cross-device and same-device journeys have been validated with synthetic data. See the
-> [committed evidence](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/main/docs/evidence/01-age).
+> [committed evidence](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/tree/main/docs/evidence/01-age).
 
 ## The problem
 
@@ -152,7 +152,7 @@ The committed validation evidence covers direct wallet issuance, web QR and
 same-device deep-link verification, consent, minimum disclosure, and approved
 and denied outcomes.
 
-[Review the Age evidence and test results](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/main/docs/evidence/01-age)
+[Review the Age evidence and test results](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/tree/main/docs/evidence/01-age)
 
 ## Experience demonstrated
 
@@ -204,9 +204,9 @@ and denied outcomes.
 ## Explore the implementation
 
 - [Sunbird RC documentation](https://docs.sunbirdrc.dev/)
-- [Reference implementation repository](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations)
-- [Age implementation](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/main/iterations/01-age)
-- [Age demonstration evidence](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/main/docs/evidence/01-age)
+- [Reference implementation repository](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations)
+- [Age implementation](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/tree/main/iterations/01-age)
+- [Age demonstration evidence](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/tree/main/docs/evidence/01-age)
 
 > Add the public customer demonstration video and live-demo link here when they
 > are ready for external access.
