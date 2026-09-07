@@ -4,8 +4,30 @@ Verbatim output, kept so a reviewer can see results without running anything, an
 so a later run can be diffed against these. Every file carries its own header with
 the branch, commit, environment, image and fork tip, Node version and timestamp.
 
-All four were captured on a **clean working tree** at the commit named in their
-headers.
+Every file was captured on a **clean working tree** at the commit named in its
+header.
+
+## The accepted results — the public deployment on `c8beec27`
+
+These are the captures the iteration rests on. The deployment at
+`https://135.235.192.9.sslip.io` runs the corrected image on all nine `oid4vc-*`
+services, over its real Let's Encrypt certificate.
+
+| File | Command | Result |
+|---|---|---|
+| [`test-unit-deployment.txt`](test-unit-deployment.txt) | `npm run test:unit` | **175 passed, 0 failed** |
+| [`test-e2e-deployment.txt`](test-e2e-deployment.txt) | `npm run test:e2e` | **150 passed, 0 failed** |
+| [`verify-deployment.txt`](verify-deployment.txt) | `./scripts/verify.sh --no-tests` | **116 passed, 0 failed, 1 skipped** |
+| [`test-fork.txt`](test-fork.txt) | `npx jest` in the fork's `oid4vc-service` | **154 passed, 0 failed** |
+
+The Age and Agriculture regression is **inside** the 150-test end-to-end run —
+`regression-01-02-deployment.txt` does not exist because it would add nothing. The
+arithmetic and the per-suite evidence are below.
+
+## The earlier local-stack captures, kept for the audit trail
+
+Same code, run before the deployment could be moved. **Not** the accepted
+environment — see the SUPERSEDED note further down for why they exist.
 
 | File | Command | Environment | Result |
 |---|---|---|---|
@@ -13,15 +35,6 @@ headers.
 | [`test-e2e.txt`](test-e2e.txt) | `npm run test:e2e` | local stack, HTTP | **150 passed, 0 failed** |
 | [`regression-01-02.txt`](regression-01-02.txt) | Iteration 01 and 02 suites only | local stack, HTTP | **98 passed, 0 failed** |
 | [`verify.txt`](verify.txt) | `./scripts/verify.sh --no-tests` | local stack, HTTP | **109 passed, 0 failed, 2 skipped** |
-| [`test-fork.txt`](test-fork.txt) | `npx jest` in the fork's `oid4vc-service` | checkout only | **154 passed, 0 failed** |
-
-Against the **public deployment**, after it was moved to `c8beec27`:
-
-| File | Command | Result |
-|---|---|---|
-| [`test-unit-deployment.txt`](test-unit-deployment.txt) | `npm run test:unit` | **175 passed, 0 failed** |
-| [`test-e2e-deployment.txt`](test-e2e-deployment.txt) | `npm run test:e2e` | **150 passed, 0 failed** |
-| [`verify-deployment.txt`](verify-deployment.txt) | `./scripts/verify.sh --no-tests` | **116 passed, 0 failed, 1 skipped** |
 
 `verify-deployment.txt` is seven checks better than the local capture, and one of
 them matters: **the wallet trust-pinning check runs only when the wallet's built
@@ -116,7 +129,7 @@ Verified there, not inferred:
 So the local stack is **not** proposed as the accepted environment. The public
 deployment is, and it is the one these results come from.
 
-### The one thing that made this harder than it should be
+### The one thing that made this harder than it should be (now fixed)
 
 Bumping the tag in `deploy/docker-compose.yml` did **not** move the deployment.
 The host's generated `deploy/.env` carried its own
@@ -142,18 +155,26 @@ and its line count checked before and after.
   session was that, not an outage. Use `ServerAliveInterval`; an earlier capture
   lost its tunnel mid-run and produced forty spurious `fetch failed` errors.
 
-## About the earlier local-stack captures
+## SUPERSEDED — the local-stack captures, and why they exist
 
-The 1 September captures ran against the demo deployment over HTTPS. These ran
-against the local stack over HTTP, because **ssh to the demo host is still not
-answering** — port 22 times out while 443 continues to serve, unchanged since the
-first capture. The deployment therefore still runs the 1 September image and does
-not yet carry the three fixes below; redeploying it needs the host back.
+> **This section is history, kept for the audit trail. Every statement in it about
+> the deployment has since been overtaken.** The public deployment runs
+> `c8beec27`, the corrected image, and the accepted results are the
+> `*-deployment.txt` captures above. `test-e2e.txt`, `regression-01-02.txt` and
+> `verify.txt` are the earlier local-stack runs of the same code.
 
-What that costs, stated rather than glossed: these runs do not exercise the real
-Let's Encrypt certificate or the public origin. Everything they do exercise is
-the same code, the same images and the same twenty containers, and the two
-guarantees the review was about are protocol behaviour rather than transport.
+When the fixes first landed, ssh to the demo host was not answering — port 22
+times out while 443 continues to serve — so the deployment could not be moved off
+the 1 September image and the suites were captured against the local stack over
+HTTP instead. That was recorded at the time as a caveat: the runs did not exercise
+the real Let's Encrypt certificate or the public origin, though they did exercise
+the same code, images and twenty containers.
+
+**Both parts of that caveat are now closed.** ssh came back, the deployment was
+moved to `c8beec27`, and the suites were re-run and re-captured against it — see
+*The public deployment now runs the corrected image* above. The local-stack files
+remain committed because they are the runs that were made, not because they are
+the accepted environment.
 
 What the re-capture proves that the first one could not:
 
@@ -170,7 +191,11 @@ case) and its over-disclosure test now asserts a refusal instead of a filtered
 decision. Iteration 01 got stronger from an Iteration 03 fix to the shared
 service.
 
-## The two skips, and how verify.txt was captured
+## The two skips in the LOCAL `verify.txt`
+
+Also history: the accepted capture is `verify-deployment.txt`, which has **one**
+skip, `--no-tests`, because its trust-pinning check runs and passes against the
+deployment. This describes the earlier local `verify.txt`.
 
 `verify.sh` is captured with its own `--no-tests` flag, which is one of the two
 skips. The other is **wallet trust pinning**: the vendored wallet is built for the
@@ -184,7 +209,10 @@ Writing it in place makes check 1, *working tree clean*, fail on the file being
 written — which is how the first attempt at this capture reported one failure that
 was an artefact of capturing it.
 
-## Why `verify.sh` was captured with `--no-tests`
+## Why the 1 September `verify.sh` was captured with `--no-tests`
+
+Also history, from the first evidence round, and left in place because it explains
+a skip a reader will otherwise wonder about.
 
 `verify.sh` normally runs the unit and end-to-end suites itself. Here it was run
 with its own `--no-tests` flag, which is the one skip in that file.
