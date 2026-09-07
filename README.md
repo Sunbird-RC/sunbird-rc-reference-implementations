@@ -8,7 +8,7 @@ The project demonstrates the complete verifiable credential lifecycle:
 
 **Issue → Store → Request → Consent → Present → Verify → Decide**
 
-The planned use cases progressively showcase:
+The three completed reference implementations progressively showcase:
 
 1. **Age verification** — selective disclosure, holder consent, and data minimisation.
 2. **Agriculture / rural credit** — multiple issuers, multiple credentials, correlation, and business rules.
@@ -20,12 +20,16 @@ Across these use cases, the showcase uses the established customized open-source
 
 - **PRODUCT:** approved and baselined in `main`.
 - **DESIGN:** approved and baselined.
-- **IMPLEMENTATION:** Iteration 01 (Age verification) is accepted and merged to
-  `main` — Anand's sign-off is in
-  [docs/reviews/ITERATION-01-SIGNOFF.md](docs/reviews/ITERATION-01-SIGNOFF.md).
-  Iteration 02 (Agriculture / rural credit) is in progress on
-  `iteration/agriculture-02-rural-credit`, and nothing reaches `main` before its
-  own sign-off.
+- **ITERATION 01 — AGE VERIFICATION:** accepted and merged to `main`; see the
+  [formal sign-off](docs/reviews/ITERATION-01-SIGNOFF.md) and
+  [evidence](docs/evidence/01-age/README.md).
+- **ITERATION 02 — AGRICULTURE / RURAL CREDIT:** accepted and merged to `main`;
+  see the [formal sign-off](docs/reviews/ITERATION-02-SIGNOFF.md) and
+  [evidence](docs/evidence/02-agriculture/README.md).
+- **ITERATION 03 — EDUCATION / EMPLOYMENT:** accepted and merged to `main` in
+  [`7f18e75`](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/commit/7f18e756d7d82bfd5e73dad1dbe3947fa0e89f3f);
+  every requirement is **MET** in the
+  [line-by-line acceptance record](docs/evidence/03-education/ACCEPTANCE.md).
 
 ## Running the Age Verification showcase
 
@@ -39,8 +43,8 @@ cd deploy && cp env.example .env && docker compose up -d
 ../scripts/seed-age-citizens.sh  # deterministic synthetic citizens
 cd .. && npm install
 
-npm run test:unit                # 158 tests, no stack needed
-npm run test:e2e                 # 121 tests against the running stack (Age + Agriculture + Education)
+npm run test:unit                # accepted baseline: 175 passed, no stack needed
+npm run test:e2e                 # accepted baseline: 150 passed across all three iterations
 ./scripts/demo.sh                # headless walkthrough: positive and negative cases
 ./scripts/verify.sh              # environment and regression checks
 
@@ -125,7 +129,7 @@ than replacing them.
 cd deploy && docker compose up -d          # brings up the three institutions and the two VP signers
 ../scripts/bootstrap.sh                    # mints five more DIDs and publishes three more schemas
 ../scripts/seed-education.sh               # ten learners, every decision branch
-cd .. && npm run test:e2e                  # includes 24 Education tests
+cd .. && npm run test:e2e                  # accepted baseline includes 52 Education tests
 ```
 
 Then open **either** portal and press Start:
@@ -217,6 +221,7 @@ home screen during an Education demo.
 - [Iteration 03 — Implementation Plan and Progress](iterations/03-education/PLAN.md)
 - [Iteration 03 — Implementation Log](iterations/03-education/IMPLEMENTATION.md)
 - [Iteration 03 — Recording the demo, end to end](iterations/03-education/IMPLEMENTATION.md#recording-the-demo-end-to-end)
+- [Iteration 03 — Acceptance and evidence](docs/evidence/03-education/ACCEPTANCE.md)
 
 These documents are the authoritative project baseline. Architecture and implementation must remain aligned with them.
 

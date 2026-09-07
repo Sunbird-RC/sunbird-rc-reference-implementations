@@ -1,8 +1,8 @@
 # Privacy-preserving age verification
 
-> **Status: completed reference implementation.** The issuance, cross-device and
-> same-device journeys have been validated with synthetic data. See the
-> [committed evidence](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/docs/sunbird-rc-showcase-v1/docs/evidence/01-age).
+> **Status: completed, accepted and merged to `main` in Iteration 01.** The
+> issuance, cross-device and same-device journeys have been validated with synthetic data. See the
+> [committed evidence](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/main/docs/evidence/01-age).
 
 ## The problem
 
@@ -152,7 +152,7 @@ The committed validation evidence covers direct wallet issuance, web QR and
 same-device deep-link verification, consent, minimum disclosure, and approved
 and denied outcomes.
 
-[Review the Age evidence and test results](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/docs/sunbird-rc-showcase-v1/docs/evidence/01-age)
+[Review the Age evidence and test results](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/main/docs/evidence/01-age)
 
 ## Experience demonstrated
 

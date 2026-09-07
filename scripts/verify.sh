@@ -280,6 +280,29 @@ if [ -d "$FORK/.git" ]; then
   # failure this catches.
   check "an issuer is restricted to its own credential type" 'for c in school college university; do docker compose -f deploy/docker-compose.yml exec -T "oid4vc-$c" printenv ADVERTISE_OWN_CREDENTIALS_ONLY 2>/dev/null | grep -qx true || exit 1; done'
   check "an unrequested disclosure is refused, not dropped" 'for c in oid4vc-service oid4vc-bank oid4vc-university-vp oid4vc-employer-vp; do docker compose -f deploy/docker-compose.yml exec -T "$c" printenv REJECT_UNREQUESTED_DISCLOSURES 2>/dev/null | grep -qx true || exit 1; done'
+  # Anand's review asked that a reviewer be able to rebuild the pinned image from
+  # shared source. The fork branch cannot be published — its only remote is
+  # upstream Sunbird RC — so the commits travel as patches on this branch, and
+  # these checks are what stop that copy drifting from the image we actually run.
+  check "the oid4vc patch series is committed" '[ "$(ls patches/oid4vc-service/000*.patch 2>/dev/null | wc -l | tr -d " ")" = "7" ]'
+  check "the patch series has apply-and-build instructions" 'grep -q "docker build --platform linux/amd64" patches/oid4vc-service/README.md && grep -q "^git am " patches/oid4vc-service/README.md'
+  # The tag compose pins must BE the last patch's commit, not merely look like a
+  # sha: a patch series that stops one commit short of the running image is the
+  # exact failure this is here to catch, and nothing else would notice it.
+  check "the last patch is the commit the pinned image names" 'python3 -c "
+import glob, re, sys
+last = sorted(glob.glob(\"patches/oid4vc-service/000*.patch\"))[-1]
+sha = None
+for line in open(last, encoding=\"utf-8\", errors=\"replace\"):
+    if line.startswith(\"From \"):
+        sha = line.split()[1]
+        break
+pinned = re.search(r\"v2\.1\.0-authcode\.([0-9a-f]+)\", open(\"deploy/docker-compose.yml\").read()).group(1)
+sys.exit(0 if sha and sha.startswith(pinned) else 1)"'
+  check "the patch series records the shared upstream base" 'grep -q "2ade66c24afc2d5da7d05121e9cbbd082ba83cd1" patches/oid4vc-service/README.md'
+  # Committed patches are source, and source is where a credential gets pasted by
+  # accident. The repo-wide secret backstop does not know this directory exists.
+  gone "no private key or credential value in the patches" 'grep -rqE "BEGIN [A-Z ]*PRIVATE KEY|(password|secret|api[_-]?key)[\"'"'"' ]*[:=][\"'"'"' ]*[A-Za-z0-9+/]{12,}" patches/oid4vc-service/'
   check "the ported build is pinned by source commit in its tag" 'grep -qE "sunbird-rc-oid4vc-service:v2.1.0-authcode\.[0-9a-f]{7,}" deploy/docker-compose.yml'
 else
   skip "fork checks" "no checkout at $FORK — set SUNBIRD_RC_CORE_PATH"

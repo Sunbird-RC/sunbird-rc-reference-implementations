@@ -1,5 +1,17 @@
 # Iteration 03 — Education / employment: evidence
 
+> **Functionally accepted by Anand.** All implementation, security,
+> purpose-display, reproducibility and deployment feedback is closed with
+> committed evidence. **Finding 19** — the wallet's same-device deep-link decoding
+> issue — remains a non-blocking wallet backlog item and does not affect the
+> Education journey, which is cross-device QR.
+>
+> Statements from earlier rounds that this work overtook — the fork being
+> unpublished, the image not being rebuildable, and the deployment running the old
+> `9caf3c2b` image — have been removed or marked SUPERSEDED rather than left to
+> mislead. Where a superseded section is kept, it is kept for the audit trail and
+> labelled as such.
+
 Everything needed to review this iteration without running it, and everything
 needed to run it if you want to.
 
@@ -67,10 +79,10 @@ worth checking if three separate authorities asserted it.
 
 | Suite | Result | Where |
 |---|---|---|
-| Unit | **175 passed, 0 failed** (54 in the three Education files) | [`runs/test-unit.txt`](runs/test-unit.txt) |
-| End-to-end, against the local stack | **150 passed, 0 failed** (52 Education) | [`runs/test-e2e.txt`](runs/test-e2e.txt) |
-| `verify.sh --no-tests`, against the local stack | **109 passed, 0 failed, 2 skipped** | [`runs/verify.txt`](runs/verify.txt) |
-| Age + Agriculture regression, same stack | **98 passed, 0 failed** | [`runs/regression-01-02.txt`](runs/regression-01-02.txt) |
+| Unit | **175 passed, 0 failed** (54 in the three Education files) | [`runs/test-unit-deployment.txt`](runs/test-unit-deployment.txt) |
+| End-to-end, against the deployment | **150 passed, 0 failed** (52 Education) | [`runs/test-e2e-deployment.txt`](runs/test-e2e-deployment.txt) |
+| `verify.sh --no-tests`, against the deployment | **116 passed, 0 failed, 1 skipped** | [`runs/verify-deployment.txt`](runs/verify-deployment.txt) |
+| Age + Agriculture regression | **98 passed, 0 failed** — and all 98 again inside the deployment's 150-test run | [`runs/regression-01-02.txt`](runs/regression-01-02.txt) |
 | `sunbird-rc-core` fork jest | **154 passed, 0 failed** | run by `verify.sh` |
 
 ## What the review sent back, and what closed it
@@ -87,7 +99,17 @@ five things. Four are closed here; the fifth is closed in the request and
 | 4 | Reject an unrequested disclosure at the protocol boundary | **closed** — refused, not dropped |
 | 5 | Make the acceptance table and this README accurate | this document and [`ACCEPTANCE.md`](ACCEPTANCE.md) |
 
-Item 3 changes what a holder sees, so it comes with the short replacement segment
+A second round of review on 2 September asked for four more closures. **All four
+are closed.**
+
+| # | Asked for | Status |
+|---|---|---|
+| 1 | Publish the fork commits, or commit reproducible patches with instructions | **closed** — [`patches/oid4vc-service/`](../../../patches/oid4vc-service/), seven patches that reproduce the authored tree exactly |
+| 2 | Let a reviewer rebuild the `c8beec27` image from shared source | **closed** — shared base is the upstream `v2.1.0` tag; exact build recipe and five `verify.sh` checks |
+| 3 | Move the public deployment to the corrected image and re-verify there | **closed** — all nine `oid4vc-*` services on `c8beec27`; unit, end-to-end and `verify.sh` captured against it |
+| 4 | Correct the stale 167 unit / 145 E2E line | **closed** — 175 and 150, recounted from the suites |
+
+The **first** round's item 3 changes what a holder sees, so it comes with the short replacement segment
 Anand asked for: [`Education-Purpose-Followup-02Sep.mp4`](Education-Purpose-Followup-02Sep.mp4),
 39 s, the same screen before and after from real captures, plus the employer's. The 5:32 film is **not**
 re-cut — one review item changed one screen, and re-rendering the whole film would
@@ -116,6 +138,8 @@ than deleted. Part eight's rendered caption remains, and one new finding turned 
 while confirming this work:
 
 **Finding 19 — a same-device deep link crashes the wallet for some verifiers.**
+**Ruled a wallet backlog item by Anand on 2 September 2026: it does not block this
+iteration**, because the required Education journey is cross-device QR.
 The wallet base64-encodes its post-unlock redirect path unpadded and decodes it
 strictly, so the route survives only when the payload length is a multiple of 4.
 Measured, not guessed: the Master's link is 392 characters and worked on every
@@ -134,7 +158,7 @@ evidence can be trusted again. That is a decision, not a tidy-up.
 |---|---|
 | Sunbird RC services | `v2.1.0` (official ghcr images) |
 | `oid4vc-service` | `sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27` — the ported build, pinned by source commit in its tag |
-| Fork branch | `oid4vc-keycloak-as-v2.1.0`, 7 commits off `v2.1.0` — **local only**, see below |
+| Fork branch | `oid4vc-keycloak-as-v2.1.0`, 7 commits off `v2.1.0` — reproducible from [`../../../patches/oid4vc-service/`](../../../patches/oid4vc-service/) |
 | Keycloak | `quay.io/keycloak/keycloak:26.0`, `start-dev`, three realms imported |
 | Wallet | vendored at `vendor/paradym-wallet`, upstream `2d68168` + nine showcase commits, tip `82b1def` |
 | Wallet APK | `id.paradym.wallet.preview` 1.20.3, arm64-v8a, issuer directory limited to the three institutions |
@@ -148,25 +172,36 @@ evidence can be trusted again. That is a decision, not a tidy-up.
 The two Education verifier DIDs are pinned in the wallet, so `verify.sh`'s
 trust-pinning check runs and passes against this deployment rather than skipping.
 
-## The fork commits are not published, deliberately
+## Rebuilding the pinned image from shared source
 
-Two of those seven commits are the ones that close review items 2 and 4, and the
-pinned `v2.1.0-authcode.c8beec27` image is built from them. They live only in the
-working checkout at `../sunbird-rc-core`.
+The `oid4vc-service` image this deployment runs, `v2.1.0-authcode.c8beec27`, is
+rebuildable by anyone with this repository. Its seven source commits are committed
+as patches at [`../../../patches/oid4vc-service/`](../../../patches/oid4vc-service/),
+on top of a base that needs nothing from us: the upstream tag `v2.1.0`
+(`2ade66c24afc2d5da7d05121e9cbbd082ba83cd1`), reachable from `origin/main` of
+`Sunbird-RC/sunbird-rc-core`.
 
-That checkout's single remote is `https://github.com/Sunbird-RC/sunbird-rc-core.git`
-— **upstream Sunbird-RC itself, not a fork of ours** — so pushing the branch would
-put showcase commits into the upstream project, and merging it would alter the
-released `v2.1.0` baseline this programme treats as a controlled input. Neither is
-ours to do. `verify.sh` already guards half of it by asserting `fork main` still
-equals `origin/main` and sits on the `v2.1.0` tag.
+They are not a summary. Applying the series to a pristine `v2.1.0` worktree was
+checked to produce a tree **identical** to the authoring checkout's branch tip,
+compared by tree hash. Patches `0006` and `0007` are the issuer-authorization and
+over-disclosure fixes; the five before them are the pre-existing port, included
+because the image cannot be built without them. The exact `git am` and
+`docker build` commands, including why `--platform linux/amd64` is not optional,
+are in that directory's [`README.md`](../../../patches/oid4vc-service/README.md).
 
-Stated plainly rather than left to be discovered: **a reviewer cannot rebuild that
-image from a clean checkout today.** What they can verify without it is the tag
-pinned in `deploy/docker-compose.yml`, the fork's own 154-test suite in
-[`runs/test-fork.txt`](runs/test-fork.txt), and the repo-side end-to-end tests that
-exercise both fixes through the running stack. Publishing the two commits — under a
-remote of our own, or as patches committed here — is a decision still open.
+Six `verify.sh` checks keep the patches honest against the running image — the
+series is present and complete, it carries apply-and-build instructions, it records
+the shared base, and patch `0007`'s commit **is** the one `deploy/docker-compose.yml`
+pins.
+
+The fork branch itself is deliberately not pushed: that checkout's only remote is
+`https://github.com/Sunbird-RC/sunbird-rc-core.git` — upstream Sunbird RC, not a
+fork under this project's control — so pushing it would put showcase commits into
+the upstream project, and merging it would alter a released baseline this programme
+treats as a controlled input. `verify.sh` asserts that `fork main` still equals
+`origin/main` and sits on the `v2.1.0` tag. **The patches make that irrelevant to a
+reviewer**, which is why the earlier statement that the image could not be rebuilt
+from a clean checkout no longer applies.
 
 ## Reproducing it
 

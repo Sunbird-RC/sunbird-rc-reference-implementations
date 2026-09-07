@@ -1,0 +1,627 @@
+From 1147b9045e97ee1648beb73b5521d9962c5c5521 Mon Sep 17 00:00:00 2001
+From: Kartheek Palla <kartheek@sanketika.in>
+Date: Wed, 2 Sep 2026 10:36:17 +0530
+Subject: [PATCH 6/7] feat(oid4vc-service): refuse another issuer's type, and
+ unrequested disclosure
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Two holes found in the Education review, both of which let a request succeed
+that should not have.
+
+An issuer restricted to its own credentials still minted anybody's. The flag
+narrowed the ADVERTISED metadata only, so the credential endpoint went on
+resolving the deployment-wide config list: a wallet that named a configuration
+id it had learned from another institution got that credential, signed by this
+issuer's key. The endpoint now resolves against the same own-authored list the
+metadata is built from, and a request for somebody else's type is refused by
+name — including a vct-only request, which is the shape a wallet on the
+authorization_code path actually sends, and which would otherwise have failed
+with the useless "could not determine the credential type".
+
+A holder could also disclose more than was asked for and have it accepted. The
+DCQL matcher checked that every requested claim was present and never that no
+unrequested one was, so extra disclosures were dropped downstream rather than
+refused — a verifier that never asked for a national id could still receive
+one over the wire. The matcher now compares the disclosed claim names against
+the query and rejects the credential, naming the claims but never their values.
+REJECT_UNREQUESTED_DISCLOSURES=false restores the old behaviour for a
+deployment that depends on it; unlike the issuance flag this defaults ON,
+because accepting undisclosed data is not a safe default.
+
+Fifteen tests, positive and negative for each: an issuer issues its own type
+and is refused another's, and a presentation carrying one unrequested claim is
+refused where the same presentation without it is accepted.
+---
+ .../src/config/configuration.ts               |  16 ++
+ .../src/oid4vci/oid4vci.service.ts            |  49 ++++-
+ .../oid4vci/own-credentials-issuance.spec.ts  | 156 ++++++++++++++++
+ .../oid4vc-service/src/oid4vp/dcql.service.ts |  57 +++++-
+ .../src/oid4vp/oid4vp.service.ts              |  22 ++-
+ .../src/oid4vp/unrequested-disclosure.spec.ts | 175 ++++++++++++++++++
+ 6 files changed, 472 insertions(+), 3 deletions(-)
+ create mode 100644 services/oid4vc-service/src/oid4vci/own-credentials-issuance.spec.ts
+ create mode 100644 services/oid4vc-service/src/oid4vp/unrequested-disclosure.spec.ts
+
+diff --git a/services/oid4vc-service/src/config/configuration.ts b/services/oid4vc-service/src/config/configuration.ts
+index 7962ac29..e8024be3 100644
+--- a/services/oid4vc-service/src/config/configuration.ts
++++ b/services/oid4vc-service/src/config/configuration.ts
+@@ -178,6 +178,21 @@ export interface Oid4vcConfig {
+    * nothing changes for anyone who has not asked for it.
+    */
+   advertiseOwnCredentialsOnly: boolean;
++  /**
++   * Refuse a presentation that discloses more than the DCQL query asked for,
++   * instead of dropping the surplus and answering normally.
++   *
++   * ON by default, unlike the flag above. That one widens what a wallet is shown
++   * and could surprise an existing deployment, so it opts in; this one closes a
++   * gap between what a verifier receives and what it can claim to have received,
++   * and defaulting it off would ship the weaker guarantee to everyone who does
++   * not know to look for it.
++   *
++   * Set REJECT_UNREQUESTED_DISCLOSURES=false to restore the previous behaviour —
++   * useful when testing against a wallet that over-discloses and you need to see
++   * the rest of the flow before fixing it.
++   */
++  rejectUnrequestedDisclosures: boolean;
+   oid4vpEnabled: boolean;
+   draft13CompatMode: boolean;
+   vpSignRequest: boolean;
+@@ -318,6 +333,7 @@ export const loadConfig = (): Oid4vcConfig => ({
+   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+   issuerDid: process.env.ISSUER_DID || '',
+   advertiseOwnCredentialsOnly: process.env.ADVERTISE_OWN_CREDENTIALS_ONLY === 'true',
++  rejectUnrequestedDisclosures: process.env.REJECT_UNREQUESTED_DISCLOSURES !== 'false',
+   oid4vpEnabled: process.env.OID4VP_ENABLED !== 'false',
+   draft13CompatMode: process.env.DRAFT13_COMPAT_MODE === 'true',
+   // OID4VP request-object mode. Legacy implies unsigned (the `redirect_uri`
+diff --git a/services/oid4vc-service/src/oid4vci/oid4vci.service.ts b/services/oid4vc-service/src/oid4vci/oid4vci.service.ts
+index 70d5056f..796361a8 100644
+--- a/services/oid4vc-service/src/oid4vci/oid4vci.service.ts
++++ b/services/oid4vc-service/src/oid4vci/oid4vci.service.ts
+@@ -733,7 +733,22 @@ export class Oid4vciService {
+     }
+ 
+     const requestedId = body?.credential_configuration_id || body?.credential_identifier;
+-    const configs = await this.schema.getOid4vciConfigs();
++    // ownConfigs(), not getOid4vciConfigs(): the SAME narrowing the metadata
++    // applies, applied to the endpoint that actually mints.
++    //
++    // Filtering only the metadata was a hole, not merely untidy. credential-schema
++    // signs with the key of the DID that AUTHORED the schema, so an authenticated
++    // holder could ask any instance for any published configuration id and get
++    // back a credential signed by a different issuer, carrying the claims this
++    // instance resolved from its own registry entity. Reported live on 1 September
++    // 2026: the school instance answered a request for the college configuration
++    // with a College-signed credential carrying the learner's school percentage.
++    //
++    // A vct scoped to the minting instance's PUBLIC_URL kept it unpresentable, so
++    // nothing downstream accepted it — but that is a property of how a URL is
++    // built, not an authorization decision, and it is not what should be standing
++    // between a holder and someone else's signing key.
++    const configs = await this.ownConfigs();
+     // Only what the request actually said. The format is derived from the
+     // resolved credential further down — assuming one here (this used to default
+     // to 'vc+sd-jwt') made every filter below reject a deployment that publishes
+@@ -792,6 +807,38 @@ export class Oid4vciService {
+       if (candidates.length === 1) cfg = candidates[0];
+     }
+     if (!cfg) {
++      // "Not mine" and "no such thing" are different answers, and an operator
++      // debugging a refusal needs to be told which. Only reached when the
++      // narrowing above actually removed something, so the extra lookup costs
++      // nothing in the ordinary case.
++      if (identifiedSomething && this.config.advertiseOwnCredentialsOnly && this.config.issuerDid) {
++        const all = await this.schema.getOid4vciConfigs();
++        // By id OR by vct: a wallet on the authorization_code path sends neither a
++        // configuration id nor a credential identifier — Credo sends `vct` — so
++        // reporting the useful message only for an id would leave the commonest
++        // request shape with "could not determine the credential type", which
++        // sends an operator looking for a schema that is present and simply
++        // belongs to somebody else.
++        const elsewhere = all.find(
++          (c) =>
++            (requestedId &&
++              (c.schemaId === requestedId ||
++                c.formats.some((f) => `${c.schemaId}_${f}` === requestedId))) ||
++            (body?.vct &&
++              c.formats.includes('vc+sd-jwt') &&
++              normalizeVct(c.vct, this.config.publicUrl) === body.vct),
++        );
++        if (elsewhere) {
++          this.logger.warn(
++            `Refused a credential request for '${elsewhere.name}', authored by ` +
++              `${elsewhere.author}, on the instance whose ISSUER_DID is ${this.config.issuerDid}.`,
++          );
++          throw new BadRequestException(
++            `invalid_credential_request: '${elsewhere.name}' is not issued by this issuer. ` +
++              `It is authored by ${elsewhere.author}; request it from that issuer instead.`,
++          );
++        }
++      }
+       this.logger.warn(
+         `Self-service credential request did not identify a type. Body keys: ${Object.keys(
+           body ?? {},
+diff --git a/services/oid4vc-service/src/oid4vci/own-credentials-issuance.spec.ts b/services/oid4vc-service/src/oid4vci/own-credentials-issuance.spec.ts
+new file mode 100644
+index 00000000..73b3c974
+--- /dev/null
++++ b/services/oid4vc-service/src/oid4vci/own-credentials-issuance.spec.ts
+@@ -0,0 +1,156 @@
++// Advertising only your own credentials is a display decision. MINTING only your
++// own is an authorization decision, and until 2 September 2026 this build made
++// the first and not the second.
++//
++// credential-schema signs with the key of the DID that AUTHORED the schema, so an
++// authenticated holder could ask any instance for any published configuration id
++// and be answered with a credential signed by a different issuer, carrying the
++// claims the answering instance resolved from its own registry entity. Reported
++// live: the school instance answered a request for the college configuration with
++// a College-signed credential carrying the learner's school percentage.
++//
++// These assertions are about what an instance will MINT, not about what it lists.
++describe('issuing only an issuer\'s own credentials', () => {
++  const ORIGINAL_ENV = process.env;
++  afterEach(() => {
++    process.env = ORIGINAL_ENV;
++    jest.resetModules();
++  });
++
++  const SCHOOL = 'did:web:issuer.example:school';
++  const COLLEGE = 'did:web:issuer.example:college';
++
++  const CONFIGS = [
++    {
++      schemaId: 'did:schema:school',
++      version: '1.0.0',
++      name: 'School Record Credential',
++      type: 'https://w3c-ccg.github.io/vc-json-schemas/',
++      tags: ['education'],
++      formats: ['vc+sd-jwt'],
++      vct: 'school-record-credential',
++      display: [{ name: 'School Record Credential', locale: 'en-US' }],
++      schema: { properties: {}, required: [] },
++      author: SCHOOL,
++    },
++    {
++      schemaId: 'did:schema:college',
++      version: '1.0.0',
++      name: 'College Record Credential',
++      type: 'https://w3c-ccg.github.io/vc-json-schemas/',
++      tags: ['education'],
++      formats: ['vc+sd-jwt'],
++      vct: 'college-record-credential',
++      display: [{ name: 'College Record Credential', locale: 'en-US' }],
++      schema: { properties: {}, required: [] },
++      author: COLLEGE,
++    },
++  ];
++
++  /**
++   * Drives the SCHOOL instance's self-service credential path with whatever the
++   * request names, and reports which schema it resolved.
++   *
++   * buildSelfServiceSession is private, which is the point: it is the step that
++   * decides WHICH credential a request gets, and it is reached from the
++   * wallet-facing endpoint. Calling it directly keeps the assertion on that
++   * decision rather than on everything issuance does afterwards.
++   */
++  async function resolveAs(env: Record<string, string>, body: Record<string, any>) {
++    process.env = {
++      ...ORIGINAL_ENV,
++      PUBLIC_URL: 'https://issuer.example',
++      KEYCLOAK_SUBJECT_CLAIM: 'nationalId',
++      ISSUER_DID: SCHOOL,
++      ...env,
++    };
++    jest.resetModules();
++
++    const { Oid4vciService } = await import('./oid4vci.service');
++    const { MemoryStoreService } = await import('../session/memory-store.service');
++    // The claim source is stubbed rather than reached: everything past type
++    // resolution talks to the registry and to credentials-service, neither of
++    // which this is about.
++    const claimSources = {
++      for: () => ({
++        resolve: async () => ({ claims: { learnerId: 'EDU-L-006733' }, missing: [] }),
++      }),
++    } as any;
++    const service: any = new Oid4vciService(
++      new MemoryStoreService() as any,
++      {} as any,
++      { getOid4vciConfigs: jest.fn().mockResolvedValue(CONFIGS) } as any,
++      { authorizationServers: () => ['https://issuer.example'], getIssuerDid: () => SCHOOL } as any,
++      {} as any,
++      claimSources,
++    );
++    return service.buildSelfServiceSession(
++      { subjectId: 'NAT-70022345', raw: {} } as any,
++      body,
++    );
++  }
++
++  const RESTRICTED = { ADVERTISE_OWN_CREDENTIALS_ONLY: 'true' };
++
++  it('issues its own credential type', async () => {
++    const session = await resolveAs(RESTRICTED, {
++      credential_configuration_id: 'did:schema:school',
++    });
++    expect(session.credentialConfigurationId).toBe('did:schema:school');
++  });
++
++  it('refuses to mint another institution\'s credential type', async () => {
++    // Asserted on the message, not on BadRequestException: jest.resetModules()
++    // gives this spec a different class object from the one the freshly-imported
++    // service throws, so `toThrow(BadRequestException)` fails for a reason that
++    // has nothing to do with the behaviour. Same trap own-credentials.spec.ts
++    // documents for Logger.
++    await expect(
++      resolveAs(RESTRICTED, { credential_configuration_id: 'did:schema:college' }),
++    ).rejects.toThrow(/not issued by this issuer/);
++  });
++
++  it('says whose credential it is, so a refusal is diagnosable', async () => {
++    // "Could not determine the credential type" would send an operator looking
++    // for a missing schema. The schema is there; it belongs to someone else.
++    await expect(
++      resolveAs(RESTRICTED, { credential_configuration_id: 'did:schema:college' }),
++    ).rejects.toThrow(/College Record Credential.*not issued by this issuer/s);
++    await expect(
++      resolveAs(RESTRICTED, { credential_configuration_id: 'did:schema:college' }),
++    ).rejects.toThrow(new RegExp(COLLEGE));
++  });
++
++  it('refuses the other issuer\'s vct too, not just its configuration id', async () => {
++    // A wallet on the authorization_code path sends neither a configuration id
++    // nor a credential identifier — Credo sends `vct`. Narrowing only the id
++    // would leave the same hole open under a different key.
++    await expect(
++      resolveAs(RESTRICTED, { vct: 'https://issuer.example/vct/college-record-credential' }),
++    ).rejects.toThrow(/College Record Credential.*not issued by this issuer/s);
++  });
++
++  it('still resolves the single published type when the request names nothing', async () => {
++    // With the narrowing on, this instance publishes exactly one credential, so
++    // a request that identifies nothing is unambiguous — and must stay that way,
++    // because that is the path a minimal wallet takes.
++    const session = await resolveAs(RESTRICTED, {});
++    expect(session.credentialConfigurationId).toBe('did:schema:school');
++  });
++
++  it('mints anything published when the flag is off, as it always has', async () => {
++    // Unchanged for a single-issuer deployment that never set the flag.
++    const session = await resolveAs({}, { credential_configuration_id: 'did:schema:college' });
++    expect(session.credentialConfigurationId).toBe('did:schema:college');
++  });
++
++  it('ignores the flag when no issuer DID is configured', async () => {
++    // Same reasoning as the metadata path: filtering on an empty DID would issue
++    // nothing at all, which looks like the schema service being down.
++    const session = await resolveAs(
++      { ...RESTRICTED, ISSUER_DID: '' },
++      { credential_configuration_id: 'did:schema:college' },
++    );
++    expect(session.credentialConfigurationId).toBe('did:schema:college');
++  });
++});
+diff --git a/services/oid4vc-service/src/oid4vp/dcql.service.ts b/services/oid4vc-service/src/oid4vp/dcql.service.ts
+index f18997a8..e921cba8 100644
+--- a/services/oid4vc-service/src/oid4vp/dcql.service.ts
++++ b/services/oid4vc-service/src/oid4vp/dcql.service.ts
+@@ -24,9 +24,21 @@ function sameFormat(a: string, b: string): boolean {
+ @Injectable()
+ export class DcqlService {
+   // Returns { satisfied, matched: { [credentialQueryId]: disclosedClaims } }.
++  //
++  // `rejectUnrequestedDisclosures` refuses a presentation that reveals more than
++  // the query asked for, rather than quietly dropping the surplus. See the block
++  // marked OVER-DISCLOSURE below for why that distinction matters.
+   evaluate(
+     query: any,
+-    presented: Array<{ types: string[]; vct?: string; docType?: string; format: string; claims: Record<string, any> }>,
++    presented: Array<{
++      types: string[];
++      vct?: string;
++      docType?: string;
++      format: string;
++      claims: Record<string, any>;
++      disclosedNames?: string[];
++    }>,
++    options: { rejectUnrequestedDisclosures?: boolean } = {},
+   ): { satisfied: boolean; matched: Record<string, any>; reason?: string } {
+     const credentialQueries = query?.credentials || [];
+     if (!Array.isArray(credentialQueries) || credentialQueries.length === 0) {
+@@ -83,6 +95,49 @@ export class DcqlService {
+         }
+         disclosed[path.join('.')] = value;
+       }
++      // OVER-DISCLOSURE.
++      //
++      // Building `disclosed` from the requested paths alone means a holder who
++      // reveals more than was asked for is answered normally, with the surplus
++      // silently discarded. The relying party never sees it and no decision can
++      // turn on it — but the values did leave the wallet and did reach this
++      // service, so "the verifier never receives it" was true of the relying
++      // party and not of the protocol boundary. Refusing here makes the
++      // guarantee the one that was claimed.
++      //
++      // Only for selective-disclosure formats, and only when the query named
++      // claims: a query with no `claims` is asking for the whole credential, so
++      // nothing a holder sends can exceed it.
++      if (options.rejectUnrequestedDisclosures && requestedClaims.length && candidate.disclosedNames) {
++        // Compare on the FIRST path segment. A nested claim is disclosed as its
++        // top-level object, so a request for ["address","city"] is satisfied by
++        // disclosing `address` — matching the full dotted path would refuse a
++        // correct presentation.
++        const asked = new Set(
++          requestedClaims
++            .map((c: any) => (Array.isArray(c.path) ? c.path : []))
++            .map((path: string[]) =>
++              (candidate.format === 'jwt_vc_json' || candidate.format === 'ldp_vc') &&
++              path[0] === 'credentialSubject'
++                ? path[1]
++                : path[0],
++            )
++            .filter(Boolean),
++        );
++        const surplus = candidate.disclosedNames.filter((name) => !asked.has(name));
++        if (surplus.length) {
++          return {
++            satisfied: false,
++            matched,
++            // Names the claims, not their values: this reason is reported to the
++            // relying party, and echoing a value the holder should not have sent
++            // would disclose it after refusing to accept it.
++            reason:
++              `credential for query ${cq.id} disclosed ${surplus.length} claim(s) the request ` +
++              `did not ask for: ${surplus.sort().join(', ')}`,
++          };
++        }
++      }
+       // No specific claims requested → disclose all.
+       matched[cq.id || candidate.types.join('_')] =
+         requestedClaims.length ? disclosed : candidate.claims;
+diff --git a/services/oid4vc-service/src/oid4vp/oid4vp.service.ts b/services/oid4vc-service/src/oid4vp/oid4vp.service.ts
+index f73429ad..fc66cebb 100644
+--- a/services/oid4vc-service/src/oid4vp/oid4vp.service.ts
++++ b/services/oid4vc-service/src/oid4vp/oid4vp.service.ts
+@@ -482,7 +482,9 @@ export class Oid4vpService {
+       }
+ 
+       // DCQL satisfaction.
+-      const dcqlResult = this.dcql.evaluate(txn.dcqlQuery, presented);
++      const dcqlResult = this.dcql.evaluate(txn.dcqlQuery, presented, {
++        rejectUnrequestedDisclosures: this.config.rejectUnrequestedDisclosures,
++      });
+       if (!dcqlResult.satisfied) throw new Error(`DCQL not satisfied: ${dcqlResult.reason}`);
+       checks.dcql = 'OK';
+ 
+@@ -548,6 +550,18 @@ export class Oid4vpService {
+     format: string;
+     claims: Record<string, any>;
+     subjectId?: string;
++    // The claim names the HOLDER chose to reveal, for SD-JWT only.
++    //
++    // Kept separate from `claims` because `claims` is a merged view: the signed
++    // payload's registered claims (iss, iat, sub, vct, cnf, ...) plus the
++    // disclosed values. Comparing that against what a query asked for would
++    // flag `iss` as an unrequested disclosure and refuse every presentation.
++    // Only the `~` segments say what the holder actually disclosed.
++    //
++    // Undefined for formats that have no selective disclosure, where the
++    // question does not arise: an ldp_vc or jwt_vc_json credential carries all
++    // of its claims by construction and the holder chose nothing.
++    disclosedNames?: string[];
+   }> {
+     let list = vp.verifiableCredential || vp.verifiable_credential || [];
+     if (!Array.isArray(list)) list = [list];
+@@ -579,12 +593,17 @@ export class Oid4vpService {
+           delete claims._sd;
+           delete claims._sd_alg;
+           const disclosed: Record<string, any> = { ...claims };
++          const disclosedNames: string[] = [];
+           for (const d of parts.slice(1).filter((p) => p.length > 0)) {
+             try {
+               const [, name, value] = JSON.parse(
+                 Buffer.from(d, 'base64url').toString('utf8'),
+               );
+               disclosed[name] = value;
++              // A three-element array is a disclosure; the trailing segment of a
++              // presentation is the Key Binding JWT, which parses as neither and
++              // lands in the catch below.
++              if (typeof name === 'string') disclosedNames.push(name);
+             } catch {
+               // malformed disclosure — ignore, digest check in verify() below still gates trust
+             }
+@@ -596,6 +615,7 @@ export class Oid4vpService {
+             format: 'vc+sd-jwt',
+             claims: disclosed,
+             subjectId: disclosed?.sub,
++            disclosedNames,
+           };
+         }
+         // jwt_vc_json: W3C VC-JWT convention, claims nested under `vc`.
+diff --git a/services/oid4vc-service/src/oid4vp/unrequested-disclosure.spec.ts b/services/oid4vc-service/src/oid4vp/unrequested-disclosure.spec.ts
+new file mode 100644
+index 00000000..64c45947
+--- /dev/null
++++ b/services/oid4vc-service/src/oid4vp/unrequested-disclosure.spec.ts
+@@ -0,0 +1,175 @@
++// A holder can reveal more than the query asked for. The matcher used to build
++// its result from the requested paths alone, so the surplus was dropped and the
++// presentation answered normally — the relying party never saw it and no decision
++// could turn on it, but the values had already left the wallet and reached this
++// service. "The verifier never receives it" was therefore true of the relying
++// party and not of the protocol boundary.
++//
++// These assertions are about which of those two guarantees the service makes.
++import { DcqlService } from './dcql.service';
++
++describe('rejecting disclosures the request did not ask for', () => {
++  const dcql = new DcqlService();
++
++  const QUERY = {
++    credentials: [
++      {
++        id: 'school_cred',
++        format: 'vc+sd-jwt',
++        meta: { vct_values: ['https://issuer.example/school/vct/school-record-credential'] },
++        claims: [{ path: ['learnerId'] }, { path: ['completionStatus'] }],
++      },
++    ],
++  };
++
++  /** What extractCredentials() hands the matcher for an SD-JWT presentation. */
++  const presented = (disclosedNames: string[]) => [
++    {
++      types: ['VerifiableCredential'],
++      vct: 'https://issuer.example/school/vct/school-record-credential',
++      format: 'vc+sd-jwt',
++      // The merged view: registered claims from the signed payload plus the
++      // disclosed values. Deliberately includes iss/iat/cnf, because comparing
++      // THIS against the query would refuse every presentation ever made.
++      claims: {
++        iss: 'did:web:issuer.example:school',
++        iat: 1756700000,
++        cnf: { jwk: {} },
++        vct: 'https://issuer.example/school/vct/school-record-credential',
++        learnerId: 'EDU-L-006733',
++        completionStatus: 'COMPLETED',
++        percentage: 72,
++      },
++      disclosedNames,
++    },
++  ];
++
++  it('accepts a presentation that discloses exactly what was asked for', () => {
++    const result = dcql.evaluate(QUERY, presented(['learnerId', 'completionStatus']), {
++      rejectUnrequestedDisclosures: true,
++    });
++    expect(result.satisfied).toBe(true);
++    expect(result.matched.school_cred).toEqual({
++      learnerId: 'EDU-L-006733',
++      completionStatus: 'COMPLETED',
++    });
++  });
++
++  it('refuses one that discloses a claim the request did not ask for', () => {
++    const result = dcql.evaluate(
++      QUERY,
++      presented(['learnerId', 'completionStatus', 'percentage']),
++      { rejectUnrequestedDisclosures: true },
++    );
++    expect(result.satisfied).toBe(false);
++    expect(result.reason).toContain('did not ask for');
++    expect(result.reason).toContain('percentage');
++  });
++
++  it('names the surplus claims but never their values', () => {
++    // The reason reaches the relying party. Echoing the value would disclose the
++    // very thing the refusal exists to withhold.
++    const result = dcql.evaluate(
++      QUERY,
++      presented(['learnerId', 'completionStatus', 'percentage']),
++      { rejectUnrequestedDisclosures: true },
++    );
++    expect(result.reason).not.toContain('72');
++  });
++
++  it('does not fault the registered claims that ride along in every SD-JWT', () => {
++    // iss, iat, cnf and vct are in `claims` but are not disclosures. An earlier
++    // shape of this check compared the whole claim object and refused everything.
++    const result = dcql.evaluate(QUERY, presented(['learnerId', 'completionStatus']), {
++      rejectUnrequestedDisclosures: true,
++    });
++    expect(result.satisfied).toBe(true);
++  });
++
++  it('drops the surplus instead of refusing when the flag is off', () => {
++    // The previous behaviour, kept reachable for interop debugging against a
++    // wallet that over-discloses.
++    const result = dcql.evaluate(
++      QUERY,
++      presented(['learnerId', 'completionStatus', 'percentage']),
++      { rejectUnrequestedDisclosures: false },
++    );
++    expect(result.satisfied).toBe(true);
++    expect(result.matched.school_cred).not.toHaveProperty('percentage');
++  });
++
++  it('allows anything when the query names no claims, because nothing can exceed it', () => {
++    const wholeCredential = {
++      credentials: [
++        {
++          id: 'school_cred',
++          format: 'vc+sd-jwt',
++          meta: { vct_values: ['https://issuer.example/school/vct/school-record-credential'] },
++        },
++      ],
++    };
++    const result = dcql.evaluate(
++      wholeCredential,
++      presented(['learnerId', 'completionStatus', 'percentage']),
++      { rejectUnrequestedDisclosures: true },
++    );
++    expect(result.satisfied).toBe(true);
++  });
++
++  it('is not applied to a format that has no selective disclosure', () => {
++    // An ldp_vc carries all of its claims by construction; the holder chose
++    // nothing, so there is nothing to refuse them for.
++    const ldpQuery = {
++      credentials: [
++        {
++          id: 'c',
++          format: 'ldp_vc',
++          meta: { type_values: [['VerifiableCredential']] },
++          claims: [{ path: ['credentialSubject', 'learnerId'] }],
++        },
++      ],
++    };
++    const result = dcql.evaluate(
++      ldpQuery,
++      [
++        {
++          types: ['VerifiableCredential'],
++          format: 'ldp_vc',
++          claims: { learnerId: 'EDU-L-006733', percentage: 72 },
++        },
++      ],
++      { rejectUnrequestedDisclosures: true },
++    );
++    expect(result.satisfied).toBe(true);
++  });
++
++  it('accepts a nested claim disclosed as its top-level object', () => {
++    // A request for ["address","city"] is satisfied by disclosing `address`.
++    // Comparing the full dotted path would refuse a correct presentation.
++    const nested = {
++      credentials: [
++        {
++          id: 'c',
++          format: 'vc+sd-jwt',
++          meta: { vct_values: ['v'] },
++          claims: [{ path: ['address', 'city'] }],
++        },
++      ],
++    };
++    const result = dcql.evaluate(
++      nested,
++      [
++        {
++          types: ['VerifiableCredential'],
++          vct: 'v',
++          format: 'vc+sd-jwt',
++          claims: { iss: 'did:web:x', address: { city: 'Bengaluru' } },
++          disclosedNames: ['address'],
++        },
++      ],
++      { rejectUnrequestedDisclosures: true },
++    );
++    expect(result.satisfied).toBe(true);
++    expect(result.matched.c).toEqual({ 'address.city': 'Bengaluru' });
++  });
++});

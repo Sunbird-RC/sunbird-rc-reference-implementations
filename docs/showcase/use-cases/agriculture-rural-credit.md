@@ -1,8 +1,8 @@
 # Farmer and land credentials for rural credit
 
-> **Status: completed reference implementation.** The two-credential rural-credit
-> journey has been accepted using synthetic farmer and land data. See the
-> [committed evidence](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/docs/sunbird-rc-showcase-v1/docs/evidence/02-agriculture).
+> **Status: completed, accepted and merged to `main` in Iteration 02.** The
+> two-credential rural-credit journey uses synthetic farmer and land data. See the
+> [committed evidence](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/tree/main/docs/evidence/02-agriculture).
 
 ## The problem
 
@@ -178,7 +178,7 @@ The committed demonstration covers Farmer and Land credential issuance, wallet
 persistence, bank QR verification, minimum disclosure, loan calculation,
 ineligible, mismatched-record and refusal outcomes.
 
-[Watch the committed Agriculture demonstration](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/blob/docs/sunbird-rc-showcase-v1/docs/evidence/02-agriculture/Agriculture-Rural-Credit-Showcase-31Aug.mp4)
+[Watch the committed Agriculture demonstration](https://github.com/pallakartheekreddy/sunbird-rc-reference-implementations/blob/main/docs/evidence/02-agriculture/Agriculture-Rural-Credit-Showcase-31Aug.mp4)
 
 ## Experience demonstrated
 
