@@ -137,7 +137,7 @@ organisation's Expo project and App Store listing:
 | `apps/wallet/app.config.js` | EAS `projectId b5f457fa-…`, Animo's Expo project |
 | `apps/wallet/base.app.config.js` | `owner: 'animo-id'`, the Expo account |
 | `apps/wallet/eas.json` | the `submit` block: `companyName "Animo Solutions"`, `ascAppId 6449846111` |
-| `apps/wallet/app.config.js` | `98.70.36.106.sslip.io`, a dead demo host still registered as an App Link domain and as the default OAuth redirect |
+| `apps/wallet/app.config.js` | an earlier demo host, now decommissioned, still registered as an App Link domain and as the default OAuth redirect |
 
 None of it is needed: the showcase builds locally with `expo prebuild` and Gradle,
 and passes `WALLET_REDIRECT_BASE_URLS=""` so the redirect default is unused. The

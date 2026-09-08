@@ -133,10 +133,12 @@ commit is the one `deploy/docker-compose.yml` pins.
 
 ## Authorship, here versus in the upstream pull request
 
-These patch files preserve authorship as committed: `0001`–`0005` carry
+These patch files preserve authorship exactly as committed: `0001`–`0005` carry
 `palla.kartheekreddy@gmail.com`, `0006`–`0007` carry `kartheek@sanketika.in`.
-They are left as they were because the image tag and the whole evidence chain are
-pinned to this exact series.
+They are left as authored because the image tag and the whole evidence chain are
+pinned to this exact series, and because a `From:` header cannot carry a name
+without an address — `git am` refuses one with *"empty ident name (for <>) not
+allowed"*.
 
 The **upstream pull request** unifies all seven to the work address, since commit
 metadata contributed to Sunbird RC becomes permanent public record. Same content,

@@ -142,8 +142,8 @@ say "3. Identities (did:web, so standards wallets can resolve them)"
 # which then reaches .env, the schema `author` field and the trust allowlist.
 # (Found exactly that way on the first run: the allowlist held an ANSI-coloured
 # sentence and the verifier trusted nobody real.)
-# The host the published origin implies, e.g. `135.235.192.9.sslip.io` from
-# https://135.235.192.9.sslip.io. A did:web spells its host into the identifier,
+# The host the published origin implies, e.g. `demo.example.org` from
+# https://demo.example.org. A did:web spells its host into the identifier,
 # so this is what a reusable DID has to match.
 PUBLIC_DID_HOST="$(printf '%s' "${PUBLIC#*://}" | cut -d/ -f1 | cut -d: -f1)"
 
@@ -411,6 +411,45 @@ if [ "$KC_ADMIN_PASS" = "admin" ]; then
 else
   info "reusing the Keycloak admin password already in deploy/.env"
 fi
+
+# The wallet's OAuth redirect URI for THIS deployment's public origin.
+#
+# The realm imports ship only localhost entries, because a redirect URI is
+# deployment-specific and hardcoding one operator's host into a published
+# configuration file both leaks that host and breaks every other deployment.
+# Keycloak refuses an authorization request whose redirect_uri it does not know,
+# and the wallet reports that as a bare "something went wrong", so this is
+# registered here from PUBLIC_URL instead of being typed into the JSON.
+#
+# Skipped when the origin is already localhost: the imports cover it.
+register_redirect() {
+  local realm="$1" uri="$2" client
+  client="$(kcadm get clients -r "$realm" -q clientId=id.animo.paradym --fields id --format csv --noquotes 2>/dev/null | tr -d '\r' | head -1)"
+  [ -n "$client" ] || { warn "$realm: wallet client not found; redirect URI not registered"; return; }
+  local existing
+  existing="$(kcadm get "clients/$client" -r "$realm" --fields redirectUris --format json 2>/dev/null | tr -d '\r\n ')"
+  case "$existing" in
+    *"\"$uri\""*) info "$realm: redirect URI already registered"; return;;
+  esac
+  # kcadm appends to the array rather than replacing it, so the imported
+  # localhost entries survive and a re-run stays idempotent.
+  if kcadm update "clients/$client" -r "$realm" \
+       --args '[{"op":"add","path":"/redirectUris/-","value":"'"$uri"'"}]' >/dev/null 2>&1 \
+     || kcadm update "clients/$client" -r "$realm" -s 'redirectUris+="'"$uri"'"' >/dev/null 2>&1; then
+    green "$realm: registered redirect URI $uri"
+  else
+    warn "$realm: could not register $uri — wallet sign-in will fail on this origin"
+  fi
+}
+
+case "$PUBLIC" in
+  http://localhost|http://localhost:*|"")
+    info "public origin is localhost; the realm imports already cover it" ;;
+  *)
+    for r in age agriculture education; do
+      register_redirect "$r" "${PUBLIC%/}/wallet/redirect"
+    done ;;
+esac
 
 for u in citizen.meera citizen.arjun citizen.nikhil citizen.sana citizen.unmapped; do
   if kcadm set-password -r age --username "$u" --new-password "$CITIZEN_PASSWORD" >/dev/null 2>&1; then

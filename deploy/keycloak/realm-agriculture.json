@@ -109,12 +109,9 @@
         "+"
       ],
       "redirectUris": [
-        "https://98.70.36.106.sslip.io/wallet/redirect",
         "https://paradym.id/invitation/redirect",
         "https://paradymwallet.app/oauth2/redirect",
         "id.animo.paradym:///wallet/redirect",
-        "http://135.235.192.9/wallet/redirect",
-        "https://135.235.192.9.sslip.io/wallet/redirect",
         "http://localhost/wallet/redirect",
         "http://localhost:3000/wallet/redirect"
       ],

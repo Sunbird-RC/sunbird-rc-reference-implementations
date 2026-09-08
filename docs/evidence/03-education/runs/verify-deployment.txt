@@ -26,8 +26,8 @@
 
 === output ===
 Iteration 01 verification — 2026-09-02 17:22 UTC
-repo: /Users/kartheek/Documents/Workspace/Sunbird/Sunbird_RC/Fork/sunbird-rc-reference-implementations
-fork: /Users/kartheek/Documents/Workspace/Sunbird/Sunbird_RC/Fork/sunbird-rc-reference-implementations/../sunbird-rc-core
+repo: sunbird-rc-reference-implementations
+fork: sunbird-rc-core
 
 1. Branch and working tree
   PASS  on an iteration branch, not main (iteration/education-03-employment)
