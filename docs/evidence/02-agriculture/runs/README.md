@@ -48,7 +48,7 @@ deployment whose operator endpoints are loopback-only by design, so they come
 through a tunnel:
 
 ```bash
-ssh -L 8090:127.0.0.1:8088 rc@<demo-host>
+ssh -L 8090:127.0.0.1:8088 <user>@<demo-host>
 
 # Values come from deploy/.env ON THE HOST. The DIDs are public identifiers;
 # DEMO_CITIZEN_PASSWORD is generated at bootstrap and never committed.

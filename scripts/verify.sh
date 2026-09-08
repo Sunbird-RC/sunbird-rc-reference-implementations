@@ -34,7 +34,11 @@ check() { if ( eval "$2" ) >/dev/null 2>&1; then ok "$1"; else no "$1"; fi; }
 gone()  { if ( eval "$2" ) >/dev/null 2>&1; then no "$1"; else ok "$1"; fi; }
 
 printf 'Iteration 01 verification — %s\n' "$(date -u '+%Y-%m-%d %H:%M UTC')"
-printf 'repo: %s\nfork: %s\n' "$ROOT" "$FORK"
+# Basenames, not absolute paths: this banner is copied verbatim into the
+# committed evidence captures, and an absolute path publishes the operator's
+# home directory to every reader of a public repository. The names are what a
+# reader needs; the location is theirs, not ours to share.
+printf 'repo: %s\nfork: %s\n' "$(basename "$ROOT")" "$(basename "$FORK")"
 
 head_ '1. Branch and working tree'
 # Any iteration branch, not one named branch: Iteration 01 is merged and accepted,

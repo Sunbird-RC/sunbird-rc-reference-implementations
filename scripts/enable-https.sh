@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Puts the stack behind a real Let's Encrypt certificate.
 #
-#   ./scripts/enable-https.sh 135.235.192.9.sslip.io
+#   ./scripts/enable-https.sh demo.example.org
 #   ./scripts/enable-https.sh my.host.example  ops@example.org
 #
 # WHY this exists at all: `did:web` mandates https, so over plain HTTP our

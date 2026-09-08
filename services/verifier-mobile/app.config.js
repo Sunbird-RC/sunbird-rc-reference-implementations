@@ -58,7 +58,7 @@ export default {
     extra: {
       // Where the reusable verifier service lives. The app makes exactly two
       // calls to it and renders the answer; it never inspects a credential.
-      verifierBaseUrl: process.env.VERIFIER_BASE_URL ?? 'https://135.235.192.9.sslip.io',
+      verifierBaseUrl: process.env.VERIFIER_BASE_URL ?? 'http://localhost',
       // The one channel this build serves. Read once, at start-up.
       useCase: USE_CASE,
     },

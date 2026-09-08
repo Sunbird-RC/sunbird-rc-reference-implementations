@@ -4,8 +4,8 @@
 # commit: 1e9b3e3
 
 Iteration 01 verification — 2026-08-27 13:29 UTC
-repo: /Users/kartheek/Documents/Workspace/Sunbird/Sunbird_RC/Fork/sunbird-rc-reference-implementations
-fork: /Users/kartheek/Documents/Workspace/Sunbird/Sunbird_RC/Fork/sunbird-rc-reference-implementations/../sunbird-rc-core
+repo: sunbird-rc-reference-implementations
+fork: sunbird-rc-core
 
 1. Branch and working tree
   PASS  on iteration/age-01-verification

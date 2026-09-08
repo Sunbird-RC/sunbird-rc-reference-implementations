@@ -265,17 +265,17 @@ replaces the host's `PUBLIC_URL` and all six existing DIDs with a localhost
 developer's. Back it up before the first run of a new recipe.
 
 ```bash
-ssh rc@<host> 'cd /home/rc/age-demo/deploy && cp -a .env ".env.bak.$(date -u +%Y%m%dT%H%M%SZ)"'
+ssh <user>@<host> 'cd <deploy-dir>/deploy && cp -a .env ".env.bak.$(date -u +%Y%m%dT%H%M%SZ)"'
 
 rsync -a --delete \
   --exclude '.git' --exclude 'node_modules' \
   --exclude 'deploy/.env' --exclude 'deploy/.env.bak.*' \
   --exclude 'services/verifier-mobile/android' --exclude 'services/verifier-mobile/ios' \
   --exclude '.expo' --exclude 'vendor/paradym-wallet' --exclude 'RC_video' \
-  ./ rc@<host>:/home/rc/age-demo/
+  ./ <user>@<host>:<deploy-dir>/
 
-ssh rc@<host> 'cd /home/rc/age-demo/deploy && docker compose up -d'
-ssh rc@<host> 'cd /home/rc/age-demo && ./scripts/bootstrap.sh && ./scripts/seed-education.sh'
+ssh <user>@<host> 'cd <deploy-dir>/deploy && docker compose up -d'
+ssh <user>@<host> 'cd <deploy-dir> && ./scripts/bootstrap.sh && ./scripts/seed-education.sh'
 ```
 
 `vendor/paradym-wallet` is excluded because the host never builds the wallet — the
@@ -530,8 +530,8 @@ minutes** from pressing Start. That is the scanning window, and it is also how t
 
 ```bash
 # The fixtures, and the two Age citizens that expire daily
-ssh rc@<host> 'cd /home/rc/age-demo && ./scripts/seed-education.sh'
-ssh rc@<host> 'cd /home/rc/age-demo && ./scripts/seed-age-citizens.sh'
+ssh <user>@<host> 'cd <deploy-dir> && ./scripts/seed-education.sh'
+ssh <user>@<host> 'cd <deploy-dir> && ./scripts/seed-age-citizens.sh'
 
 # A clean phone. Both are safe: the credentials are synthetic and re-collectable.
 adb shell pm clear id.paradym.wallet.preview     # cards, PIN, and its Keycloak session

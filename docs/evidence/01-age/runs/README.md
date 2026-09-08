@@ -17,7 +17,7 @@ live deployment, and its operator endpoints are loopback-only by design, so they
 come through a tunnel:
 
 ```bash
-ssh -L 8089:127.0.0.1:8088 rc@<demo-host>
+ssh -L 8089:127.0.0.1:8088 <user>@<demo-host>
 
 PUBLIC_URL=https://<demo-host> OPS_URL=http://127.0.0.1:8089 \
   AGE_ISSUER_DID=<from deploy/.env on the host> \

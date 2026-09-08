@@ -196,7 +196,7 @@ Two facts about the result worth recording:
 ### Why the redirect is the app scheme, not an https URL
 
 The wallet sends `allowedRedirectBaseUrls[0]` as its `redirect_uri`, and that
-list was pinned to `https://98.70.36.106.sslip.io/wallet/redirect` — a host we
+list was pinned to a redirect URI on an earlier, now decommissioned demo host — one we
 do not control. An https redirect only returns to the app if Android has
 **verified** the App Link, which requires that host to serve an
 `assetlinks.json` naming this build's signing certificate. A debug-signed local
@@ -228,7 +228,7 @@ issuer's `did:web` resolves the ordinary way and the flag is irrelevant. The
 credential type URL resolves too, which Credo fetches for rendering.
 
 **Redirect URI must match.** The wallet sends `allowedRedirectBaseUrls[0]`,
-`https://98.70.36.106.sslip.io/wallet/redirect` today. The Keycloak client in
+that decommissioned host's redirect URI today. The Keycloak client in
 `deploy/keycloak/realm-age.json` lists that, the app-scheme form
 (`id.animo.paradym:///wallet/redirect`) and this deployment's
 `https://135.235.192.9.sslip.io/wallet/redirect`. If the wallet is built to send
@@ -267,7 +267,7 @@ Two things this deployment made necessary, both now in the repository:
   Operator work therefore happens on the box, or over an ssh port-forward:
 
   ```bash
-  ssh -L 8088:127.0.0.1:8088 rc@<host>
+  ssh -L 8088:127.0.0.1:8088 <user>@<host>
   PUBLIC_URL=https://<host> OPS_URL=http://127.0.0.1:8088 npm run test:e2e
   ```
 - **Re-running setup is safe.** `scripts/enable-https.sh` is idempotent, and

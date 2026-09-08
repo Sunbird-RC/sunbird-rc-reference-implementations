@@ -233,7 +233,7 @@ Run instructions for a clean checkout are in the
 the live deployment, the operator endpoints need a tunnel:
 
 ```bash
-ssh -L 8089:127.0.0.1:8088 rc@<demo-host>
+ssh -L 8089:127.0.0.1:8088 <user>@<demo-host>
 
 PUBLIC_URL=https://<demo-host> OPS_URL=http://127.0.0.1:8089 \
   AGE_ISSUER_DID=<from deploy/.env on the host> \
