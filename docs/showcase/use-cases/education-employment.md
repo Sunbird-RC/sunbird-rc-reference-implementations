@@ -1,9 +1,8 @@
 # Education credentials for admission and employment
 
-> **Status: completed, accepted and merged to `main` in Iteration 03.** The
+> **Status: complete reference implementation.** The
 > three-credential admission and employment journeys use synthetic education
-> records. Every requirement is marked **MET** in the
-> [committed acceptance evidence](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/blob/main/docs/evidence/03-education/ACCEPTANCE.md).
+> records. See the [evidence summary](../../evidence/03-education/README.md).
 
 ## The problem
 
@@ -246,9 +245,8 @@ verification-rejection and refusal outcomes.
 
 - [Sunbird RC documentation](https://docs.sunbirdrc.dev/)
 - [Reference implementation repository](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations)
-- [Education Product, requirements, design and implementation](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/tree/main/iterations/03-education)
+- [Deployment and demo guide](../../deployment-and-demos.md)
 - [Education Registry schemas](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/tree/main/registry-schemas)
-- [Line-by-line acceptance evidence](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/blob/main/docs/evidence/03-education/ACCEPTANCE.md)
 - [Education evidence and reproducible test results](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/tree/main/docs/evidence/03-education)
 - [Complete Education and Employment demonstration](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/blob/main/docs/evidence/03-education/Education-Employment-Showcase-01Sep.mp4)
 - [Purpose-display follow-up evidence](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/blob/main/docs/evidence/03-education/Education-Purpose-Followup-02Sep.mp4)
