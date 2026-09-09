@@ -67,7 +67,7 @@ Age verification in 80 seconds — issue once, prove 18+ without revealing a dat
 {% endembed %}
 ```
 
-Never commit the MP4s. The two full films are 15.1 MB and 16.5 MB; GitBook would
+Never commit the MP4s. The three full films are 15.1, 15.1 and 16.5 MB; GitBook would
 serve them badly and they would bloat a repository that is already 50 MB.
 
 ### Short clips, not the full films
@@ -77,19 +77,31 @@ Ask for **one 60–90 second clip per use case**, cut to a single spine:
 scanning; a five-minute film is a commitment they have not yet agreed to. Put the
 full film underneath as a link for the reader the short clip has convinced.
 
-| Page | Short clip | Source | Full film |
+All three source films already exist under
+`RC_video/New_Flow/`, finished and to one spec — 720x1600 H.264, AAC stereo,
+each normalised to exactly -16.0 LUFS:
+
+| Page | Short clip | Source film | Full film |
 |---|---|---|---|
-| Age verification | ~70 s | **none exists — must be produced** | none |
-| Agriculture | ~75 s | `Agriculture-Rural-Credit-Showcase-31Aug.mp4` (322 s) | link |
-| Education | ~90 s | `Education-Employment-Showcase-01Sep.mp4` (332 s) | link |
-| Education, purpose fix | 39 s, use as-is | `Education-Purpose-Followup-02Sep.mp4` | — |
+| Age verification | ~70 s | `27-08-2016/Age-Verification-Showcase-27Aug.mp4` (285 s) | link |
+| Agriculture | ~75 s | `Agri_Demo/Agriculture-Rural-Credit-Showcase-31Aug.mp4` (322 s) | link |
+| Education | ~90 s | `Edu_Demo/Education-Employment-Showcase-01Sep.mp4` (332 s) | link |
+| Education, purpose fix | 39 s, use as-is | `Education-Purpose-Followup-02Sep.mp4` | - |
 
-**Age has no video at all.** Anand's own page carries the placeholder *"Add the
-public customer demonstration video and live-demo link here when they …"*, and no
-Age MP4 is committed. Either footage is cut from the Iteration 01 recordings or a
-fresh capture is needed; this is the single largest piece of new work.
+**No new filming is needed.** Every clip is a cut from footage that already
+exists, which makes this a day of editing rather than a reshoot.
 
-Cutting the two clips reuses the existing pipeline in
+Two things to know about the Age film specifically. It is **not committed to this
+repository** — Agriculture and Education are, Age is not — so
+`docs/evidence/01-age/` has no video beside its README, and the showcase page
+still carries Anand's placeholder *"Add the public customer demonstration video
+and live-demo link here when they ..."*. Committing it would add 15.1 MB; given
+the YouTube decision above, the better fix is to fill that placeholder with the
+embed rather than the file. And note `Age-Verification-Showcase-27Aug.pass1.mp4`
+(342 s) sitting next to it is the superseded earlier cut — the 285 s file without
+`.pass1` is the one to use.
+
+Cutting the clips reuses the existing pipeline in
 `RC_video/New_Flow/Edu_Demo/` — `build-body.py` for segment assembly with
 measured crops, `make-yaml.py` for narration cues derived from the timeline.
 Every hold must be checked on the frame it lands on: `tpad` clones the *last*
@@ -123,7 +135,8 @@ Four, and the first two are blocking.
    404s for anyone outside until it is made public.
 3. **YouTube uploads need Sunbird channel access.** `SB-Internal` is not ours.
    Sunbird uploads, or grants access; either way it is a dependency, not a task
-   we can schedule.
+   we can schedule. This is now the only external dependency, since the footage
+   all exists.
 4. **The Education page is missing the "Information design" section** its two
    siblings have, and all three diverge from `use-case-template.md`. Worth
    reconciling before they become the published reference.
@@ -134,7 +147,7 @@ Four, and the first two are blocking.
 2. Correct the pages here, on a branch, so the fixes are reviewable before they
    travel.
 3. Make the repository public (or the links stay dead).
-4. Cut the two clips; produce the Age clip.
+4. Cut the three clips from the existing films. No filming required.
 5. Sunbird uploads the three clips to `SB-Internal`, unlisted or public.
 6. Open the `Sunbird-RC/community` PR: five pages, the `SUMMARY.md` entries, the
    embeds, and the cross-link from Reference Solutions.
