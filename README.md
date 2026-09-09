@@ -18,18 +18,9 @@ Across these use cases, the showcase uses the established customized open-source
 
 ## Project Status
 
-- **PRODUCT:** approved and baselined in `main`.
-- **DESIGN:** approved and baselined.
-- **ITERATION 01 — AGE VERIFICATION:** accepted and merged to `main`; see the
-  [formal sign-off](docs/reviews/ITERATION-01-SIGNOFF.md) and
-  [evidence](docs/evidence/01-age/README.md).
-- **ITERATION 02 — AGRICULTURE / RURAL CREDIT:** accepted and merged to `main`;
-  see the [formal sign-off](docs/reviews/ITERATION-02-SIGNOFF.md) and
-  [evidence](docs/evidence/02-agriculture/README.md).
-- **ITERATION 03 — EDUCATION / EMPLOYMENT:** accepted and merged to `main` in
-  [`7f18e75`](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/commit/7f18e756d7d82bfd5e73dad1dbe3947fa0e89f3f);
-  every requirement is **MET** in the
-  [line-by-line acceptance record](docs/evidence/03-education/ACCEPTANCE.md).
+- **Age verification:** complete — [guide](docs/showcase/use-cases/age-verification.md) · [evidence](docs/evidence/01-age/README.md)
+- **Agriculture / rural credit:** complete — [guide](docs/showcase/use-cases/agriculture-rural-credit.md) · [evidence](docs/evidence/02-agriculture/README.md)
+- **Education / employment:** complete — [guide](docs/showcase/use-cases/education-employment.md) · [evidence](docs/evidence/03-education/README.md)
 
 ## Running the Age Verification showcase
 
@@ -44,7 +35,7 @@ cd deploy && cp env.example .env && docker compose up -d
 cd .. && npm install
 
 npm run test:unit                # accepted baseline: 175 passed, no stack needed
-npm run test:e2e                 # accepted baseline: 150 passed across all three iterations
+npm run test:e2e                 # baseline: 150 passed across all three applications
 ./scripts/demo.sh                # headless walkthrough: positive and negative cases
 ./scripts/verify.sh              # environment and regression checks
 
@@ -58,7 +49,7 @@ gitignored `deploy/.env`. Nothing sensitive is committed.
 
 Then open `http://localhost/verifier/` — "Start age check" shows the presentation
 QR and the decision. There is deliberately no issuer web page: issuance is
-wallet-driven through Keycloak, with no QR code, as the iteration charter requires.
+wallet-driven through Keycloak, with no QR code.
 
 **For a phone to take part**, the stack needs a public HTTPS origin: `did:web`
 mandates https, and the origin is baked into every DID and credential, so it has
@@ -93,8 +84,8 @@ uses: real keys, real signatures, real key binding, nothing stubbed. It is
 supporting evidence and not the customer journey, which is wallet-driven issuance
 on a real device.
 
-**The Agriculture wallet build must not list the Age issuer** — `DEMO.md`'s
-quality gate. The issuer directory is baked in at build time, so pass only the
+**The Agriculture wallet build must not list the Age issuer.** The issuer
+directory is baked in at build time, so pass only the
 two registries:
 
 ```bash
@@ -111,13 +102,12 @@ VERIFIER_USE_CASE=agriculture VERIFIER_BASE_URL=https://<host> \
 cd android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
 ```
 
-It is **not required** for Iteration 02 acceptance — `REQUIREMENTS.md` §1 makes web
-QR verification the customer-facing channel — and it shares a package with the Age
-build, so installing one replaces the other.
+Web QR verification is the customer-facing Agriculture channel. The mobile
+verifier shares a package with the Age build, so installing one replaces the other.
 
 One APK cannot satisfy both demos: both builds share the package name, so
-installing one replaces the other. See
-[iterations/02-agriculture/IMPLEMENTATION.md](iterations/02-agriculture/IMPLEMENTATION.md).
+installing one replaces the other. See the
+[deployment and demo guide](docs/deployment-and-demos.md).
 
 ## Running the Education / employment showcase
 
@@ -179,64 +169,20 @@ cd android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
 ```
 
 `education-masters` gives "Master's Admissions"; `education-job` gives "Interview
-Shortlisting". Two channels because Education has two relying parties — one app
-named for both would mislabel one of them. It is **not required** for acceptance:
-`DEMO.md` puts the verifier on a website. It exists because all four builds share a
-package name, so leaving the Agriculture build installed puts "Farm Credit" on the
-home screen during an Education demo.
+Shortlisting". Two channels are provided because Education has two relying
+parties—one app named for both would mislabel one of them. The primary verifier
+experience is web based. All four builds share a package name, so leaving the
+Agriculture build installed puts "Farm Credit" on the home screen during an
+Education demo.
 
 | I want to | Read |
 |---|---|
-| Review Iteration 01 against the validation table | [docs/evidence/01-age/VALIDATION.md](docs/evidence/01-age/VALIDATION.md) |
-| See what was built, versions, deviations and defects | [docs/evidence/01-age/README.md](docs/evidence/01-age/README.md) |
-| See captured test and verification runs | [docs/evidence/01-age/runs/](docs/evidence/01-age/runs/) |
-| Build the wallet or the mobile verifier app | [docs/evidence/01-age/README.md](docs/evidence/01-age/README.md#building-the-two-mobile-apps) |
+| Understand the applications | [docs/showcase/](docs/showcase/README.md) |
+| Deploy and demonstrate the applications | [docs/deployment-and-demos.md](docs/deployment-and-demos.md) |
+| Run and understand the tests | [docs/testing.md](docs/testing.md) |
+| Review the technical profile and limitations | [docs/technical-profile.md](docs/technical-profile.md) |
 | See what we changed in the wallet, and what is upstream's | [vendor/paradym-wallet/SUNBIRD-CHANGES.md](vendor/paradym-wallet/SUNBIRD-CHANGES.md) |
-| Understand a protocol or wallet compatibility finding | [docs/design/COMPATIBILITY.md](docs/design/COMPATIBILITY.md) |
 
-## Project Documents
+## Documentation
 
-- [Product Definition](docs/project/PRODUCT.md)
-- [Working & Engagement Model](docs/project/WORKING-ENGAGEMENT-MODEL.md)
-- [Git Working Model](docs/project/GIT-WORKING-MODEL.md)
-- [Architecture & Design](docs/design/DESIGN.md)
-- [Compatibility Baseline](docs/design/COMPATIBILITY.md)
-- [Coding Agent Instructions](CLAUDE.md)
-- [Iteration 01 — Age Verification](iterations/01-age/CHARTER.md)
-- [Iteration 01 review feedback](docs/reviews/ITERATION-01-FEEDBACK.md)
-- [Iteration 01 review feedback, round 2](docs/reviews/ITERATION-01-FEEDBACK-ROUND2.md)
-- [Iteration 01 formal sign-off](docs/reviews/ITERATION-01-SIGNOFF.md)
-- [Iteration 01 evidence](docs/evidence/01-age/README.md)
-- [Programme wallet-scope decision](docs/reviews/DECISION-03-wallet-scope.md)
-- [Iteration 02 formal sign-off](docs/reviews/ITERATION-02-SIGNOFF.md)
-- [Iteration 02 — Agriculture Product](iterations/02-agriculture/PRODUCT.md)
-- [Iteration 02 — Agriculture Requirements](iterations/02-agriculture/REQUIREMENTS.md)
-- [Iteration 02 — Agriculture Design](iterations/02-agriculture/DESIGN.md)
-- [Iteration 02 — Final Demo Expectations](iterations/02-agriculture/DEMO.md)
-- [Iteration 03 — Education: Start Here](iterations/03-education/START.md)
-- [Iteration 03 — Product Definition](iterations/03-education/PRODUCT.md)
-- [Iteration 03 — Requirements](iterations/03-education/REQUIREMENTS.md)
-- [Iteration 03 — Architecture & Design](iterations/03-education/DESIGN.md)
-- [Iteration 03 — Final Demo Expectations](iterations/03-education/DEMO.md)
-- [Iteration 03 — Implementation Plan and Progress](iterations/03-education/PLAN.md)
-- [Iteration 03 — Implementation Log](iterations/03-education/IMPLEMENTATION.md)
-- [Iteration 03 — Recording the demo, end to end](iterations/03-education/IMPLEMENTATION.md#recording-the-demo-end-to-end)
-- [Iteration 03 — Acceptance and evidence](docs/evidence/03-education/ACCEPTANCE.md)
-
-These documents are the authoritative project baseline. Architecture and implementation must remain aligned with them.
-
-## Working Model
-
-- Anand and ChatGPT own Product, Design, and iteration acceptance.
-- Kartheek owns development and testing with Claude Code / Co-work.
-- Kartheek and Claude have freedom within the active iteration branch.
-- `main` contains only accepted, working baselines.
-- Nothing is merged into `main` without Anand's explicit sign-off after the demonstration, test evidence, and feedback closure.
-
-## Delivery Flow
-
-```text
-Product → Design → Iteration → Build/Test → Demo → Feedback → Sign-off → Merge
-```
-
-Each new iteration starts from the latest accepted `main` baseline.
+Start with the [reference implementation documentation](docs/README.md).

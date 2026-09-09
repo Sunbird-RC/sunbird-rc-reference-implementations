@@ -74,14 +74,14 @@ trusted records and portable evidence.
 
 ## Reference implementation status
 
-All three reference implementations have completed demonstration, feedback,
-acceptance and merge into the repository's `main` baseline.
+All three reference implementations are complete and available in the
+repository's `main` baseline.
 
-| Iteration | Reference implementation | Status | Accepted evidence |
-|---|---|---|---|
-| 01 | Age verification | **Completed and merged** | [Validation and evidence](../evidence/01-age/README.md) |
-| 02 | Agriculture and rural credit | **Completed and merged** | [Acceptance and evidence](../evidence/02-agriculture/README.md) |
-| 03 | Education and employment | **Completed and merged** | [Line-by-line acceptance](../evidence/03-education/ACCEPTANCE.md) |
+| Reference implementation | Status | Evidence |
+|---|---|---|
+| Age verification | **Complete** | [Evidence summary](../evidence/01-age/README.md) |
+| Agriculture and rural credit | **Complete** | [Evidence summary](../evidence/02-agriculture/README.md) |
+| Education and employment | **Complete** | [Evidence summary](../evidence/03-education/README.md) |
 
 The status describes these bounded reference applications. It does not imply
 that the wider production ecosystems, governance arrangements or external
