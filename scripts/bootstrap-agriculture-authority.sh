@@ -95,6 +95,32 @@ curl -sS --max-time 10 "$BASE/health" >/dev/null 2>&1 \
 head1 "Authority Service at $BASE"
 green "health ok"
 
+# Preflight, in the main shell where die can actually stop the script.
+#
+# Everything below runs inside $(...) captures, and `exit` there kills only the subshell —
+# the first draft of this script hit a 401 on every call and cheerfully reported creating
+# things. Health is a public route and says nothing about whether these headers are
+# accepted, so this asks for something that requires a principal.
+preflight="$(curl -sS --max-time 15 "$API/tenants" \
+  -H "x-dev-issuer: $BOOT_ISSUER" -H "x-dev-subject: $BOOT_SUBJECT" -w '\n%{http_code}')"
+case "${preflight##*$'\n'}" in
+  2*) green "bootstrap principal accepted" ;;
+  401|403)
+    die "the service rejected the bootstrap principal — it is running with authentication on.
+    These headers work only when the service has ENABLE_AUTH=false, and root tenant creation
+    additionally needs BOOTSTRAP_ADMINS to contain \"$BOOT_ISSUER|$BOOT_SUBJECT\".
+    Both default to secure values, so a freshly started stack will not have them." ;;
+  *) die "unexpected response from $API/tenants: ${preflight##*$'\n'}" ;;
+esac
+
+# require_id NAME VALUE — called in the main shell, so this one can stop everything.
+require_id() {
+  case "$2" in
+    ????????-????-????-????-????????????) : ;;
+    *) die "$1 did not come back as an id (got \"${2:-empty}\") — refusing to continue" ;;
+  esac
+}
+
 # Bash 3.2 is what macOS ships, so no associative arrays. With two of everything,
 # naming them is clearer than working around the shell anyway.
 
@@ -161,11 +187,15 @@ print(next((m["id"] for m in items
 
 head1 "Tenants"
 TENANT_FARMER="$(ensure_tenant T-AGRI-FARMER 'Farmer Authority Tenant')"
+require_id "tenant T-AGRI-FARMER" "$TENANT_FARMER"
 TENANT_LAND="$(ensure_tenant T-AGRI-LAND 'Land Authority Tenant')"
+require_id "tenant T-AGRI-LAND" "$TENANT_LAND"
 
 head1 "Authorities"
 AUTH_FARMER="$(ensure_authority AUTH-FARMER 'Farmer Authority' "$TENANT_FARMER")"
+require_id "authority AUTH-FARMER" "$AUTH_FARMER"
 AUTH_LAND="$(ensure_authority AUTH-LAND 'Land Authority' "$TENANT_LAND")"
+require_id "authority AUTH-LAND" "$AUTH_LAND"
 
 head1 "Registry bindings"
 # uniqueFields is tenant-scoped, per the identifier decision: no RC global index and no
@@ -177,11 +207,15 @@ head1 "Registry bindings"
 # record, and uniqueFields cannot be patched afterwards. Verified by getting it wrong first:
 # a binding declaring "farmerNumber" accepted two records with the same farmerId.
 BIND_FARMER="$(ensure_binding "$AUTH_FARMER" FarmerRecord 'Farmer Records' farmerId)"
+require_id "binding FarmerRecord" "$BIND_FARMER"
 BIND_LAND="$(ensure_binding "$AUTH_LAND" LandRecord 'Land Records' landId)"
+require_id "binding LandRecord" "$BIND_LAND"
 
 head1 "Issuers"
 ISS_FARMER="$(ensure_issuer "$AUTH_FARMER" ISS-FARMER 'Farmer Authority')"
+require_id "issuer ISS-FARMER" "$ISS_FARMER"
 ISS_LAND="$(ensure_issuer "$AUTH_LAND" ISS-LAND 'Land Authority')"
+require_id "issuer ISS-LAND" "$ISS_LAND"
 
 head1 "Memberships"
 # Distinct operators per Authority. Neither can read the other's records, and the
