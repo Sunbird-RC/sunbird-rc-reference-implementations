@@ -1,0 +1,23 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "@protected": true,
+
+    "id": "@id",
+    "type": "@type",
+
+    "agri": "https://sunbirdrc.dev/contexts/agriculture/v1#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+
+    "FarmerIdentityCredential": "agri:FarmerIdentityCredential",
+    "LandOwnershipCredential": "agri:LandOwnershipCredential",
+
+    "farmerReference":    { "@id": "agri:farmerReference",    "@type": "xsd:string" },
+    "registrationStatus": { "@id": "agri:registrationStatus", "@type": "xsd:boolean" },
+    "parcelReference":    { "@id": "agri:parcelReference",    "@type": "xsd:string" },
+    "ownershipStatus":    { "@id": "agri:ownershipStatus",    "@type": "xsd:string" },
+    "cropType":           { "@id": "agri:cropType",           "@type": "xsd:string" },
+    "cultivatedArea":     { "@id": "agri:cultivatedArea",     "@type": "xsd:decimal" },
+    "jurisdiction":       { "@id": "agri:jurisdiction",       "@type": "xsd:string" }
+  }
+}
