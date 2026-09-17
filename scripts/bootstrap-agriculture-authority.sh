@@ -42,6 +42,18 @@ LAND_OPERATOR="${LAND_OPERATOR:-agri-land-operator}"
 FARMER_OFFICER="${FARMER_OFFICER:-agri-farmer-officer}"
 LAND_OFFICER="${LAND_OFFICER:-agri-land-officer}"
 
+# Issuer DIDs. Unset by default: a DID is an environment fact, and the demo stack cannot
+# produce a usable one (see the guard below). Set these to publicly resolvable did:web
+# values to complete issuer configuration.
+ISSUER_DID_FARMER="${ISSUER_DID_FARMER:-}"
+ISSUER_DID_LAND="${ISSUER_DID_LAND:-}"
+ISSUER_KEY_ALGORITHM="${ISSUER_KEY_ALGORITHM:-Ed25519}"
+# Key references default to the issuer DID: the usual case is a DID that resolves to its own
+# verification method. Set these only if the signing key is published somewhere else.
+ISSUER_KEY_FARMER="${ISSUER_KEY_FARMER:-}"
+ISSUER_KEY_LAND="${ISSUER_KEY_LAND:-}"
+ISSUER_KEY_ID="${ISSUER_KEY_ID:-key-0}"
+
 green() { printf '  \033[32m✓\033[0m %s\n' "$1" >&2; }
 info()  { printf '  \033[2m·\033[0m %s\n' "$1" >&2; }
 warn()  { printf '  \033[33m!\033[0m %s\n' "$1" >&2; }
@@ -219,6 +231,103 @@ require_id "issuer ISS-FARMER" "$ISS_FARMER"
 ISS_LAND="$(ensure_issuer "$AUTH_LAND" ISS-LAND 'Land Authority')"
 require_id "issuer ISS-LAND" "$ISS_LAND"
 
+
+# An issuer's DID is the one piece of configuration that is published verbatim to anyone,
+# unauthenticated, at GET /trust/issuers/{id}. Two things follow, and the demo stack gets
+# both wrong by default.
+#
+# The identity service mints DIDs from WEB_DID_BASE_URL, which defaults to
+# http://identity:3332/did/web — its own address inside the compose network. A DID built
+# from that reads
+#
+#   did:web:http%3A::identity%3A3332:did:web:24d82774-...
+#
+# and publishing it would disclose an internal service location on a public route, which the
+# privacy constraint forbids. It is also simply broken: identity publishes no port, so no
+# external verifier can resolve it. A trust anchor nobody can resolve is not a trust anchor.
+#
+# This guard is a heuristic, not a proof — it rejects hosts that cannot be public rather
+# than verifying that a host is. That is the direction worth being wrong in.
+did_looks_internal() {
+  printf '%s' "$1" | python3 -c '
+import sys, re, urllib.parse
+did = urllib.parse.unquote(sys.stdin.read())
+host = ""
+m = re.search(r"did:web:(?:https?:/*)?([^:/]+)", did)
+if m:
+    host = m.group(1).lower()
+# No dot at all means a container or host alias, never a public name. The rest are the
+# obvious local and private forms.
+internal = (
+    not host
+    or "." not in host
+    or host in ("localhost", "host.docker.internal")
+    or re.match(r"^(127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)", host)
+)
+print("internal" if internal else "public")
+'
+}
+
+# ensure_issuer_did ISSUER_ID DID LABEL VAR_NAME
+ensure_issuer_did() {
+  local issuer_id="$1" did="$2" label="$3" var="$4" current version
+  if [ -z "$did" ]; then
+    warn "$label has no DID — set $var to publish it at /trust/issuers"
+    return
+  fi
+  if [ "$(did_looks_internal "$did")" = internal ]; then
+    die "refusing to set $label to a DID that names an internal or unresolvable host:
+    $did
+    This is published verbatim, unauthenticated, at GET /trust/issuers/{id}. A DID minted by
+    the demo identity service is built from WEB_DID_BASE_URL (http://identity:3332/did/web by
+    default) and is both a disclosure of internal topology and unresolvable from outside.
+    Point WEB_DID_BASE_URL at the Authority's public origin, or supply a did:web you host."
+  fi
+  current="$(api GET "/issuers/$issuer_id" | field did)"
+  if [ "$current" = "$did" ]; then info "$label DID already set"; return; fi
+  version="$(api GET "/issuers/$issuer_id" | field version)"
+  curl -sS --max-time 25 -X PATCH "$API/issuers/$issuer_id" \
+    -H "x-dev-issuer: $BOOT_ISSUER" -H "x-dev-subject: $BOOT_SUBJECT" \
+    -H 'Content-Type: application/json' -H "If-Match: $version" \
+    -d "$(printf '{"did":"%s"}' "$did")" -o /dev/null -w '' || die "could not set $label DID"
+  green "$label DID set"
+}
+
+# ensure_issuer_key ISSUER_ID KEY_REF LABEL
+#
+# The key reference is published too. Guarding only the issuer DID is not enough: a
+# verification method's reference appears verbatim in the same public response, so an
+# internal DID attached as a key leaks exactly what the DID guard was there to prevent.
+# Found by fixing the DID and watching the internal address stay in verificationMethods.
+ensure_issuer_key() {
+  local issuer_id="$1" key_ref="$2" label="$3" existing
+  [ -n "$key_ref" ] || return 0
+  if [ "$(did_looks_internal "$key_ref")" = internal ]; then
+    die "refusing to attach a key to $label whose reference names an internal host:
+    $key_ref
+    Key references are published in verificationMethods at GET /trust/issuers/{id}, with the
+    same consequences as an internal issuer DID."
+  fi
+  existing="$(api GET "/issuers/$issuer_id/keys" | python3 -c '
+import sys, json
+want = sys.argv[1]
+data = json.load(sys.stdin)
+items = data if isinstance(data, list) else data.get("items", [])
+print(next((k["id"] for k in items if k.get("keyRefUri") == want), ""))
+' "$key_ref")"
+  if [ -n "$existing" ]; then info "$label key already attached"; return; fi
+  api POST "/issuers/$issuer_id/keys" \
+    "$(printf '{"keyRefType":"IDENTITY_SERVICE_DID","keyRefUri":"%s","kid":"%s","algorithm":"%s"}' \
+       "$key_ref" "$ISSUER_KEY_ID" "$ISSUER_KEY_ALGORITHM")" >/dev/null
+  green "$label key attached"
+}
+
+head1 "Issuer DIDs"
+ensure_issuer_did "$ISS_FARMER" "$ISSUER_DID_FARMER" "ISS-FARMER" ISSUER_DID_FARMER
+ensure_issuer_did "$ISS_LAND"   "$ISSUER_DID_LAND"   "ISS-LAND"   ISSUER_DID_LAND
+ensure_issuer_key "$ISS_FARMER" "${ISSUER_KEY_FARMER:-$ISSUER_DID_FARMER}" ISS-FARMER
+ensure_issuer_key "$ISS_LAND"   "${ISSUER_KEY_LAND:-$ISSUER_DID_LAND}"     ISS-LAND
+
 head1 "Memberships"
 # Distinct operators per Authority. Neither can read the other's records, and the
 # application correlates across them from credentials rather than from access.
@@ -231,8 +340,6 @@ ensure_membership "$TENANT_LAND"   "$LAND_OPERATOR"   OPERATOR
 # away while appearing to satisfy it.
 ensure_membership "$TENANT_FARMER" "$FARMER_OFFICER"  AUTHORISED_OFFICER
 ensure_membership "$TENANT_LAND"   "$LAND_OFFICER"    AUTHORISED_OFFICER
-
-warn "No signing key is configured here — see the note at the end of this script."
 
 head1 "Summary"
 printf '  tenant    %-16s %s\n' T-AGRI-FARMER "$TENANT_FARMER" T-AGRI-LAND "$TENANT_LAND"
