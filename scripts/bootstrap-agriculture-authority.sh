@@ -170,8 +170,14 @@ AUTH_LAND="$(ensure_authority AUTH-LAND 'Land Authority' "$TENANT_LAND")"
 head1 "Registry bindings"
 # uniqueFields is tenant-scoped, per the identifier decision: no RC global index and no
 # platform-wide identifier. Two tenants may legitimately both hold local number F-004821.
-BIND_FARMER="$(ensure_binding "$AUTH_FARMER" FarmerRecord 'Farmer Records' farmerNumber)"
-BIND_LAND="$(ensure_binding "$AUTH_LAND" LandRecord 'Land Records' parcelNumber)"
+#
+# These names must match the RC entity schema exactly — farmerId and landId, as defined in
+# registry-schemas/. A name that matches nothing does NOT fail: uniqueness is claimed only
+# for fields a record actually carries, so a typo silently disables the constraint for every
+# record, and uniqueFields cannot be patched afterwards. Verified by getting it wrong first:
+# a binding declaring "farmerNumber" accepted two records with the same farmerId.
+BIND_FARMER="$(ensure_binding "$AUTH_FARMER" FarmerRecord 'Farmer Records' farmerId)"
+BIND_LAND="$(ensure_binding "$AUTH_LAND" LandRecord 'Land Records' landId)"
 
 head1 "Issuers"
 ISS_FARMER="$(ensure_issuer "$AUTH_FARMER" ISS-FARMER 'Farmer Authority')"
