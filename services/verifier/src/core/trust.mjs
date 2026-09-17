@@ -33,20 +33,16 @@ function expand(value, env) {
 }
 
 /**
- * @param {{file: string, env?: Record<string, string|undefined>}} config
+ * Builds the checker over already-resolved issuers. Shared so that a policy read
+ * from a file and one resolved from the Authority Service cannot drift apart in
+ * how they answer — the difference between them is where a DID comes from, and
+ * nothing else.
+ *
+ * @param {{name: string, did: string, credentials: string[], roles: string[]}[]} issuers
+ * @param {string} source for error messages
  */
-export function loadTrustPolicy({ file, env = process.env }) {
-  const raw = JSON.parse(readFileSync(file, 'utf8'));
-  const issuers = (raw.issuers || []).map((issuer) => ({
-    name: issuer.name,
-    did: expand(String(issuer.did || ''), env),
-    credentials: issuer.credentials || [],
-    // Which role(s) in a multi-credential request this issuer may satisfy.
-    // Empty means "no role constraint", which is how the single-credential Age
-    // request works and why adding roles did not change its behaviour.
-    roles: issuer.roles || [],
-  }));
-  if (issuers.length === 0) throw new Error(`trust policy ${file} allowlists no issuers`);
+function buildPolicy(issuers, source) {
+  if (issuers.length === 0) throw new Error(`trust policy ${source} allowlists no issuers`);
 
   const byDid = new Map(issuers.map((issuer) => [issuer.did, issuer]));
 
@@ -91,4 +87,152 @@ export function loadTrustPolicy({ file, env = process.env }) {
       return { ok: true, issuer: { name: issuer.name, did: issuer.did } };
     },
   };
+}
+
+/**
+ * Reads the policy file and normalises one entry.
+ *
+ * @param {any} issuer
+ * @param {Record<string, string|undefined>} env
+ */
+function normalise(issuer, env) {
+  return {
+    name: issuer.name,
+    credentials: issuer.credentials || [],
+    // Which role(s) in a multi-credential request this issuer may satisfy.
+    // Empty means "no role constraint", which is how the single-credential Age
+    // request works and why adding roles did not change its behaviour.
+    roles: issuer.roles || [],
+    authorityIssuer: issuer.authorityIssuer || null,
+    did: issuer.did ? expand(String(issuer.did), env) : null,
+  };
+}
+
+function readPolicy(file) {
+  return JSON.parse(readFileSync(file, 'utf8')).issuers || [];
+}
+
+/**
+ * The original, file-only form. Every issuer must carry a literal DID.
+ *
+ * @param {{file: string, env?: Record<string, string|undefined>}} config
+ */
+export function loadTrustPolicy({ file, env = process.env }) {
+  const issuers = readPolicy(file).map((issuer) => {
+    const entry = normalise(issuer, env);
+    if (entry.authorityIssuer) {
+      // Refused rather than skipped. Dropping the entry would quietly shrink the
+      // allowlist, and the credential it covers would then be rejected as
+      // "not in the allowlist" — a confusing symptom a long way from the cause.
+      throw new Error(
+        `trust policy ${file} entry "${entry.name}" names an Authority Service issuer, ` +
+          'which this loader cannot resolve. Use resolveTrustPolicy.',
+      );
+    }
+    if (!entry.did) throw new Error(`trust policy ${file} entry "${entry.name}" has no did`);
+    return entry;
+  });
+  return buildPolicy(issuers, file);
+}
+
+/**
+ * Resolves the allowlist against the Authority Service.
+ *
+ * The policy stops naming DIDs and starts naming issuers: "this Authority
+ * Service issuer is trusted, go and resolve it". The allowlist itself does not
+ * disappear — being resolvable is not the same as being trusted, and the role
+ * constraints that stop a Farmer credential satisfying the Land slot live here,
+ * not in the Authority Service.
+ *
+ * Entries carrying a literal `did` are still read from the file. Only two of the
+ * six issuers moved behind the Authority Service; Age and the three Education
+ * issuers have no Authority Service configuration, and requiring one would break
+ * journeys this iteration does not touch.
+ *
+ * Fails closed, the same way an unset ${VAR} already did: an issuer that cannot
+ * be resolved stops the verifier from starting. A verifier that silently drops an
+ * unreachable issuer would keep serving, reject that issuer's credentials as
+ * untrusted, and look like a credential problem.
+ *
+ * Resolved once, at boot, like the file it replaces. That means deactivating an
+ * issuer in the Authority Service does not reach a running verifier until it
+ * restarts — no worse than the file, but no better, and worth knowing before
+ * anyone treats this as revocation.
+ *
+ * @param {{file: string, env?: Record<string, string|undefined>, baseUrl: string,
+ *          fetchImpl?: typeof fetch, timeoutMs?: number}} config
+ */
+export async function resolveTrustPolicy({
+  file,
+  env = process.env,
+  baseUrl,
+  fetchImpl = fetch,
+  timeoutMs = 5000,
+}) {
+  const entries = readPolicy(file).map((issuer) => normalise(issuer, env));
+
+  const resolved = await Promise.all(
+    entries.map(async (entry) => {
+      if (!entry.authorityIssuer) {
+        if (!entry.did) throw new Error(`trust policy ${file} entry "${entry.name}" has no did`);
+        return entry;
+      }
+      if (!baseUrl) {
+        throw new Error(
+          `trust policy ${file} entry "${entry.name}" needs the Authority Service, ` +
+            'but no base URL was configured.',
+        );
+      }
+
+      const url = `${baseUrl.replace(/\/$/, '')}/api/v1/trust/issuers/${encodeURIComponent(entry.authorityIssuer)}`;
+      let response;
+      try {
+        response = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs) });
+      } catch (cause) {
+        throw new Error(
+          `could not reach the Authority Service to resolve issuer "${entry.name}": ${cause.message}`,
+        );
+      }
+      if (!response.ok) {
+        // 404 is the Authority Service's answer for both "no such issuer" and
+        // "not published", deliberately, so that the route cannot be used to
+        // discover which issuer identifiers exist. Either way this one is not
+        // usable and the verifier must not start.
+        throw new Error(
+          `Authority Service did not publish issuer "${entry.name}" (${entry.authorityIssuer}): HTTP ${response.status}`,
+        );
+      }
+
+      const body = await response.json();
+      const did = typeof body?.issuer === 'string' ? body.issuer : '';
+      if (!did) {
+        throw new Error(`Authority Service returned no issuer DID for "${entry.name}"`);
+      }
+      return {
+        ...entry,
+        did,
+        // The published display name is the Authority's own. The local name stays
+        // as the fallback so a policy entry is still readable when the service is
+        // reachable but nameless.
+        name: pickName(body?.name) || entry.name,
+      };
+    }),
+  );
+
+  return buildPolicy(resolved, file);
+}
+
+/**
+ * The public trust response carries display names keyed by language. Takes
+ * English when present, otherwise the first entry, otherwise nothing.
+ *
+ * @param {unknown} name
+ */
+function pickName(name) {
+  if (typeof name === 'string') return name;
+  if (!name || typeof name !== 'object') return '';
+  const values = Object.entries(name).filter(([, v]) => typeof v === 'string' && v);
+  if (values.length === 0) return '';
+  const english = values.find(([k]) => k === 'en');
+  return (english || values[0])[1];
 }
