@@ -39,6 +39,8 @@ BOOT_SUBJECT="${BOOTSTRAP_SUBJECT:-bootstrap}"
 MEMBER_ISSUER="${MEMBER_ISSUER:-https://idp.test}"
 FARMER_OPERATOR="${FARMER_OPERATOR:-agri-farmer-operator}"
 LAND_OPERATOR="${LAND_OPERATOR:-agri-land-operator}"
+FARMER_OFFICER="${FARMER_OFFICER:-agri-farmer-officer}"
+LAND_OFFICER="${LAND_OFFICER:-agri-land-officer}"
 
 green() { printf '  \033[32m✓\033[0m %s\n' "$1" >&2; }
 info()  { printf '  \033[2m·\033[0m %s\n' "$1" >&2; }
@@ -222,6 +224,13 @@ head1 "Memberships"
 # application correlates across them from credentials rather than from access.
 ensure_membership "$TENANT_FARMER" "$FARMER_OPERATOR" OPERATOR
 ensure_membership "$TENANT_LAND"   "$LAND_OPERATOR"   OPERATOR
+# Separation of duties: an OPERATOR may create and submit a record but not approve it.
+# Approval requires AUTHORISED_OFFICER or ADMINISTRATOR, so a record cannot be brought into
+# force by the same person who entered it. Seeding therefore needs both roles, and they are
+# deliberately different subjects — granting one person both would configure the separation
+# away while appearing to satisfy it.
+ensure_membership "$TENANT_FARMER" "$FARMER_OFFICER"  AUTHORISED_OFFICER
+ensure_membership "$TENANT_LAND"   "$LAND_OFFICER"    AUTHORISED_OFFICER
 
 warn "No signing key is configured here — see the note at the end of this script."
 
