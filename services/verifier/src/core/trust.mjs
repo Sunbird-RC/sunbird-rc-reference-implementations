@@ -211,10 +211,16 @@ export async function resolveTrustPolicy({
       return {
         ...entry,
         did,
-        // The published display name is the Authority's own. The local name stays
-        // as the fallback so a policy entry is still readable when the service is
-        // reachable but nameless.
-        name: pickName(body?.name) || entry.name,
+        // The POLICY's name wins; the published one fills a gap.
+        //
+        // The other way round reads better in principle — an Authority's own name
+        // for itself is more authoritative than a relying party's label for it —
+        // and it silently rewrote user-visible output: the bank's answer started
+        // naming "Farmer Authority" where it had always said "Farmer Registry",
+        // and the e2e suite caught it. Which name a relying party shows its own
+        // customers is that relying party's decision, and changing it is not
+        // something resolving a DID should do on the way past.
+        name: entry.name || pickName(body?.name),
       };
     }),
   );

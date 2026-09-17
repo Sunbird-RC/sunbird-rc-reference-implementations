@@ -275,7 +275,16 @@ ensure_issuer_did() {
     warn "$label has no DID — set $var to publish it at /trust/issuers"
     return
   fi
-  if [ "$(did_looks_internal "$did")" = internal ]; then
+  if [ "$(did_looks_internal "$did")" = internal ] && [ "${ALLOW_LOCAL_ISSUER_DID:-}" = true ]; then
+    # Opt-in, loud, and never the default. The reference stack mints
+    # did:web:localhost:<uuid> from PUBLIC_URL, so a local end-to-end run cannot use a
+    # publishable DID — the demo's own issuers are unresolvable from anywhere but this
+    # machine. Allowing that quietly would turn the guard into a formality, so it says what
+    # it is permitting every time.
+    warn "ALLOW_LOCAL_ISSUER_DID=true — publishing a DID that cannot be resolved off this"
+    warn "  machine: $did"
+    warn "  Acceptable for a local run. Never for anything a verifier outside this host reads."
+  elif [ "$(did_looks_internal "$did")" = internal ]; then
     die "refusing to set $label to a DID that names an internal or unresolvable host:
     $did
     This is published verbatim, unauthenticated, at GET /trust/issuers/{id}. A DID minted by
@@ -302,7 +311,9 @@ ensure_issuer_did() {
 ensure_issuer_key() {
   local issuer_id="$1" key_ref="$2" label="$3" existing
   [ -n "$key_ref" ] || return 0
-  if [ "$(did_looks_internal "$key_ref")" = internal ]; then
+  if [ "$(did_looks_internal "$key_ref")" = internal ] && [ "${ALLOW_LOCAL_ISSUER_DID:-}" = true ]; then
+    warn "ALLOW_LOCAL_ISSUER_DID=true — attaching an unresolvable key reference to $label"
+  elif [ "$(did_looks_internal "$key_ref")" = internal ]; then
     die "refusing to attach a key to $label whose reference names an internal host:
     $key_ref
     Key references are published in verificationMethods at GET /trust/issuers/{id}, with the

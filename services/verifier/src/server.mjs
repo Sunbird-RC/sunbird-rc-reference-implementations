@@ -16,7 +16,7 @@ import { oid4vcClient } from './core/oid4vc-client.mjs';
 import { loadAlgorithmPolicy } from './core/algorithms.mjs';
 import { buildDcqlQuery, expectedClaimNames, ISSUER_CLAIM } from './core/dcql.mjs';
 import { evaluateChecks } from './core/checks.mjs';
-import { loadTrustPolicy } from './core/trust.mjs';
+import { resolveTrustPolicy } from './core/trust.mjs';
 import { assertExactClaims } from './core/claim-policy.mjs';
 import { sessionStore } from './core/sessions.mjs';
 import { ageCredentialRequest, decideAge, AGE_CLAIM } from './domains/age/index.mjs';
@@ -46,6 +46,10 @@ const SCHOOL_VCT = process.env.SCHOOL_VCT || `${PUBLIC_URL}/vct/school-record-cr
 const COLLEGE_VCT = process.env.COLLEGE_VCT || `${PUBLIC_URL}/vct/college-record-credential`;
 const UNIVERSITY_VCT = process.env.UNIVERSITY_VCT || `${PUBLIC_URL}/vct/university-record-credential`;
 const TRUST_POLICY_FILE = process.env.TRUST_POLICY_FILE || '/app/config/trust/issuers.json';
+// Where to resolve issuers the trust policy names rather than spells out. Unset
+// is fine for a policy of literal DIDs; an entry that needs it will say so and
+// refuse to start.
+const AUTHORITY_BASE_URL = process.env.AUTHORITY_BASE_URL || '';
 const CROP_POLICY_FILE = process.env.CROP_POLICY_FILE || '/app/config/policy/crop-rates.json';
 const ALG_POLICY_FILE = process.env.ALG_POLICY_FILE || '/app/config/policy/algorithms.json';
 // Mirrors oid4vc-service's VP_TXN_TTL default. A verifier session outliving the
@@ -92,9 +96,14 @@ const signers = {
 const oid4vc = signers.age;
 const sessions = sessionStore({ ttlSeconds: SESSION_TTL_SECONDS });
 
-// Loaded once, at boot, and deliberately allowed to throw: a verifier that
-// cannot tell which issuers it trusts must not start and accept presentations.
-const trust = loadTrustPolicy({ file: TRUST_POLICY_FILE });
+// Resolved once, at boot, before the listener opens — see the bottom of this
+// file. Deliberately allowed to throw: a verifier that cannot tell which issuers
+// it trusts must not start and accept presentations.
+//
+// Assigned rather than const because resolution reads the Authority Service for
+// any issuer the policy names instead of spelling out, and that is asynchronous.
+// Nothing reads it before listen(), which is the ordering that matters.
+let trust;
 
 // Same rule as the trust allowlist: a verifier that cannot read the lending
 // policy must not start and then quote a rupee figure it made up.
@@ -616,6 +625,19 @@ const server = createServer(async (req, res) => {
     return send(500, { error: 'verifier_error' });
   }
 });
+
+// Resolve trust first, then listen. The order is the safety property: a verifier
+// that opened its port and resolved afterwards would accept presentations during
+// the gap with no allowlist, and answer them.
+//
+// A failure here exits non-zero rather than serving in a degraded state. There is
+// no useful degraded state for this — every branch below refuses everything.
+try {
+  trust = await resolveTrustPolicy({ file: TRUST_POLICY_FILE, baseUrl: AUTHORITY_BASE_URL });
+} catch (err) {
+  console.error(`[verifier] refusing to start: ${err.message}`);
+  process.exit(1);
+}
 
 server.listen(PORT, () => {
   console.log(

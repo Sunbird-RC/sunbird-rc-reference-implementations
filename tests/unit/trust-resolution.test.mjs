@@ -151,13 +151,21 @@ test('an unset ${VAR} still fails, even when other entries resolve', async () =>
   );
 });
 
-test('the published display name is preferred, and falls back to the policy name', async () => {
-  const nameless = { [FARMER_ID]: { issuer: FARMER_DID }, [LAND_ID]: PUBLISHED[LAND_ID] };
-  const { fetchImpl } = authority(nameless);
-  const trust = await resolveTrustPolicy({ file: policyFile(AGRI_POLICY), baseUrl: BASE, fetchImpl });
+test('the policy name wins, and the published name fills a gap', async () => {
+  // Resolution supplies a DID. It must not quietly relabel an issuer in output a
+  // relying party shows its own customers — preferring the published name changed
+  // the bank's answer from "Farmer Registry" to "Farmer Authority", and the e2e
+  // suite caught it. The published name is still used when the policy has none.
+  const { fetchImpl } = authority(PUBLISHED);
+  const named = await resolveTrustPolicy({ file: policyFile(AGRI_POLICY), baseUrl: BASE, fetchImpl });
+  assert.equal(named.check(FARMER_DID).issuer.name, 'Farmer Registry');
+  assert.equal(named.check(LAND_DID).issuer.name, 'Land Registry');
 
-  assert.equal(trust.check(FARMER_DID).issuer.name, 'Farmer Registry', 'falls back to the policy');
-  assert.equal(trust.check(LAND_DID).issuer.name, 'Land Authority', 'prefers what was published');
+  const anonymous = {
+    issuers: [{ name: '', authorityIssuer: FARMER_ID, credentials: [], roles: ['farmer'] }],
+  };
+  const fallback = await resolveTrustPolicy({ file: policyFile(anonymous), baseUrl: BASE, fetchImpl });
+  assert.equal(fallback.check(FARMER_DID).issuer.name, 'Farmer Authority');
 });
 
 test('the file-only loader refuses an Authority Service entry rather than dropping it', () => {

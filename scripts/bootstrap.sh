@@ -22,7 +22,24 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEPLOY="$ROOT/deploy"
 ENV_FILE="$DEPLOY/.env"
+# COMPOSE_EXTRA lets a local overlay ride along — an arm64 development machine needs one,
+# because the compose file pins platform: linux/amd64 on every Sunbird RC service. That pin
+# is correct for the demo host, but on Apple silicon it makes compose treat a present local
+# image as missing and try to pull it, surfacing as a misleading "pull access denied".
+#
+# Step 6 recreates services. Without this, it would recreate them from the base file alone
+# and undo whatever the stack was actually started with.
+#
+#   COMPOSE_EXTRA=deploy/compose.arm64.yml scripts/bootstrap.sh
 COMPOSE=(docker compose -f "$DEPLOY/docker-compose.yml")
+if [ -n "${COMPOSE_EXTRA:-}" ]; then
+  # Not die(): the helpers are defined below this point.
+  [ -f "$COMPOSE_EXTRA" ] || {
+    printf '  \033[31m✗\033[0m COMPOSE_EXTRA=%s does not exist\n' "$COMPOSE_EXTRA" >&2
+    exit 1
+  }
+  COMPOSE+=(-f "$COMPOSE_EXTRA")
+fi
 
 green() { printf '  \033[32m✓\033[0m %s\n' "$1"; }
 info()  { printf '  \033[2m·\033[0m %s\n' "$1"; }
