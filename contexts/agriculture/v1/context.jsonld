@@ -6,7 +6,7 @@
     "id": "@id",
     "type": "@type",
 
-    "agri": "https://sunbirdrc.dev/contexts/agriculture/v1#",
+    "agri": "https://w3id.org/sunbird-rc/agriculture/v1#",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
 
     "FarmerIdentityCredential": "agri:FarmerIdentityCredential",

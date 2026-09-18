@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import jsonld from 'jsonld';
 
-const URL_CTX = 'https://sunbirdrc.dev/contexts/agriculture/v1';
+const URL_CTX = 'https://w3id.org/sunbird-rc/agriculture/v1';
 const NS = `${URL_CTX}#`;
 const context = JSON.parse(
   readFileSync(new URL('../../contexts/agriculture/v1/context.jsonld', import.meta.url), 'utf8'),

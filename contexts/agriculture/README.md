@@ -4,30 +4,45 @@
 Agriculture credentials carry. Both credential profiles point `contextUris` at it and
 leave `claimVocabulary` unset, which is the path the Authority Service supports.
 
-## Two different URLs, and why they are not the same thing
+## Two different URIs, and why they are not the same thing
 
-The namespace baked into every credential is **not** the address the document happens to
-be served from.
+The namespace baked into every credential is **not** the address the document happens to be
+served from.
 
 | | |
 | --- | --- |
-| Vocabulary namespace | `https://sunbirdrc.dev/contexts/agriculture/v1#` |
-| Document location | wherever this file is published for a given deployment |
+| Vocabulary namespace | `https://w3id.org/sunbird-rc/agriculture/v1#` |
+| Context document | `https://w3id.org/sunbird-rc/agriculture/v1` |
 
 Term IRIs are identity. `farmerReference` expands to the namespace IRI above, and that
-expansion is what a verifier compares and what a signature covers. If the namespace
-differed per environment, a credential issued in development would mean something
-different from one issued in production while looking identical, and neither would match
-the other. So the namespace is fixed here and the serving location is configured per
-deployment.
+expansion is what a verifier compares and what a signature covers. If the namespace differed
+per environment, a credential issued in development would mean something different from one
+issued in production while looking identical, and neither would match the other. So the
+namespace is fixed here.
 
-A consequence worth stating plainly: **a context URL that stops resolving breaks
-verification everywhere**, including for credentials already issued. Substituting a
-namespace after release is not a configuration change, it is a new vocabulary.
+A consequence worth stating plainly: **a context URI that stops resolving breaks verification
+everywhere**, including for credentials already issued. Substituting a namespace after
+release is not a configuration change, it is a new vocabulary.
 
-> The namespace is **proposed, not yet operative** — `sunbirdrc.dev` does not serve this
-> path today. It follows the upstream proposal for a Sunbird RC-controlled URL and needs
-> to be confirmed before any credential is issued outside development.
+### Why w3id.org
+
+A W3ID identifier is a permanent redirect the project controls, so the redirect target can
+move — initially to this fork, later to the official Sunbird RC repository — **without
+changing the identifier**, and therefore without invalidating anything already issued. That
+is the whole reason to spend an indirection on it.
+
+An earlier draft used `https://sunbirdrc.dev/contexts/agriculture/v1#`. It was rejected on
+review: that URL resolves to a generic HTML landing page, not a context document, so it
+looked operational while serving nothing a JSON-LD processor could use.
+
+### Current state
+
+> The W3ID redirect is **not yet registered**. Until it resolves to the immutable `v1`
+> context, development may load an identical copy from the deployment's own HTTPS origin.
+>
+> Credentials issued that way are **disposable development fixtures**. They cannot be used
+> as interoperability evidence, and acceptance or externally shared credentials must not be
+> issued until the permanent URI resolves and the expansion tests pass against it.
 
 ## Fixed decisions
 
