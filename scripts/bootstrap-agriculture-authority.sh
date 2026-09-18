@@ -362,16 +362,20 @@ cat <<'NOTE'
 
 Not configured yet, and deliberately not faked:
 
-  Signing keys   Each issuer needs a key before it can sign. The key reference is an
-                 environment fact (an identity-service DID, a KMS URI or a JWKS URL), not
-                 something this script should invent — inventing one would produce an
-                 issuer that looks configured and cannot sign.
+  Profiles and   Waiting on a reviewed Authority Service image. farmerReference must be
+  claim mappings
 
-  Profiles and   Blocked on the canonical-reference decision. The credential profiles
-  claim mappings cannot be completed while farmerReference and parcelReference have no
-                 way to be produced: the Authority Service's claim mappings are a closed
-                 set (DIRECT, CONSTANT, DERIVED with AGE_OVER or FIELD_PRESENT) and none
-                 of them can build "{authority}:{jurisdiction}:{local}". Configuring the
-                 profiles with a bare local number instead would issue exactly the value
-                 the identifier decision refuses.
+                   {authorityBase}#{resourceType}/{jurisdiction}/{localIdentifier}
+                   e.g. did:web:farmer-authority.example#farmer/KA/FRM-0041
+
+                 produced by a new closed derivation, QUALIFIED_REFERENCE, which is
+                 approved but not yet built. The current claim mappings are DIRECT,
+                 CONSTANT, and DERIVED limited to AGE_OVER and FIELD_PRESENT, and none of
+                 them can produce that. Configuring the profiles with a bare local number
+                 instead would issue exactly the value the identifier model refuses.
+
+                 Note that both credentials must carry the SAME canonical reference, and
+                 the Land profile must use the Farmer Authority's namespace rather than
+                 its own issuer namespace — otherwise the two cannot be correlated, which
+                 is the entire point of the claim.
 NOTE

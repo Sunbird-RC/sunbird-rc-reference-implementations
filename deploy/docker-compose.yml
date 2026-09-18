@@ -831,6 +831,48 @@ services:
       timeout: 5s
       retries: 20
 
+  # The Authority Service. Pinned by digest, not by tag: a tag can be moved and a
+  # demo would then verify something other than what was accepted.
+  #
+  # Multi-architecture (linux/amd64 and linux/arm64), so it needs no platform pin
+  # and runs natively on the demo host and on a development machine alike.
+  authority-service:
+    image: ghcr.io/pallakartheekreddy/sunbird-rc-authority-service@sha256:15baddce549a216448006af00e6d1ba3a1f08b440c6f47d20c605efa7693d616
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+    environment:
+      PORT: '3334'
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/authority?schema=public
+      SHADOW_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/authority_shadow?schema=public
+      RC_REGISTRY_URL: http://registry:8081
+      CREDENTIALS_SERVICE_URL: http://credential:3000
+      # Authentication is ON unless explicitly disabled, and the compose file will
+      # not be the thing that disables it. ENABLE_AUTH=false is a local-development
+      # escape hatch that belongs in a developer's shell, not in a committed
+      # default where it would be inherited silently by a demo host.
+      ENABLE_AUTH: '${ENABLE_AUTH:-true}'
+      # Creating a root tenant requires a principal named here. Empty by default,
+      # which disables root tenant creation rather than granting it to anyone.
+      BOOTSTRAP_ADMINS: '${BOOTSTRAP_ADMINS:-}'
+      OIDC_ISSUER: '${AUTHORITY_OIDC_ISSUER:-http://keycloak:8080/realms/authority}'
+      OIDC_JWKS_URI: '${AUTHORITY_OIDC_JWKS_URI:-http://keycloak:8080/realms/authority/protocol/openid-connect/certs}'
+    ports:
+      # Loopback only. The administrative API is authenticated but not public, and
+      # binding it to 127.0.0.1 keeps it off the host's network interfaces the way
+      # the registry's operator routes already are. The public trust routes are
+      # reached through nginx, not here.
+      - '127.0.0.1:3334:3334'
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://localhost:3334/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
   nginx:
     image: nginx:alpine
     restart: unless-stopped

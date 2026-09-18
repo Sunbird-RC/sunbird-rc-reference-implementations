@@ -36,7 +36,23 @@ const SHOWCASE_DB = 'registry';
  * without overwriting each other's migration state. Recorded in the plan as an
  * interpretation for Anand's acknowledgement.
  */
-const PROTOCOL_DBS = ['identity', 'credential', 'credential_schema'];
+const PROTOCOL_DBS = [
+  'identity',
+  'credential',
+  'credential_schema',
+  // The Authority Service, on the same grounds: a separate Prisma service with its
+  // own migration state, holding tenancy and issuance configuration rather than any
+  // use case's records. `authority_shadow` is Prisma's migration-diffing database
+  // and holds nothing at rest.
+  //
+  // Worth being explicit about, because this allowlist is the only thing standing
+  // between "a platform service owns its schema" and "a use case quietly got its
+  // own database". Farmer and Land records still live in `registry` alongside Age
+  // and Education, and the later assertions in this file are what prove it — a name
+  // added here buys no exemption from those.
+  'authority',
+  'authority_shadow',
+];
 
 async function psql(sql, database = SHOWCASE_DB) {
   const { stdout } = await run('docker', [

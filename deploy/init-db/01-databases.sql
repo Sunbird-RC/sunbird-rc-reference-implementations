@@ -19,6 +19,13 @@ CREATE DATABASE identity;
 CREATE DATABASE credential;
 CREATE DATABASE credential_schema;
 
+-- The Authority Service owns its own database, for the same reason as the three
+-- above: it is a separate Prisma service with its own migration state. The shadow
+-- database is Prisma's, used to diff migrations at deploy time; it is not optional
+-- and the service will not start its migration step without one.
+CREATE DATABASE authority;
+CREATE DATABASE authority_shadow;
+
 -- No per-use-case database. Age, Agriculture and Education share the registry's
 -- database and are separated by their own tables/entities (Anand's answer 10,
 -- PRODUCT and DESIGN §7). These three remain separate because they are NOT
