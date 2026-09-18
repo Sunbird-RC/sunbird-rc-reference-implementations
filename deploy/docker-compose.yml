@@ -837,7 +837,7 @@ services:
   # Multi-architecture (linux/amd64 and linux/arm64), so it needs no platform pin
   # and runs natively on the demo host and on a development machine alike.
   authority-service:
-    image: ghcr.io/pallakartheekreddy/sunbird-rc-authority-service@sha256:15baddce549a216448006af00e6d1ba3a1f08b440c6f47d20c605efa7693d616
+    image: ghcr.io/pallakartheekreddy/sunbird-rc-authority-service@sha256:56333d4561bff7222db34c6089d0cf857a69cb6a156037d25c1650e14e2b70e3
     restart: unless-stopped
     depends_on:
       db:
