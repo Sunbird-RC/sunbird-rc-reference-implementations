@@ -58,9 +58,16 @@ ISSUER_KEY_ID="${ISSUER_KEY_ID:-key-0}"
 # https://w3id.org/sunbird-rc/agriculture/v1; until that redirect is live, development points
 # at the same immutable document on a CDN. Credentials issued against anything other than the
 # permanent identifier are development fixtures, not interoperability evidence.
+# The base Verifiable Credentials context. The Authority Service composes a credential's
+# @context from contextUris ALONE — it prepends nothing — so without this the VC terms
+# themselves (VerifiableCredential, issuer, credentialSubject) have nothing to expand under
+# and signing fails in JSON-LD safe mode, reported only as "Error signing the document".
+VC_CONTEXT_URI="${VC_CONTEXT_URI:-https://www.w3.org/2018/credentials/v1}"
 CONTEXT_URI="${CONTEXT_URI:-https://cdn.jsdelivr.net/gh/pallakartheekreddy/sunbird-rc-reference-implementations@2eec9cb87845f19e27cf33c4decbf9d39f876c38/contexts/agriculture/v1/context.jsonld}"
 # The jurisdiction a canonical reference is qualified by, read from the record.
 JURISDICTION_PATH="${JURISDICTION_PATH:-state}"
+# Where credential schemas are registered. Reached through the demo gateway.
+SCHEMA_BASE="${SCHEMA_BASE:-http://127.0.0.1:8088}"
 
 green() { printf '  \033[32m✓\033[0m %s\n' "$1" >&2; }
 info()  { printf '  \033[2m·\033[0m %s\n' "$1" >&2; }
@@ -361,15 +368,34 @@ ensure_membership "$TENANT_FARMER" "$FARMER_OFFICER"  AUTHORISED_OFFICER
 ensure_membership "$TENANT_LAND"   "$LAND_OFFICER"    AUTHORISED_OFFICER
 
 
-# ensure_profile AUTHORITY_ID BINDING_ID ISSUER_ID CODE NAME CREDENTIAL_TYPE -> id
+# ensure_profile AUTHORITY_ID BINDING_ID ISSUER_ID CODE NAME CREDENTIAL_TYPE SCHEMA_ID -> id
 ensure_profile() {
   local existing
   existing="$(api GET "/credential-profiles?authorityId=$1" | id_by_code "$4")"
-  if [ -n "$existing" ]; then info "profile $4 already present"; printf '%s' "$existing"; return; fi
+  if [ -n "$existing" ]; then
+    # A profile pointing at the wrong schema cannot be repaired in place:
+    # credentialSchemaId is deliberately not patchable, because changing which schema a
+    # profile issues against makes it a different credential rather than an edit to this
+    # one. Retire it and let a correctly configured profile be created alongside.
+    local current version
+    current="$(api GET "/credential-profiles/$existing" | field credentialSchemaId)"
+    if [ -n "$7" ] && [ "$current" != "$7" ]; then
+      version="$(api GET "/credential-profiles/$existing" | field version)"
+      curl -sS --max-time 25 -X PATCH "$API/credential-profiles/$existing" \
+        -H "x-dev-issuer: $BOOT_ISSUER" -H "x-dev-subject: $BOOT_SUBJECT" \
+        -H 'Content-Type: application/json' -H "If-Match: $version" \
+        -d '{"status":"RETIRED"}' -o /dev/null
+      warn "profile $4 pointed at schema \"$current\", which is not the registered one —"
+      warn "  retired. A replacement is created below under a distinct code."
+    else
+      info "profile $4 already present"
+      printf '%s' "$existing"; return
+    fi
+  fi
   info "profile $4 created"
   api POST /credential-profiles "$(python3 -c '
 import json, sys
-authority, binding, issuer, code, name, ctype, context = sys.argv[1:8]
+authority, binding, issuer, code, name, ctype, context, schema_id, vc_context = sys.argv[1:10]
 print(json.dumps({
     "authorityId": authority,
     "registryBindingId": binding,
@@ -377,12 +403,12 @@ print(json.dumps({
     "code": code,
     "name": name,
     "credentialType": ["VerifiableCredential", ctype],
-    "credentialSchemaId": code.lower(),
+    "credentialSchemaId": schema_id,
     "credentialSchemaVersion": "1.0.0",
     # claimVocabulary is deliberately unset: every claim is mapped by the context above, and
     # a vocabulary fallback would let an unmapped claim through as a guess.
-    "contextUris": [context],
-}))' "$1" "$2" "$3" "$4" "$5" "$6" "$CONTEXT_URI")" | field id
+    "contextUris": [vc_context, context],
+}))' "$1" "$2" "$3" "$4" "$5" "$6" "$CONTEXT_URI" "$7" "$VC_CONTEXT_URI")" | field id
 }
 
 # map PROFILE_ID JSON — configures one claim. Keyed on the claim, so re-running replaces.
@@ -414,24 +440,123 @@ print(json.dumps({"targetClaim": target, "source": "DIRECT", "sourcePath": sourc
                   "required": required == "true"}))' "$1" "$2" "${3:-true}"
 }
 
+
+# --- credential schemas ----------------------------------------------------------------
+# The Authority-issued credentials need their own schemas, and this is a consequence of the
+# identifier model rather than a preference.
+#
+# The existing Agriculture schemas REQUIRE farmerId and landId — the bare local identifiers.
+# A credential carrying a bare local number is precisely what the identifier model refuses,
+# because two jurisdictions may hold the same one. These schemas require the canonical
+# references instead, and carry only the declared minimum: no national identifier, no
+# district, no farmer category, no total holding size.
+#
+# Registered under distinct names because the legacy schemas remain in use by the direct
+# issuance path while both coexist, and two schemas with one name under one author cannot be
+# told apart afterwards.
+
+# register_schema NAME VCT ID PROPERTIES_JSON REQUIRED_JSON AUTHOR_DID
+register_schema() {
+  local name="$1" vct="$2" sid="$3" props="$4" required="$5" author="$6" existing body
+  existing="$(curl -fsS --max-time 25 "$SCHEMA_BASE/credential-schema/oid4vci-configs" 2>/dev/null \
+    | python3 -c '
+import json, sys
+want = sys.argv[1]
+for c in json.load(sys.stdin):
+    if c.get("name") == want:
+        print(c.get("schemaId", "")); break
+' "$name")"
+  if [ -n "$existing" ]; then info "schema $name already registered"; printf '%s' "$existing"; return; fi
+
+  body="$(python3 -c '
+import json, sys
+name, vct, sid, props, required, author = sys.argv[1:7]
+print(json.dumps({
+    "schema": {
+        "type": "https://w3c-ccg.github.io/vc-json-schemas/",
+        "version": "1.0.0",
+        "id": sid,
+        "name": name,
+        "author": author,
+        "authored": "2026-01-01T00:00:00.000Z",
+        "schema": {
+            "$id": sid,
+            "$schema": "https://json-schema.org/draft/2019-09/schema",
+            "description": name,
+            "type": "object",
+            "properties": json.loads(props),
+            "required": json.loads(required),
+            # Must be true: issuance adds credentialSubject.id, which is not one of the
+            # schema own claims, and a false here rejects every issuance with an opaque 500.
+            "additionalProperties": True,
+        },
+    },
+    "tags": ["agriculture", "authority-service"],
+    # PUBLISHED, or the schema exists and is invisible as an issuable credential.
+    "status": "PUBLISHED",
+    "oid4vciConfig": {
+        "oid4vciEnabled": True,
+        "oid4vciFormats": ["vc+sd-jwt"],
+        "vct": vct,
+        "display": [{"name": name, "locale": "en-US"}],
+    },
+}))' "$name" "$vct" "$sid" "$props" "$required" "$author")"
+
+  curl -fsS --max-time 30 -X POST "$SCHEMA_BASE/credential-schema" \
+    -H 'content-type: application/json' -d "$body" >/dev/null \
+    || die "registering schema $name failed"
+  # Read the identifier back from the listing rather than from the create response. The
+  # response echoes the $id that was submitted, which is NOT the did:schema: identifier
+  # everything else refers to — using it produces a profile pointing at a schema that
+  # cannot be found, and the credential service reports that as an opaque 500.
+  existing="$(curl -fsS --max-time 25 "$SCHEMA_BASE/credential-schema/oid4vci-configs" 2>/dev/null \
+    | python3 -c '
+import json, sys
+want = sys.argv[1]
+for c in json.load(sys.stdin):
+    if c.get("name") == want:
+        print(c.get("schemaId", "")); break
+' "$name")"
+  [ -n "$existing" ] || die "schema $name was registered but is not in the listing"
+  info "schema $name registered"
+  printf '%s' "$existing"
+}
+
+head1 "Credential schemas"
+if [ -z "$ISSUER_DID_FARMER" ] || [ -z "$ISSUER_DID_LAND" ]; then
+  warn "No issuer DIDs configured, so schemas are skipped — a schema records its author."
+  SCHEMA_FARMER=""; SCHEMA_LAND=""
+else
+SCHEMA_FARMER="$(register_schema \
+  'Farmer Identity Credential (Authority-issued)' farmer-identity-credential-authority \
+  FarmerIdentityCredential \
+  '{"farmerReference":{"type":"string","description":"Canonical reference to the farmer record held by the Farmer Authority."},"registrationStatus":{"type":"boolean","description":"Whether the Authority lists this person as a registered farmer."}}' \
+  '["farmerReference","registrationStatus"]' "$ISSUER_DID_FARMER")"
+SCHEMA_LAND="$(register_schema \
+  'Land Ownership Credential (Authority-issued)' land-ownership-credential-authority \
+  LandOwnershipCredential \
+  '{"farmerReference":{"type":"string","description":"Canonical reference to the owning farmer, in the FARMER Authority namespace, so a lender can correlate this credential with the Farmer credential."},"parcelReference":{"type":"string","description":"Canonical reference to the parcel, in the Land Authority namespace."},"ownershipStatus":{"type":"string","description":"ACTIVE, INACTIVE, DISPUTED or TRANSFERRED. Only ACTIVE is fundable."},"cropType":{"type":"string","description":"Controlled vocabulary; the rate is looked up from published policy."},"cultivatedArea":{"type":"number","description":"Cultivated area in acres, the authoritative input to the loan calculation."}}' \
+  '["farmerReference","parcelReference","ownershipStatus","cropType","cultivatedArea"]' "$ISSUER_DID_LAND")"
+fi
+
 head1 "Credential profiles"
 if [ -z "$ISSUER_DID_FARMER" ] || [ -z "$ISSUER_DID_LAND" ]; then
   warn "No issuer DIDs configured, so profiles are skipped — a canonical reference needs an"
   warn "  authority base, and inventing one would issue a reference that resolves nowhere."
 else
   PROFILE_FARMER="$(ensure_profile "$AUTH_FARMER" "$BIND_FARMER" "$ISS_FARMER" \
-    P-FARMER 'Farmer Identity Credential' FarmerIdentityCredential)"
-  require_id "profile P-FARMER" "$PROFILE_FARMER"
+    P-FARMER-AUTH 'Farmer Identity Credential' FarmerIdentityCredential "$SCHEMA_FARMER")"
+  require_id "profile P-FARMER-AUTH" "$PROFILE_FARMER"
   PROFILE_LAND="$(ensure_profile "$AUTH_LAND" "$BIND_LAND" "$ISS_LAND" \
-    P-LAND 'Land Ownership Credential' LandOwnershipCredential)"
-  require_id "profile P-LAND" "$PROFILE_LAND"
+    P-LAND-AUTH 'Land Ownership Credential' LandOwnershipCredential "$SCHEMA_LAND")"
+  require_id "profile P-LAND-AUTH" "$PROFILE_LAND"
 
   head1 "Claim mappings"
-  info "P-FARMER"
+  info "P-FARMER-AUTH"
   map "$PROFILE_FARMER" "$(qualified_reference farmerId "$ISSUER_DID_FARMER" farmer farmerReference)"
   map "$PROFILE_FARMER" "$(direct registeredFarmer registrationStatus)"
 
-  info "P-LAND"
+  info "P-LAND-AUTH"
   # The farmer reference on the LAND credential is qualified with the FARMER Authority's
   # base. This is the line the whole correlation depends on: qualifying it with the Land
   # Authority's own base produces a well-formed reference that silently never matches the
