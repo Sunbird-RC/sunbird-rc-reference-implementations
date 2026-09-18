@@ -54,6 +54,14 @@ ISSUER_KEY_FARMER="${ISSUER_KEY_FARMER:-}"
 ISSUER_KEY_LAND="${ISSUER_KEY_LAND:-}"
 ISSUER_KEY_ID="${ISSUER_KEY_ID:-key-0}"
 
+# Where the JSON-LD context document is fetched from. The permanent identifier is
+# https://w3id.org/sunbird-rc/agriculture/v1; until that redirect is live, development points
+# at the same immutable document on a CDN. Credentials issued against anything other than the
+# permanent identifier are development fixtures, not interoperability evidence.
+CONTEXT_URI="${CONTEXT_URI:-https://cdn.jsdelivr.net/gh/pallakartheekreddy/sunbird-rc-reference-implementations@2eec9cb87845f19e27cf33c4decbf9d39f876c38/contexts/agriculture/v1/context.jsonld}"
+# The jurisdiction a canonical reference is qualified by, read from the record.
+JURISDICTION_PATH="${JURISDICTION_PATH:-state}"
+
 green() { printf '  \033[32m✓\033[0m %s\n' "$1" >&2; }
 info()  { printf '  \033[2m·\033[0m %s\n' "$1" >&2; }
 warn()  { printf '  \033[33m!\033[0m %s\n' "$1" >&2; }
@@ -352,30 +360,94 @@ ensure_membership "$TENANT_LAND"   "$LAND_OPERATOR"   OPERATOR
 ensure_membership "$TENANT_FARMER" "$FARMER_OFFICER"  AUTHORISED_OFFICER
 ensure_membership "$TENANT_LAND"   "$LAND_OFFICER"    AUTHORISED_OFFICER
 
+
+# ensure_profile AUTHORITY_ID BINDING_ID ISSUER_ID CODE NAME CREDENTIAL_TYPE -> id
+ensure_profile() {
+  local existing
+  existing="$(api GET "/credential-profiles?authorityId=$1" | id_by_code "$4")"
+  if [ -n "$existing" ]; then info "profile $4 already present"; printf '%s' "$existing"; return; fi
+  info "profile $4 created"
+  api POST /credential-profiles "$(python3 -c '
+import json, sys
+authority, binding, issuer, code, name, ctype, context = sys.argv[1:8]
+print(json.dumps({
+    "authorityId": authority,
+    "registryBindingId": binding,
+    "issuerId": issuer,
+    "code": code,
+    "name": name,
+    "credentialType": ["VerifiableCredential", ctype],
+    "credentialSchemaId": code.lower(),
+    "credentialSchemaVersion": "1.0.0",
+    # claimVocabulary is deliberately unset: every claim is mapped by the context above, and
+    # a vocabulary fallback would let an unmapped claim through as a guess.
+    "contextUris": [context],
+}))' "$1" "$2" "$3" "$4" "$5" "$6" "$CONTEXT_URI")" | field id
+}
+
+# map PROFILE_ID JSON — configures one claim. Keyed on the claim, so re-running replaces.
+map() {
+  api PUT "/credential-profiles/$1/claim-mappings" "$2" >/dev/null
+  info "  $(printf '%s' "$2" | python3 -c 'import sys,json;print(json.load(sys.stdin)["targetClaim"])')"
+}
+
+# qualified_reference SOURCE_PATH AUTHORITY_BASE RESOURCE_TYPE TARGET -> mapping JSON
+qualified_reference() {
+  python3 -c '
+import json, sys
+source, base, rtype, target, jpath = sys.argv[1:6]
+print(json.dumps({
+    "targetClaim": target,
+    "source": "DERIVED",
+    "derivation": "QUALIFIED_REFERENCE",
+    "sourcePath": source,
+    "parameters": {"authorityBase": base, "resourceType": rtype, "jurisdictionPath": jpath},
+    "required": True,
+}))' "$1" "$2" "$3" "$4" "$JURISDICTION_PATH"
+}
+
+direct() {
+  python3 -c '
+import json, sys
+source, target, required = sys.argv[1:4]
+print(json.dumps({"targetClaim": target, "source": "DIRECT", "sourcePath": source,
+                  "required": required == "true"}))' "$1" "$2" "${3:-true}"
+}
+
+head1 "Credential profiles"
+if [ -z "$ISSUER_DID_FARMER" ] || [ -z "$ISSUER_DID_LAND" ]; then
+  warn "No issuer DIDs configured, so profiles are skipped — a canonical reference needs an"
+  warn "  authority base, and inventing one would issue a reference that resolves nowhere."
+else
+  PROFILE_FARMER="$(ensure_profile "$AUTH_FARMER" "$BIND_FARMER" "$ISS_FARMER" \
+    P-FARMER 'Farmer Identity Credential' FarmerIdentityCredential)"
+  require_id "profile P-FARMER" "$PROFILE_FARMER"
+  PROFILE_LAND="$(ensure_profile "$AUTH_LAND" "$BIND_LAND" "$ISS_LAND" \
+    P-LAND 'Land Ownership Credential' LandOwnershipCredential)"
+  require_id "profile P-LAND" "$PROFILE_LAND"
+
+  head1 "Claim mappings"
+  info "P-FARMER"
+  map "$PROFILE_FARMER" "$(qualified_reference farmerId "$ISSUER_DID_FARMER" farmer farmerReference)"
+  map "$PROFILE_FARMER" "$(direct registeredFarmer registrationStatus)"
+
+  info "P-LAND"
+  # The farmer reference on the LAND credential is qualified with the FARMER Authority's
+  # base. This is the line the whole correlation depends on: qualifying it with the Land
+  # Authority's own base produces a well-formed reference that silently never matches the
+  # one on the Farmer credential, and nothing anywhere reports an error.
+  map "$PROFILE_LAND" "$(qualified_reference farmerId "$ISSUER_DID_FARMER" farmer farmerReference)"
+  map "$PROFILE_LAND" "$(qualified_reference landId "$ISSUER_DID_LAND" parcel parcelReference)"
+  map "$PROFILE_LAND" "$(direct ownershipStatus ownershipStatus)"
+  map "$PROFILE_LAND" "$(direct cropType cropType)"
+  map "$PROFILE_LAND" "$(direct cultivatedAreaAcres cultivatedArea)"
+  # nationalId, district, landAreaAcres and farmerCategory are deliberately NOT mapped. They
+  # exist in the registry and must not reach a verifier; the loan uses cultivated area only,
+  # so total holding size stays with the farmer.
+fi
+
 head1 "Summary"
 printf '  tenant    %-16s %s\n' T-AGRI-FARMER "$TENANT_FARMER" T-AGRI-LAND "$TENANT_LAND"
 printf '  authority %-16s %s\n' AUTH-FARMER "$AUTH_FARMER" AUTH-LAND "$AUTH_LAND"
 printf '  binding   %-16s %s\n' FarmerRecord "$BIND_FARMER" LandRecord "$BIND_LAND"
 printf '  issuer    %-16s %s\n' ISS-FARMER "$ISS_FARMER" ISS-LAND "$ISS_LAND"
-
-cat <<'NOTE'
-
-Not configured yet, and deliberately not faked:
-
-  Profiles and   Waiting on a reviewed Authority Service image. farmerReference must be
-  claim mappings
-
-                   {authorityBase}#{resourceType}/{jurisdiction}/{localIdentifier}
-                   e.g. did:web:farmer-authority.example#farmer/KA/FRM-0041
-
-                 produced by a new closed derivation, QUALIFIED_REFERENCE, which is
-                 approved but not yet built. The current claim mappings are DIRECT,
-                 CONSTANT, and DERIVED limited to AGE_OVER and FIELD_PRESENT, and none of
-                 them can produce that. Configuring the profiles with a bare local number
-                 instead would issue exactly the value the identifier model refuses.
-
-                 Note that both credentials must carry the SAME canonical reference, and
-                 the Land profile must use the Farmer Authority's namespace rather than
-                 its own issuer namespace — otherwise the two cannot be correlated, which
-                 is the entire point of the claim.
-NOTE
