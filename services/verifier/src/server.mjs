@@ -52,10 +52,10 @@ const TRUST_POLICY_FILE = process.env.TRUST_POLICY_FILE || '/app/config/trust/is
 // refuse to start.
 const AUTHORITY_BASE_URL = process.env.AUTHORITY_BASE_URL || '';
 
-// Asks the issuing Authority whether a credential is still one it stands behind. Built
-// unconditionally; it only runs for requests that declare a statusClaim, because that is the
-// claim carrying the identifier to resolve.
-const credentialStatus = credentialStatusChecker({ baseUrl: AUTHORITY_BASE_URL });
+// Asks the issuing Authority whether a credential is still one it stands behind. The
+// endpoint is not configured here: it comes from the trust policy entry for the issuer that
+// signed the credential, so a credential can never point this at somewhere of its choosing.
+const credentialStatus = credentialStatusChecker();
 // The claim carrying an Agriculture credential's identifier at the issuing Authority. Unset
 // until the credentials the wallet presents carry one; setting it before then correctly
 // fails the journey rather than quietly skipping the check.
@@ -553,7 +553,13 @@ async function readSession(sessionId) {
     //     missing identifier, declaring statusClaim on a request whose credential does not
     //     carry one fails closed rather than silently passing.
     if (request.statusClaim) {
-      const standing = await credentialStatus.check(claims[request.statusClaim]);
+      // Resolved against the Authority that vouched for THIS issuer, taken from the trust
+      // policy — never from anything the credential carries. The credential supplies only
+      // an identifier; where that identifier is looked up is configuration.
+      const standing = await credentialStatus.check(
+        claims[request.statusClaim],
+        trusted.issuer.authorityBaseUrl,
+      );
       if (!standing.ok) {
         console.log(`[verifier] session ${sessionId} rejected: ${standing.reason}`);
         return reject(standing.reason);

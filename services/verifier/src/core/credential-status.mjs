@@ -15,16 +15,19 @@
 const USABLE = new Set(['ACTIVE']);
 
 /**
- * @param {{baseUrl: string, fetchImpl?: typeof fetch, timeoutMs?: number}} config
+ * @param {{fetchImpl?: typeof fetch, timeoutMs?: number}} [config]
  */
-export function credentialStatusChecker({ baseUrl, fetchImpl = fetch, timeoutMs = 4000 }) {
+export function credentialStatusChecker({ fetchImpl = fetch, timeoutMs = 4000 } = {}) {
   return {
     /**
-     * @param {unknown} credentialId The credential's own `id`, as issued.
+     * @param {unknown} credentialId The credential's own identifier at its Authority.
+     * @param {string} baseUrl The Authority Service that vouched for the credential's
+     *        ISSUER, taken from the trust policy. Never from the credential: a status
+     *        endpoint a credential could choose is a status endpoint an attacker can choose.
      * @returns {Promise<{ok: true, status: string, effectiveAt?: string}
      *                  | {ok: false, reason: string, status?: string}>}
      */
-    async check(credentialId) {
+    async check(credentialId, baseUrl) {
       if (typeof credentialId !== 'string' || credentialId.length === 0) {
         // Not "no identifier, therefore fine". A credential this verifier cannot look up is
         // one whose current standing is unknown, and unknown is not a pass.

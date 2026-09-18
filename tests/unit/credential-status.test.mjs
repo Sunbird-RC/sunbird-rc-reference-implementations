@@ -24,7 +24,7 @@ const ok = (body) => ({ ok: true, status: 200, json: async () => body });
 
 test('an ACTIVE credential passes, and the identifier is escaped into the path', async () => {
   const { fetchImpl, calls } = authority(ok({ credentialId: ID, status: 'ACTIVE', effectiveAt: '2026-09-18T10:21:58.323Z' }));
-  const result = await credentialStatusChecker({ baseUrl: BASE, fetchImpl }).check(ID);
+  const result = await credentialStatusChecker({ fetchImpl }).check(ID, BASE);
   assert.equal(result.ok, true);
   assert.equal(result.status, 'ACTIVE');
   assert.equal(calls[0], `${BASE}/api/v1/trust/credentials/${encodeURIComponent(ID)}/status`);
@@ -34,7 +34,7 @@ test('an ACTIVE credential passes, and the identifier is escaped into the path',
 test('SUSPENDED, REVOKED and INACTIVE each stop the decision, and are named', async () => {
   for (const status of ['SUSPENDED', 'REVOKED', 'INACTIVE']) {
     const { fetchImpl } = authority(ok({ status }));
-    const result = await credentialStatusChecker({ baseUrl: BASE, fetchImpl }).check(ID);
+    const result = await credentialStatusChecker({ fetchImpl }).check(ID, BASE);
     assert.equal(result.ok, false, `${status} must not pass`);
     assert.equal(result.status, status);
     assert.match(result.reason, new RegExp(status));
@@ -44,39 +44,39 @@ test('SUSPENDED, REVOKED and INACTIVE each stop the decision, and are named', as
 test('an unreachable Authority fails closed', async () => {
   // Indistinguishable from one that would have said REVOKED.
   const { fetchImpl } = authority(() => { throw new Error('connect ECONNREFUSED'); });
-  const result = await credentialStatusChecker({ baseUrl: BASE, fetchImpl }).check(ID);
+  const result = await credentialStatusChecker({ fetchImpl }).check(ID, BASE);
   assert.equal(result.ok, false);
   assert.match(result.reason, /could not reach the issuing Authority/);
 });
 
 test('a credential the Authority does not recognise fails closed', async () => {
   const { fetchImpl } = authority({ ok: false, status: 404, json: async () => ({}) });
-  const result = await credentialStatusChecker({ baseUrl: BASE, fetchImpl }).check(ID);
+  const result = await credentialStatusChecker({ fetchImpl }).check(ID, BASE);
   assert.equal(result.ok, false);
   assert.match(result.reason, /does not recognise/);
 });
 
 test('a server error fails closed rather than being read as absence', async () => {
   const { fetchImpl } = authority({ ok: false, status: 500, json: async () => ({}) });
-  const result = await credentialStatusChecker({ baseUrl: BASE, fetchImpl }).check(ID);
+  const result = await credentialStatusChecker({ fetchImpl }).check(ID, BASE);
   assert.equal(result.ok, false);
   assert.match(result.reason, /answered 500/);
 });
 
 test('an unreadable or statusless response fails closed', async () => {
   const unreadable = authority({ ok: true, status: 200, json: async () => { throw new Error('bad json'); } });
-  assert.equal((await credentialStatusChecker({ baseUrl: BASE, fetchImpl: unreadable.fetchImpl }).check(ID)).ok, false);
+  assert.equal((await credentialStatusChecker({ fetchImpl: unreadable.fetchImpl }).check(ID, BASE)).ok, false);
   const statusless = authority(ok({ credentialId: ID }));
-  assert.equal((await credentialStatusChecker({ baseUrl: BASE, fetchImpl: statusless.fetchImpl }).check(ID)).ok, false);
+  assert.equal((await credentialStatusChecker({ fetchImpl: statusless.fetchImpl }).check(ID, BASE)).ok, false);
 });
 
 test('a credential with no identifier is refused, not waved through', async () => {
   // The important one. "No id, so nothing to check, so fine" is how this check would become
   // decoration — a credential whose standing cannot be looked up has unknown standing.
   const { fetchImpl, calls } = authority(ok({ status: 'ACTIVE' }));
-  const checker = credentialStatusChecker({ baseUrl: BASE, fetchImpl });
+  const checker = credentialStatusChecker({ fetchImpl });
   for (const value of [undefined, null, '', 42, {}]) {
-    const result = await checker.check(value);
+    const result = await checker.check(value, BASE);
     assert.equal(result.ok, false, `should refuse ${JSON.stringify(value)}`);
     assert.match(result.reason, /no identifier/);
   }
@@ -85,7 +85,28 @@ test('a credential with no identifier is refused, not waved through', async () =
 
 test('no configured Authority is refused rather than skipped', async () => {
   const { fetchImpl } = authority(ok({ status: 'ACTIVE' }));
-  const result = await credentialStatusChecker({ baseUrl: '', fetchImpl }).check(ID);
+  const result = await credentialStatusChecker({ fetchImpl }).check(ID, '');
   assert.equal(result.ok, false);
   assert.match(result.reason, /no Authority Service configured/);
+});
+
+test('the endpoint comes from the caller, never from the credential', async () => {
+  // Anand's rule: resolve only against the Authority configured for the trusted issuer.
+  // A status endpoint a credential can choose is a status endpoint an attacker can choose —
+  // it would let a forged credential nominate a server that always answers ACTIVE.
+  const { fetchImpl, calls } = authority(ok({ status: 'ACTIVE' }));
+  const hostile = 'did:rcw:abc?x=https://attacker.example/always-active';
+  await credentialStatusChecker({ fetchImpl }).check(hostile, BASE);
+  assert.ok(calls[0].startsWith(`${BASE}/api/v1/trust/credentials/`), 'must stay on the configured host');
+  assert.ok(!calls[0].includes('attacker.example/'), 'the credential must not steer the request');
+});
+
+test('an issuer with no Authority behind it cannot be status-checked', async () => {
+  // Issuers configured as a literal DID have nothing vouching for them. That is "cannot
+  // check", not "nothing to check", so it fails closed like every other unknown.
+  const { fetchImpl, calls } = authority(ok({ status: 'ACTIVE' }));
+  const result = await credentialStatusChecker({ fetchImpl }).check(ID, '');
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /no Authority Service configured/);
+  assert.equal(calls.length, 0);
 });

@@ -184,3 +184,24 @@ test('an issuer needing the Authority Service with no base URL configured is ref
     /needs the Authority Service, but no base URL was configured/,
   );
 });
+
+test('a resolved issuer carries the Authority that vouched for it', async () => {
+  // This is what binds a status check to a configured endpoint. The verifier reads it from
+  // the trust result rather than from the credential, so a credential cannot nominate where
+  // its own status is looked up.
+  const { fetchImpl } = authority(PUBLISHED);
+  const trust = await resolveTrustPolicy({ file: policyFile(AGRI_POLICY), baseUrl: `${BASE}/`, fetchImpl });
+  const result = trust.check(FARMER_DID, { role: 'farmer' });
+  assert.equal(result.issuer.authorityBaseUrl, BASE, 'trailing slash normalised');
+});
+
+test('an issuer configured as a literal DID carries no Authority endpoint', async () => {
+  // Nothing vouches for it, so there is nothing to ask about its credentials' status. The
+  // caller must read an empty endpoint as "cannot check" rather than "no check needed".
+  const policy = { issuers: [{ name: 'National Identity Authority', did: '${AGE_ISSUER_DID}', credentials: [] }] };
+  const { fetchImpl } = authority(PUBLISHED);
+  const trust = await resolveTrustPolicy({
+    file: policyFile(policy), env: { AGE_ISSUER_DID: AGE_DID }, baseUrl: BASE, fetchImpl,
+  });
+  assert.equal(trust.check(AGE_DID).issuer.authorityBaseUrl, '');
+});

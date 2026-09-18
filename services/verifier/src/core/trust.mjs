@@ -84,7 +84,17 @@ function buildPolicy(issuers, source) {
           };
         }
       }
-      return { ok: true, issuer: { name: issuer.name, did: issuer.did } };
+      return {
+        ok: true,
+        issuer: {
+          name: issuer.name,
+          did: issuer.did,
+          // Empty for issuers configured as a literal DID: nothing vouches for them that
+          // could be asked about status, and a caller must treat that as "cannot check"
+          // rather than "nothing to check".
+          authorityBaseUrl: issuer.authorityBaseUrl || '',
+        },
+      };
     },
   };
 }
@@ -104,6 +114,7 @@ function normalise(issuer, env) {
     // request works and why adding roles did not change its behaviour.
     roles: issuer.roles || [],
     authorityIssuer: issuer.authorityIssuer || null,
+    authorityBaseUrl: '',
     did: issuer.did ? expand(String(issuer.did), env) : null,
   };
 }
@@ -211,6 +222,10 @@ export async function resolveTrustPolicy({
       return {
         ...entry,
         did,
+        // The Authority that vouched for this issuer, and therefore the ONLY endpoint its
+        // credentials' status may be resolved against. Recorded here, at configuration time,
+        // so that a status check can never be pointed somewhere by a credential.
+        authorityBaseUrl: baseUrl.replace(/\/$/, ''),
         // The POLICY's name wins; the published one fills a gap.
         //
         // The other way round reads better in principle — an Authority's own name
