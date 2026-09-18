@@ -495,29 +495,28 @@ print(json.dumps({
     # PUBLISHED, or the schema exists and is invisible as an issuable credential.
     "status": "PUBLISHED",
     "oid4vciConfig": {
-        "oid4vciEnabled": True,
+        # FALSE, and this matters. These credentials are issued through the credential
+        # service, never offered over OID4VCI. Enabling it makes the schema appear in the
+        # OID4VCI metadata of whichever oid4vc issuer shares this author DID, so the Farmer
+        # issuer starts advertising two credentials and "each issuer advertises only its own
+        # credential" stops being true.
+        "oid4vciEnabled": False,
         "oid4vciFormats": ["vc+sd-jwt"],
         "vct": vct,
         "display": [{"name": name, "locale": "en-US"}],
     },
 }))' "$name" "$vct" "$sid" "$props" "$required" "$author")"
 
-  curl -fsS --max-time 30 -X POST "$SCHEMA_BASE/credential-schema" \
-    -H 'content-type: application/json' -d "$body" >/dev/null \
+  # schema.id in the response is the GENERATED did:schema: identifier, not the $id that was
+  # submitted. That is the one everything else refers to.
+  existing="$(curl -fsS --max-time 30 -X POST "$SCHEMA_BASE/credential-schema" \
+    -H 'content-type: application/json' -d "$body" \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["schema"]["id"])')" \
     || die "registering schema $name failed"
-  # Read the identifier back from the listing rather than from the create response. The
-  # response echoes the $id that was submitted, which is NOT the did:schema: identifier
-  # everything else refers to — using it produces a profile pointing at a schema that
-  # cannot be found, and the credential service reports that as an opaque 500.
-  existing="$(curl -fsS --max-time 25 "$SCHEMA_BASE/credential-schema/oid4vci-configs" 2>/dev/null \
-    | python3 -c '
-import json, sys
-want = sys.argv[1]
-for c in json.load(sys.stdin):
-    if c.get("name") == want:
-        print(c.get("schemaId", "")); break
-' "$name")"
-  [ -n "$existing" ] || die "schema $name was registered but is not in the listing"
+  case "$existing" in
+    did:schema:*) : ;;
+    *) die "schema $name did not return a did:schema: identifier (got \"$existing\")" ;;
+  esac
   info "schema $name registered"
   printf '%s' "$existing"
 }
@@ -531,12 +530,14 @@ SCHEMA_FARMER="$(register_schema \
   'Farmer Identity Credential (Authority-issued)' farmer-identity-credential-authority \
   FarmerIdentityCredential \
   '{"farmerReference":{"type":"string","description":"Canonical reference to the farmer record held by the Farmer Authority."},"registrationStatus":{"type":"boolean","description":"Whether the Authority lists this person as a registered farmer."}}' \
-  '["farmerReference","registrationStatus"]' "$ISSUER_DID_FARMER")"
+  '["farmerReference","registrationStatus"]' "$ISSUER_DID_FARMER" \
+  "$(schema_in_use "$AUTH_FARMER" P-FARMER-AUTH)")"
 SCHEMA_LAND="$(register_schema \
   'Land Ownership Credential (Authority-issued)' land-ownership-credential-authority \
   LandOwnershipCredential \
   '{"farmerReference":{"type":"string","description":"Canonical reference to the owning farmer, in the FARMER Authority namespace, so a lender can correlate this credential with the Farmer credential."},"parcelReference":{"type":"string","description":"Canonical reference to the parcel, in the Land Authority namespace."},"ownershipStatus":{"type":"string","description":"ACTIVE, INACTIVE, DISPUTED or TRANSFERRED. Only ACTIVE is fundable."},"cropType":{"type":"string","description":"Controlled vocabulary; the rate is looked up from published policy."},"cultivatedArea":{"type":"number","description":"Cultivated area in acres, the authoritative input to the loan calculation."}}' \
-  '["farmerReference","parcelReference","ownershipStatus","cropType","cultivatedArea"]' "$ISSUER_DID_LAND")"
+  '["farmerReference","parcelReference","ownershipStatus","cropType","cultivatedArea"]' "$ISSUER_DID_LAND" \
+  "$(schema_in_use "$AUTH_LAND" P-LAND-AUTH)")"
 fi
 
 head1 "Credential profiles"

@@ -17,6 +17,7 @@ import { loadAlgorithmPolicy } from './core/algorithms.mjs';
 import { buildDcqlQuery, expectedClaimNames, ISSUER_CLAIM } from './core/dcql.mjs';
 import { evaluateChecks } from './core/checks.mjs';
 import { resolveTrustPolicy } from './core/trust.mjs';
+import { credentialStatusChecker } from './core/credential-status.mjs';
 import { assertExactClaims } from './core/claim-policy.mjs';
 import { sessionStore } from './core/sessions.mjs';
 import { ageCredentialRequest, decideAge, AGE_CLAIM } from './domains/age/index.mjs';
@@ -50,6 +51,15 @@ const TRUST_POLICY_FILE = process.env.TRUST_POLICY_FILE || '/app/config/trust/is
 // is fine for a policy of literal DIDs; an entry that needs it will say so and
 // refuse to start.
 const AUTHORITY_BASE_URL = process.env.AUTHORITY_BASE_URL || '';
+
+// Asks the issuing Authority whether a credential is still one it stands behind. Built
+// unconditionally; it only runs for requests that declare a statusClaim, because that is the
+// claim carrying the identifier to resolve.
+const credentialStatus = credentialStatusChecker({ baseUrl: AUTHORITY_BASE_URL });
+// The claim carrying an Agriculture credential's identifier at the issuing Authority. Unset
+// until the credentials the wallet presents carry one; setting it before then correctly
+// fails the journey rather than quietly skipping the check.
+const AGRICULTURE_STATUS_CLAIM = process.env.AGRICULTURE_STATUS_CLAIM || '';
 const CROP_POLICY_FILE = process.env.CROP_POLICY_FILE || '/app/config/policy/crop-rates.json';
 const ALG_POLICY_FILE = process.env.ALG_POLICY_FILE || '/app/config/policy/algorithms.json';
 // Mirrors oid4vc-service's VP_TXN_TTL default. A verifier session outliving the
@@ -264,7 +274,12 @@ const USE_CASES = {
     // The bank is a different party from the age-restricted service, so it signs
     // with its own DID and the wallet names it correctly.
     signer: 'bank',
-    requests: () => agricultureCredentialRequests({ farmerVct: FARMER_VCT, landVct: LAND_VCT }),
+    requests: () =>
+      agricultureCredentialRequests({
+        farmerVct: FARMER_VCT,
+        landVct: LAND_VCT,
+        statusClaim: AGRICULTURE_STATUS_CLAIM,
+      }),
     describe: () => 'requesting the farmer and land credentials',
     requestedClaims: () => ({ farmer: FARMER_CLAIMS, land: LAND_CLAIMS }),
     decide: (verified) => decideFarmCredit({ farmer: verified.farmer, land: verified.land }, cropPolicy),
@@ -523,6 +538,26 @@ async function readSession(sessionId) {
     if (!trusted.ok) {
       console.log(`[verifier] session ${sessionId} rejected: ${trusted.reason}`);
       return reject(trusted.reason);
+    }
+
+    // 3b. Is the credential still one its Authority stands behind?
+    //
+    //     Sunbird RC's `revocation` check reports OK without consulting anything, so a
+    //     credential whose source record was suspended still verifies. This asks the
+    //     issuing Authority, which answers from the credential's own state combined with
+    //     the current lifecycle of the record it came from.
+    //
+    //     Opt-in per request, via the claim that carries the credential's identifier.
+    //     Journeys whose credentials carry no such identifier are unchanged rather than
+    //     being failed for a check they cannot satisfy — and because the check refuses a
+    //     missing identifier, declaring statusClaim on a request whose credential does not
+    //     carry one fails closed rather than silently passing.
+    if (request.statusClaim) {
+      const standing = await credentialStatus.check(claims[request.statusClaim]);
+      if (!standing.ok) {
+        console.log(`[verifier] session ${sessionId} rejected: ${standing.reason}`);
+        return reject(standing.reason);
+      }
     }
 
     verified[request.role || request.id] = claims;

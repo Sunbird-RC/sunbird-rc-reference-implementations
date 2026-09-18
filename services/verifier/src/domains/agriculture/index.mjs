@@ -49,11 +49,16 @@ const OWNERSHIP_STATUSES = ['ACTIVE', 'INACTIVE', 'DISPUTED', 'TRANSFERRED'];
  *
  * @param {{farmerVct: string, landVct: string}} config
  */
-export function agricultureCredentialRequests({ farmerVct, landVct }) {
+export function agricultureCredentialRequests({ farmerVct, landVct, statusClaim }) {
   if (!farmerVct || !landVct) throw new Error('both farmerVct and landVct are required');
+  // statusClaim names the disclosed claim carrying the credential's identifier at the
+  // issuing Authority. Set it only when the credential actually carries one: the status
+  // check refuses a missing identifier rather than passing it, so declaring it early fails
+  // the journey closed instead of silently doing nothing.
+  const status = statusClaim ? { statusClaim } : {};
   return [
-    { id: FARMER_REQUEST_ID, vct: farmerVct, claims: FARMER_CLAIMS, role: 'farmer' },
-    { id: LAND_REQUEST_ID, vct: landVct, claims: LAND_CLAIMS, role: 'land' },
+    { id: FARMER_REQUEST_ID, vct: farmerVct, claims: FARMER_CLAIMS, role: 'farmer', ...status },
+    { id: LAND_REQUEST_ID, vct: landVct, claims: LAND_CLAIMS, role: 'land', ...status },
   ];
 }
 
