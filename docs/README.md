@@ -11,6 +11,12 @@ reference applications.
 - [Testing and validation](testing.md)
 - [Technical profile and known limitations](technical-profile.md)
 
+## Architecture
+
+- [Authority Service integration](authority-service-integration.md) — running a
+  multi-tenant, configuration-driven issuance layer in front of Sunbird RC, and adapting
+  the pattern to another domain
+
 ## Applications
 
 - [Age verification](showcase/use-cases/age-verification.md)
