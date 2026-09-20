@@ -245,6 +245,20 @@ function educationUseCase(policyId, signer) {
  * disclosure policy, issuer trust — is shared, which is the entire reason this
  * service is reusable rather than copied.
  */
+// The claim lists the Agriculture journey ACTUALLY requests, derived from the requests
+// themselves rather than restated. When the status check is enabled the identifier is
+// appended to each request, and a policy that still published the base list would tell a
+// wallet to disclose less than the query demands — which fails as "DCQL not satisfied",
+// several services away from the mismatch.
+const agricultureRequestedClaims = () => {
+  const requests = agricultureCredentialRequests({
+    farmerVct: FARMER_VCT,
+    landVct: LAND_VCT,
+    statusClaim: AGRICULTURE_STATUS_CLAIM,
+  });
+  return Object.fromEntries(requests.map((r) => [r.role, r.claims]));
+};
+
 const USE_CASES = {
   age: {
     signer: 'age',
@@ -281,7 +295,7 @@ const USE_CASES = {
         statusClaim: AGRICULTURE_STATUS_CLAIM,
       }),
     describe: () => 'requesting the farmer and land credentials',
-    requestedClaims: () => ({ farmer: FARMER_CLAIMS, land: LAND_CLAIMS }),
+    requestedClaims: () => agricultureRequestedClaims(),
     decide: (verified) => decideFarmCredit({ farmer: verified.farmer, land: verified.land }, cropPolicy),
     respond: (outcome, { status, issuer, verified }) => ({
       state: 'decided',
@@ -330,7 +344,7 @@ const USE_CASES = {
     }),
     policy: () => ({
       credentialTypes: { farmer: FARMER_VCT, land: LAND_VCT },
-      requestedClaims: { farmer: FARMER_CLAIMS, land: LAND_CLAIMS },
+      requestedClaims: agricultureRequestedClaims(),
       protocolClaims: [ISSUER_CLAIM],
       cropRates: Object.fromEntries(cropPolicy.crops.map((crop) => [crop, cropPolicy.rate(crop)])),
       maxRatePerAcre: cropPolicy.maxRatePerAcre,
@@ -389,6 +403,10 @@ async function createSession(useCaseName = 'age') {
       id: request.id,
       role: request.role,
       expectedClaims: expectedClaimNames(request),
+      // Carried into the session, or the status check silently does not happen: the
+      // decision reads the session's copy of the request, not the one the query was built
+      // from, and a field dropped here is a check that looks configured and never runs.
+      statusClaim: request.statusClaim,
     })),
     qrData: vp.qr_data,
   });
