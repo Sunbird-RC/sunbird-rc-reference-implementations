@@ -33,16 +33,19 @@ import {
   readFarmCreditVerification,
   requestUriFromQr,
 } from './lib/stack.mjs';
+import { signIn } from './lib/keycloak.mjs';
 import {
   createHolder,
   collectCredential,
+  requestCredential,
   presentSdJwt,
   fetchRequestObject,
   submitMultiPresentation,
 } from './lib/wallet.mjs';
 
-const { base, opsBase } = deployEnv();
-const FIXTURE = { farmerId: 'FRM-KA-0041' };
+const { base, opsBase, demoPassword } = deployEnv();
+const advertised = { farmer: {}, land: {} };
+const FIXTURE = { username: 'farmer.ravi', farmerId: 'FRM-KA-0041' };
 
 let skip = null;
 let farmerIssuerDid = null;
@@ -57,6 +60,23 @@ before(async () => {
   landIssuerDid = list.find((c) => c.name === 'Land Ownership Credential')?.author || null;
   if (!farmerIssuerDid || !landIssuerDid) {
     skip = 'the Agriculture credential schemas are not published — run scripts/bootstrap.sh';
+    return;
+  }
+  if (!demoPassword) {
+    skip = 'no DEMO_CITIZEN_PASSWORD in deploy/.env — run ./scripts/bootstrap.sh';
+    return;
+  }
+  // What each registry advertises, so the wallet can ask for a credential and for a token
+  // scoped to it.
+  for (const which of ['farmer', 'land']) {
+    const meta = await json(`${base}/${which}/.well-known/openid-credential-issuer`);
+    const entries = Object.entries(meta.body?.credential_configurations_supported || {});
+    if (entries.length === 0) {
+      skip = `the ${which} registry advertises no credential — run ./scripts/bootstrap.sh`;
+      return;
+    }
+    const [id, cfg] = entries[0];
+    advertised[which] = { issuerBase: `${base}/${which}`, configurationId: id, scope: cfg.scope };
   }
 });
 
@@ -86,37 +106,29 @@ async function applyWithHolderAlgorithm(alg) {
   const landRecord = await registryRecord('LandRecord');
   assert.ok(farmerRecord && landRecord, `${FIXTURE.farmerId} must be seeded — run scripts/seed-agriculture.sh`);
 
+  // Collected through the authorization-code flow, like the customer journey, so these
+  // credentials carry the Authority linkage the bank's request asks for. The holder key is
+  // still the algorithm under test — which is the only thing this file is about.
   const holder = await createHolder({ alg });
-  const farmerOffer = await issueAgricultureCredential({
-    base,
-    which: 'farmer',
-    issuerDid: farmerIssuerDid,
-    claims: {
-      // Claim names are the credential's; the values still come from the registry record,
-      // whose own field names did not change.
-      farmerReference: farmerRecord.farmerId,
-      registrationStatus: farmerRecord.registeredFarmer,
-      farmerCategory: farmerRecord.farmerCategory,
-      district: farmerRecord.district,
-    },
+  const auth = await signIn({
+    authorizationServer: `${base}/auth/realms/agriculture`,
+    redirectUri: `${base}/wallet/redirect`,
+    username: FIXTURE.username,
+    password: demoPassword,
+    scope: ['openid', advertised.farmer.scope, advertised.land.scope].filter(Boolean).join(' '),
   });
-  const farmer = (await collectCredential({ base: farmerOffer.issuerBase, offer: farmerOffer, holder })).credential;
-
-  const landOffer = await issueAgricultureCredential({
-    base,
-    which: 'land',
-    issuerDid: landIssuerDid,
-    claims: {
-      parcelReference: landRecord.landId,
-      farmerReference: landRecord.farmerId,
-      ownershipStatus: landRecord.ownershipStatus,
-      landAreaAcres: landRecord.landAreaAcres,
-      cropType: landRecord.cropType,
-      cultivatedArea: landRecord.cultivatedAreaAcres,
-      district: landRecord.district,
-    },
-  });
-  const land = (await collectCredential({ base: landOffer.issuerBase, offer: landOffer, holder })).credential;
+  assert.ok(auth.accessToken, `sign-in failed for ${FIXTURE.username}: ${auth.error}`);
+  const collect = async (which) =>
+    (
+      await requestCredential({
+        base: advertised[which].issuerBase,
+        token: { access_token: auth.accessToken },
+        holder,
+        extra: { credential_configuration_id: advertised[which].configurationId },
+      })
+    ).credential;
+  const farmer = await collect('farmer');
+  const land = await collect('land');
 
   const session = await startFarmCreditVerification(base);
   const request = await fetchRequestObject({ requestUri: requestUriFromQr(session.qrData) });

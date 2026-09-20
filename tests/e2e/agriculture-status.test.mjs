@@ -141,21 +141,21 @@ async function authorityStatusOf(cred) {
 }
 
 /** Presents the credentials this wallet already holds, and reads the bank's answer. */
-async function applyForCredit(held = wallet) {
+async function applyForCredit(held = wallet, disclose = {}) {
   const session = await startFarmCreditVerification(base);
   const request = await fetchRequestObject({ requestUri: requestUriFromQr(session.qrData) });
   const policy = await farmCreditPolicy(base);
   const presentations = {
     farmer_cred: await presentSdJwt({
       credential: held.farmer.credential,
-      disclose: policy.requestedClaims.farmer,
+      disclose: disclose.farmer || policy.requestedClaims.farmer,
       nonce: request.nonce,
       audience: request.client_id,
       holder: held.holder,
     }),
     land_cred: await presentSdJwt({
       credential: held.land.credential,
-      disclose: policy.requestedClaims.land,
+      disclose: disclose.land || policy.requestedClaims.land,
       nonce: request.nonce,
       audience: request.client_id,
       holder: held.holder,
@@ -356,8 +356,40 @@ describe('Agriculture — the bank consults live credential status', () => {
       'the offer path is supposed to produce a credential with no linkage',
     );
 
-    const result = await applyForCredit({ ...held, farmer: unlinked });
-    assert.notEqual(result.decision, 'ELIGIBLE', 'an unlinked credential must not fund a loan');
+    // Disclosing everything this credential HAS, which is the strongest case a holder could
+    // make for it. The wallet cannot disclose a claim the card does not carry.
+    const session = await startFarmCreditVerification(base);
+    const request = await fetchRequestObject({ requestUri: requestUriFromQr(session.qrData) });
+    const policy = await farmCreditPolicy(base);
+    const submitted = await submitMultiPresentation({
+      responseUri: request.response_uri,
+      state: request.state,
+      presentations: {
+        farmer_cred: await presentSdJwt({
+          credential: unlinked.credential,
+          disclose: ['farmerReference', 'registrationStatus'],
+          nonce: request.nonce,
+          audience: request.client_id,
+          holder: held.holder,
+        }),
+        land_cred: await presentSdJwt({
+          credential: held.land.credential,
+          disclose: policy.requestedClaims.land,
+          nonce: request.nonce,
+          audience: request.client_id,
+          holder: held.holder,
+        }),
+      },
+    });
+
+    // The bank refuses the presentation itself, before any business rule runs: its request
+    // asks for the linkage claim, and a credential with no anchor cannot satisfy it. That is
+    // a stronger refusal than a NOT_ELIGIBLE decision — the lending question is never
+    // reached, because there is nothing to ask the Authority about.
+    assert.notEqual(submitted.status, 200, 'an unlinked credential must not be accepted');
+
+    const { body } = await readFarmCreditVerification(base, session.sessionId);
+    assert.notEqual(body.decision, 'ELIGIBLE', 'and no loan is offered');
   });
 
   // Inactivation of the MAIN subject is deliberately NOT exercised here. It is terminal — the Authority
