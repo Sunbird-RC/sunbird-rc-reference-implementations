@@ -1,4 +1,4 @@
-From 1e42ba471e706bbe90eb887a1aed0f26d8fcf015 Mon Sep 17 00:00:00 2001
+From 4b36d54dfe4a21fc4c11cc6554afce2bbe8e8487 Mon Sep 17 00:00:00 2001
 From: Kartheek Palla <palla.kartheekreddy@gmail.com>
 Date: Sun, 20 Sep 2026 19:17:40 +0530
 Subject: [PATCH] feat(oid4vc-service): issue through a Sunbird RC Authority
@@ -52,20 +52,20 @@ and a holder must not be able to act as it.
 
 167 tests, 16 suites, 0 failures — the existing 154 unchanged plus 13 here.
 ---
- .../src/claims/authority.claim-source.spec.ts | 221 ++++++++++++++++++
- .../src/claims/authority.claim-source.ts      | 219 +++++++++++++++++
+ .../src/claims/authority.claim-source.spec.ts | 255 ++++++++++++++++++
+ .../src/claims/authority.claim-source.ts      | 228 ++++++++++++++++
  .../src/claims/claim-source.factory.ts        |  15 ++
- .../src/config/configuration.ts               |  36 ++-
- 4 files changed, 490 insertions(+), 1 deletion(-)
+ .../src/config/configuration.ts               |  49 +++-
+ 4 files changed, 546 insertions(+), 1 deletion(-)
  create mode 100644 services/oid4vc-service/src/claims/authority.claim-source.spec.ts
  create mode 100644 services/oid4vc-service/src/claims/authority.claim-source.ts
 
 diff --git a/services/oid4vc-service/src/claims/authority.claim-source.spec.ts b/services/oid4vc-service/src/claims/authority.claim-source.spec.ts
 new file mode 100644
-index 00000000..1f5ee678
+index 00000000..fa735b55
 --- /dev/null
 +++ b/services/oid4vc-service/src/claims/authority.claim-source.spec.ts
-@@ -0,0 +1,221 @@
+@@ -0,0 +1,255 @@
 +import { AuthorityClaimSource } from './authority.claim-source';
 +import { ClaimSourceUnavailableError, SubjectNotFoundError } from './claim-source.interface';
 +
@@ -287,12 +287,46 @@ index 00000000..1f5ee678
 +    expect(JSON.parse(search.init.body).filters).toHaveProperty('farmerId');
 +  });
 +});
++
++describe('authenticating to the Authority Service', () => {
++  const saved = { ...process.env };
++  let fetchSpy: jest.SpyInstance;
++  beforeEach(() => configure());
++  afterEach(() => {
++    fetchSpy?.mockRestore();
++    process.env = { ...saved };
++  });
++
++  it('sends whatever headers the deployment configures', async () => {
++    // Not every Authority authenticates with a bearer token. The issuer must be able to
++    // identify itself without this code knowing which scheme is in use.
++    process.env.AUTHORITY_HEADERS = JSON.stringify({
++      'x-dev-issuer': 'https://idp.test',
++      'x-dev-subject': 'agri-farmer-officer',
++    });
++    const a = authority();
++    fetchSpy = jest.spyOn(global, 'fetch' as any).mockImplementation(a.impl as any);
++    await new AuthorityClaimSource().resolve(REQUEST as any);
++    for (const call of a.calls) {
++      expect(call.init.headers['x-dev-subject']).toBe('agri-farmer-officer');
++    }
++  });
++
++  it('still never forwards anything belonging to the holder', async () => {
++    process.env.AUTHORITY_HEADERS = JSON.stringify({ 'x-dev-subject': 'issuing-officer' });
++    const a = authority();
++    fetchSpy = jest.spyOn(global, 'fetch' as any).mockImplementation(a.impl as any);
++    await new AuthorityClaimSource().resolve(REQUEST as any);
++    const sent = JSON.stringify(a.calls.map((c) => c.init.headers));
++    expect(sent).not.toContain(REQUEST.subjectId);
++  });
++});
 diff --git a/services/oid4vc-service/src/claims/authority.claim-source.ts b/services/oid4vc-service/src/claims/authority.claim-source.ts
 new file mode 100644
-index 00000000..1ebc80ff
+index 00000000..f677510f
 --- /dev/null
 +++ b/services/oid4vc-service/src/claims/authority.claim-source.ts
-@@ -0,0 +1,219 @@
+@@ -0,0 +1,228 @@
 +import { Logger } from '@nestjs/common';
 +import { createHash } from 'node:crypto';
 +import { loadConfig } from '../config/configuration';
@@ -466,6 +500,15 @@ index 00000000..1ebc80ff
 +    // Server to server. The holder's token is deliberately NOT forwarded: this call is
 +    // made as the issuing service, and a holder must not be able to act as it.
 +    if (token) h.authorization = `Bearer ${token}`;
++    // Whatever else this deployment's Authority Service expects to identify the caller.
++    // A bearer token covers the ordinary case; this covers the rest without teaching the
++    // issuer about any particular authentication scheme — and without a development-only
++    // branch in code that also runs in production.
++    //
++    // The issuing service must reach the Authority as a principal entitled to issue for the
++    // tenant that owns the record. It is acting as that Authority's issuing officer, and
++    // nothing here grants it more than the Authority already decided to grant.
++    Object.assign(h, this.config.authority?.headers ?? {});
 +    return h;
 +  }
 +
@@ -546,10 +589,10 @@ index 425d3b97..513ad927 100644
        if (!this.registrySource.available) {
          // Distinguished from `none` deliberately: this deployment asked for the
 diff --git a/services/oid4vc-service/src/config/configuration.ts b/services/oid4vc-service/src/config/configuration.ts
-index e8024be3..67c851b0 100644
+index e8024be3..d51642a5 100644
 --- a/services/oid4vc-service/src/config/configuration.ts
 +++ b/services/oid4vc-service/src/config/configuration.ts
-@@ -109,7 +109,28 @@ export interface ClaimSourceSpec {
+@@ -109,7 +109,35 @@ export interface ClaimSourceSpec {
  }
  
  /** Names with built-in meaning, which a declared source must not shadow. */
@@ -573,13 +616,20 @@ index e8024be3..67c851b0 100644
 +  profileMap: Record<string, string>;
 +  /** The record field a holder's subject identifier is matched against. */
 +  subjectField: string;
++  /**
++   * Extra headers identifying this service to the Authority Service.
++   *
++   * A bearer token covers the ordinary case. This covers deployments whose Authority
++   * expects something else, without the issuer having to know which scheme that is.
++   */
++  headers: Record<string, string>;
 +  /** Request timeout. A wallet is waiting on this call, so it is bounded. */
 +  timeoutMs: number;
 +}
  
  /**
   * Discovers named claim sources from `CLAIM_SOURCE_<NAME>_URL` variables.
-@@ -255,6 +276,7 @@ export interface Oid4vcConfig {
+@@ -255,6 +283,7 @@ export interface Oid4vcConfig {
     * `registry` is always available (configured by `REGISTRY_*` above) and needs no
     * entry here; anything else is declared with `CLAIM_SOURCE_<NAME>_*`.
     */
@@ -587,7 +637,7 @@ index e8024be3..67c851b0 100644
    claimSources: Record<string, ClaimSourceSpec>;
    /**
     * Credential type -> claim source name. Keys match a credential's `schemaId` or
-@@ -406,6 +428,18 @@ export const loadConfig = (): Oid4vcConfig => ({
+@@ -406,6 +435,24 @@ export const loadConfig = (): Oid4vcConfig => ({
      ),
      birthDateField: process.env.REGISTRY_BIRTHDATE_FIELD || '',
    },
@@ -601,6 +651,12 @@ index e8024be3..67c851b0 100644
 +      (m) => console.warn(`[configuration] ${m}`),
 +    ),
 +    subjectField: (process.env.AUTHORITY_SUBJECT_FIELD || 'nationalId').trim(),
++    headers: parseStringMap(
++      process.env.AUTHORITY_HEADERS || '',
++      'AUTHORITY_HEADERS',
++      'header name -> value',
++      (m) => console.warn(`[configuration] ${m}`),
++    ),
 +    timeoutMs: num(process.env.AUTHORITY_TIMEOUT, 8000),
 +  },
    claimSources: parseClaimSources(process.env, (m) => console.warn(`[configuration] ${m}`)),

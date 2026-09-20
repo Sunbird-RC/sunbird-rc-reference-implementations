@@ -26,10 +26,6 @@ FARMER_OPERATOR="${FARMER_OPERATOR:-agri-farmer-operator}"
 LAND_OPERATOR="${LAND_OPERATOR:-agri-land-operator}"
 FARMER_OFFICER="${FARMER_OFFICER:-agri-farmer-officer}"
 LAND_OFFICER="${LAND_OFFICER:-agri-land-officer}"
-# The jurisdiction these fixtures belong to. Written to every record, and the value a
-# canonical reference is qualified by, so two jurisdictions holding the same local number
-# produce different references.
-STATE="${STATE:-Tamil Nadu}"
 
 green() { printf '  \033[32m✓\033[0m %s\n' "$1" >&2; }
 info()  { printf '  \033[2m·\033[0m %s\n' "$1" >&2; }
@@ -159,31 +155,29 @@ except Exception:
 }
 
 # --- fixtures --------------------------------------------------------------------------
-# The same six cases as seed-agriculture.sh — every branch of the loan decision, including a
-# farmer with no land record, because "fails safely" cannot be shown without a case that
-# fails — but a DISTINCT identifier series in a different state.
+# The same six people as seed-agriculture.sh, with the same identifiers, because this script
+# REPLACES that one for Agriculture rather than running beside it.
 #
-# They have to differ. Sunbird RC enforces uniqueness on the record identifier, so seeding
-# FRM-KA-0041 here when the direct seed already created it is refused with a 409 that the
-# Authority Service faithfully passes on. Until the direct path is retired the two coexist on
-# one stack, and a separate series keeps them legible: anything FRM-TN-* is managed through
-# the Authority Service, anything else was written to the Registry directly.
+# It has to replace rather than coexist. Sunbird RC indexes farmerId AND nationalId as
+# unique, so the Authority cannot manage a record for a holder the direct path already
+# seeded. A wallet signs in as that holder, so the Authority is the one that must own the
+# record: run both and the demo users' records sit outside the Authority Service, where no
+# credential can be issued through it and no status can be asked about them.
 #
-# The different state is deliberate too: it is the jurisdiction the canonical reference is
-# qualified by, so these records produce visibly different references.
-#
-#   nationalId | farmerId | registered | category | district | landId | ownership | total | crop | cultivated | label
+# `state` is the jurisdiction the canonical reference is qualified by, and is per fixture
+# rather than one value for the file, so two farmers in different states produce references
+# that cannot collide even if their local numbers ever did.
 FIXTURES='
-NAT-91018472|FRM-TN-0041|true |Small     |Madurai  |LAND-MDU-820137|ACTIVE  |6.5|PADDY    |4   |eligible: paddy, 4 acres
-NAT-91023815|FRM-TN-0117|true |SemiMedium|Thanjavur|LAND-TNJ-450922|ACTIVE  |4  |WHEAT    |2.5 |eligible: wheat, 2.5 acres
-NAT-91031164|FRM-TN-0058|true |Marginal  |Madurai  |LAND-MDU-820455|INACTIVE|3  |PADDY    |3   |not eligible: ownership is not ACTIVE
-NAT-91042093|FRM-TN-0203|true |Medium    |Salem    |LAND-SLM-771208|ACTIVE  |8  |MILLET   |5   |not eligible: crop outside the lending policy
-NAT-91066021|FRM-TN-0088|false|Small     |Madurai  |LAND-MDU-830611|ACTIVE  |5  |SUGARCANE|2   |not eligible: not a registered farmer
-NAT-91055010|FRM-TN-0072|true |Small     |Madurai  |-              |-       |-  |-        |-   |fails safely: farmer with no land record
+NAT-90018472|FRM-KA-0041|true |Small     |Mysuru   |Karnataka  |LAND-MYS-820137|ACTIVE  |6.5|PADDY    |4   |eligible: paddy, 4 acres
+NAT-90023815|FRM-PB-0117|true |SemiMedium|Ludhiana |Punjab     |LAND-LDH-450922|ACTIVE  |4  |WHEAT    |2.5 |eligible: wheat, 2.5 acres
+NAT-90031164|FRM-KA-0058|true |Marginal  |Mysuru   |Karnataka  |LAND-MYS-820455|INACTIVE|3  |PADDY    |3   |not eligible: ownership is not ACTIVE
+NAT-90042093|FRM-MH-0203|true |Medium    |Nagpur   |Maharashtra|LAND-NAG-771208|ACTIVE  |8  |MILLET   |5   |not eligible: crop outside the lending policy
+NAT-90066021|FRM-KA-0088|false|Small     |Mysuru   |Karnataka  |LAND-MYS-830611|ACTIVE  |5  |SUGARCANE|2   |not eligible: not a registered farmer
+NAT-90055010|FRM-KA-0072|true |Small     |Mysuru   |Karnataka  |-              |-       |-  |-        |-   |fails safely: farmer with no land record
 '
 
 head1 "Farmer records  (tenant T-AGRI-FARMER)"
-printf '%s\n' "$FIXTURES" | while IFS='|' read -r nat fid reg cat dist land own total crop cult label; do
+printf '%s\n' "$FIXTURES" | while IFS='|' read -r nat fid reg cat dist st land own total crop cult label; do
   [ -z "${fid// /}" ] && continue
   fid="${fid// /}"; nat="${nat// /}"; reg="${reg// /}"
   body="$(python3 -c '
@@ -199,12 +193,12 @@ print(json.dumps({"record": {
     # cannot be built, and a profile that requires one refuses to issue rather than
     # quietly dropping the claim.
     "state": state,
-}}))' "$fid" "$nat" "$reg" "$cat" "$dist" "$STATE")"
+}}))' "$fid" "$nat" "$reg" "$cat" "$dist" "$st")"
   seed "$BIND_FARMER" "$FARMER_OPERATOR" "$FARMER_OFFICER" farmerId "$fid" "$(echo "$label" | sed 's/^ *//')" "$body"
 done
 
 head1 "Land records  (tenant T-AGRI-LAND)"
-printf '%s\n' "$FIXTURES" | while IFS='|' read -r nat fid reg cat dist land own total crop cult label; do
+printf '%s\n' "$FIXTURES" | while IFS='|' read -r nat fid reg cat dist st land own total crop cult label; do
   [ -z "${fid// /}" ] && continue
   land="${land// /}"
   [ "$land" = "-" ] && { info "${fid// /}  no land record, on purpose"; continue; }
@@ -228,7 +222,7 @@ print(json.dumps({"record": {
     "cultivatedAreaAcres": cult_f,
     "district": dist,
     "state": state,
-}}))' "$land" "$nat" "${fid// /}" "$own" "$total" "$crop" "$cult" "$dist" "$STATE")" \
+}}))' "$land" "$nat" "${fid// /}" "$own" "$total" "$crop" "$cult" "$dist" "$st")" \
     || die "fixture $land is invalid — see the message above"
   seed "$BIND_LAND" "$LAND_OPERATOR" "$LAND_OFFICER" landId "$land" "$(echo "$label" | sed 's/^ *//')" "$body"
 done

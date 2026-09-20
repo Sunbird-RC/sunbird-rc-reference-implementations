@@ -3,7 +3,7 @@
 Everything needed to reconstruct the exact image this showcase runs, from source
 anyone can fetch, and to check that what you built is what we ran.
 
-The image is `sunbird-rc-oid4vc-service:v2.1.0-authcode.1e42ba47`. Its tag suffix
+The image is `sunbird-rc-oid4vc-service:v2.1.0-authcode.4b36d54d`. Its tag suffix
 is the source commit it was built from — patch `0008` below.
 
 ## Why patches and not a branch
@@ -58,7 +58,7 @@ are 27 files, +4449 / −42.
 | 0005 | `9caf3c2b` | `ADVERTISE_OWN_CREDENTIALS_ONLY` — an issuer advertises only what it authored (finding 14) |
 | **0006** | **`1147b904`** | **refuses another issuer's credential type, and refuses an unrequested disclosure** — review items 2 and 4 (findings 16, 17) |
 | **0007** | **`c8beec27`** | **fixes the wiring that made the disclosure check inert on the keyed `vp_token` path** — the path every SD-JWT presentation here takes |
-| **0008** | **`1e42ba47`** | **issues through a Sunbird RC Authority Service and carries `authorityCredentialId` into the SD-JWT**, so a presented credential can be resolved against Authority lifecycle and revocation status |
+| **0008** | **`4b36d54d`** | **issues through a Sunbird RC Authority Service and carries `authorityCredentialId` into the SD-JWT**, so a presented credential can be resolved against Authority lifecycle and revocation status |
 
 The two in bold are the ones the Education review asked for. The five before them
 are the pre-existing port, unchanged by this review, and are included because the
@@ -92,7 +92,7 @@ Then point the deployment at it:
 
 ```bash
 # deploy/docker-compose.yml pins this tag in all nine oid4vc-* services
-grep -c 'v2.1.0-authcode.1e42ba47' deploy/docker-compose.yml     # expect 9
+grep -c 'v2.1.0-authcode.4b36d54d' deploy/docker-compose.yml     # expect 9
 cd deploy && docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
 ```
 
@@ -102,7 +102,7 @@ cd deploy && docker compose -f docker-compose.yml -f docker-compose.tls.yml up -
 cd services/oid4vc-service && npm ci && npx jest
 ```
 
-**167 tests, 16 suites, 0 failures** — the 154 below plus 13 for patch `0008`, whose
+**169 tests, 16 suites, 0 failures** — the 154 below plus 15 for patch `0008`, whose
 suite is `src/claims/authority.claim-source.spec.ts`. The 154-test run is captured
 verbatim at
 [`../../docs/evidence/03-education/runs/test-fork.txt`](../../docs/evidence/03-education/runs/test-fork.txt).
@@ -121,7 +121,7 @@ git rev-parse HEAD^{tree}   # 2b73272db46b0547b2c125f11a598da75562ccea
 git rev-parse HEAD          # WILL DIFFER from c8beec27 — see below
 ```
 
-`1e42ba471e70...` is the commit id in the authoring checkout, and it is what the
+`4b36d54d1e70...` is the commit id in the authoring checkout, and it is what the
 image tag names. A fresh `git am` of this series
 produces the same tree under a different commit id, because a commit hashes its
 committer identity and timestamps as well as its content. An earlier version of
