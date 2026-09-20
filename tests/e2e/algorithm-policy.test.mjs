@@ -92,8 +92,10 @@ async function applyWithHolderAlgorithm(alg) {
     which: 'farmer',
     issuerDid: farmerIssuerDid,
     claims: {
-      farmerId: farmerRecord.farmerId,
-      registeredFarmer: farmerRecord.registeredFarmer,
+      // Claim names are the credential's; the values still come from the registry record,
+      // whose own field names did not change.
+      farmerReference: farmerRecord.farmerId,
+      registrationStatus: farmerRecord.registeredFarmer,
       farmerCategory: farmerRecord.farmerCategory,
       district: farmerRecord.district,
     },
@@ -105,12 +107,12 @@ async function applyWithHolderAlgorithm(alg) {
     which: 'land',
     issuerDid: landIssuerDid,
     claims: {
-      landId: landRecord.landId,
-      farmerId: landRecord.farmerId,
+      parcelReference: landRecord.landId,
+      farmerReference: landRecord.farmerId,
       ownershipStatus: landRecord.ownershipStatus,
       landAreaAcres: landRecord.landAreaAcres,
       cropType: landRecord.cropType,
-      cultivatedAreaAcres: landRecord.cultivatedAreaAcres,
+      cultivatedArea: landRecord.cultivatedAreaAcres,
       district: landRecord.district,
     },
   });

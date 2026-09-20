@@ -25,16 +25,23 @@ export const LAND_REQUEST_ID = 'land_cred';
 
 /**
  * Minimum disclosure, per REQUIREMENTS §5. Read the two lists together: the bank
- * gets `farmerId` twice — once from each credential, which is the whole point,
- * since correlation is only meaningful if both credentials say it — plus one
- * registration flag and the three fields the loan is computed from.
+ * gets `farmerReference` twice — once from each credential, which is the whole
+ * point, since correlation is only meaningful if both credentials say it — plus
+ * one registration flag and the three fields the loan is computed from.
+ *
+ * `farmerReference` rather than a bare local number, because a bare one cannot be
+ * correlated safely: two jurisdictions may each hold FRM-KA-0041, and a credential
+ * carrying the bare value would present them as the same person. The canonical
+ * reference names the issuing Authority and the jurisdiction as well, so matching
+ * it means what it appears to mean.
  *
  * Everything else both credentials carry (National ID never leaves the issuer;
- * name, district, farmer category, land id, total land area) is deliberately not
- * requested, which is what makes the selective disclosure demonstrable.
+ * name, district, farmer category, parcel reference, total land area) is
+ * deliberately not requested, which is what makes selective disclosure
+ * demonstrable.
  */
-export const FARMER_CLAIMS = ['farmerId', 'registeredFarmer'];
-export const LAND_CLAIMS = ['farmerId', 'ownershipStatus', 'cropType', 'cultivatedAreaAcres'];
+export const FARMER_CLAIMS = ['farmerReference', 'registrationStatus'];
+export const LAND_CLAIMS = ['farmerReference', 'ownershipStatus', 'cropType', 'cultivatedArea'];
 
 /** The ownership vocabulary the Land Registry schema permits. */
 const OWNERSHIP_STATUSES = ['ACTIVE', 'INACTIVE', 'DISPUTED', 'TRANSFERRED'];
@@ -118,7 +125,7 @@ export function loadCropPolicy({ file }) {
  * @param {{farmer: Record<string, unknown>, land: Record<string, unknown>}} presented
  *        verified minimum-disclosure claims, keyed by role
  * @param {{rate: (crop: unknown) => number|null}} policy
- * @returns {{outcome: 'ELIGIBLE', farmerId: string, cropType: string, cultivatedAreaAcres: number,
+ * @returns {{outcome: 'ELIGIBLE', farmerReference: string, cropType: string, cultivatedArea: number,
  *            ratePerAcre: number, maximumLoan: number}
  *          | {outcome: 'NOT_ELIGIBLE', reason: string}}
  */
@@ -136,24 +143,24 @@ export function decideFarmCredit({ farmer, land }, policy) {
   //    both credentials are bound to the same presenting holder; matching
   //    strings alone would be satisfied by two credentials collected from
   //    different people (REQUIREMENTS §4).
-  const farmerId = farmer.farmerId;
-  if (typeof farmerId !== 'string' || farmerId.length === 0) {
-    throw malformed('the farmer credential carried no farmerId');
+  const farmerReference = farmer.farmerReference;
+  if (typeof farmerReference !== 'string' || farmerReference.length === 0) {
+    throw malformed('the farmer credential carried no farmerReference');
   }
-  if (typeof land.farmerId !== 'string' || land.farmerId.length === 0) {
-    throw malformed('the land credential carried no farmerId');
+  if (typeof land.farmerReference !== 'string' || land.farmerReference.length === 0) {
+    throw malformed('the land credential carried no farmerReference');
   }
-  if (farmer.farmerId !== land.farmerId) {
+  if (farmer.farmerReference !== land.farmerReference) {
     throw rejected('the two credentials name different farmers');
   }
 
   // 2. Registration. Strict boolean, for the reason the Age module spells out:
   //    the string "false" is truthy, and a lending gate that approves on it is
   //    the class of bug this showcase exists to prove absent.
-  if (typeof farmer.registeredFarmer !== 'boolean') {
-    throw malformed('registeredFarmer is not a boolean assertion');
+  if (typeof farmer.registrationStatus !== 'boolean') {
+    throw malformed('registrationStatus is not a boolean assertion');
   }
-  if (!farmer.registeredFarmer) {
+  if (!farmer.registrationStatus) {
     return { outcome: 'NOT_ELIGIBLE', reason: 'the farmer registry does not list this person as a registered farmer' };
   }
 
@@ -166,7 +173,7 @@ export function decideFarmCredit({ farmer, land }, policy) {
   }
 
   // 4. Cultivated area. Malformed precision throws; zero is a business answer.
-  const hundredths = acresToHundredths(land.cultivatedAreaAcres);
+  const hundredths = acresToHundredths(land.cultivatedArea);
   if (hundredths === 0) {
     return { outcome: 'NOT_ELIGIBLE', reason: 'no cultivated area is recorded against this land' };
   }
@@ -184,9 +191,9 @@ export function decideFarmCredit({ farmer, land }, policy) {
 
   return {
     outcome: 'ELIGIBLE',
-    farmerId,
+    farmerReference,
     cropType: land.cropType,
-    cultivatedAreaAcres: hundredthsToAcres(hundredths),
+    cultivatedArea: hundredthsToAcres(hundredths),
     ratePerAcre,
     maximumLoan: maximumLoan(hundredths, ratePerAcre),
   };

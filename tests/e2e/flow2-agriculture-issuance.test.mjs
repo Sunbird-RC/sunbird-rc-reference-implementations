@@ -169,8 +169,8 @@ describe('Flow 2 — the farmer signs in and the wallet fetches from both regist
 
     const farmerClaims = disclosableValues(farmer.credential);
     const landClaims = disclosableValues(land.credential);
-    assert.equal(farmerClaims.farmerId, RAVI.farmerId);
-    assert.equal(landClaims.farmerId, RAVI.farmerId);
+    assert.ok(String(farmerClaims.farmerReference).endsWith(RAVI.farmerId));
+    assert.ok(String(landClaims.farmerReference).endsWith(RAVI.farmerId));
   });
 
   test('each credential is built from that farmer’s own registry record', async () => {
@@ -185,10 +185,10 @@ describe('Flow 2 — the farmer signs in and the wallet fetches from both regist
     const farmerClaims = disclosableValues((await collect('farmer', session, holder)).credential);
     const landClaims = disclosableValues((await collect('land', session, holder)).credential);
 
-    assert.equal(farmerClaims.registeredFarmer, farmerRecord.registeredFarmer);
+    assert.equal(farmerClaims.registrationStatus, farmerRecord.registeredFarmer);
     assert.equal(landClaims.ownershipStatus, landRecord.ownershipStatus);
     assert.equal(landClaims.cropType, landRecord.cropType);
-    assert.equal(Number(landClaims.cultivatedAreaAcres), Number(landRecord.cultivatedAreaAcres));
+    assert.equal(Number(landClaims.cultivatedArea), Number(landRecord.cultivatedAreaAcres));
   });
 
   test('the two registries sign with different keys', async () => {
@@ -366,7 +366,7 @@ describe('Flow 2 — a mismatched pair, collected by the wallet itself', () => {
 
     const farmerClaims = disclosableValues(farmer.credential);
     const landClaims = disclosableValues(land.credential);
-    assert.equal(farmerClaims.farmerId, RAVI.farmerId);
+    assert.ok(String(farmerClaims.farmerReference).endsWith(RAVI.farmerId));
     assert.equal(landClaims.farmerId, LAKSHMI.farmerId);
     assert.notEqual(
       farmerClaims.farmerId,

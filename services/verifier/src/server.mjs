@@ -296,18 +296,18 @@ const USE_CASES = {
       // request actually made. It listed three claims of the five distinct
       // ones that arrived until this was fixed.
       //
-      // farmerId is taken from the FARMER credential specifically, and the
-      // land credential's copy is not spread over it: when the two disagree
+      // farmerReference is taken from the FARMER credential specifically, and
+      // the land credential's copy is not spread over it: when the two disagree
       // the decision is CORRELATION_FAILED, and a merge would quietly display
-      // one farmer id for a presentation that carried two.
+      // one reference for a presentation that carried two.
       disclosed: {
-        farmerId: verified.farmer.farmerId,
-        registeredFarmer: verified.farmer.registeredFarmer,
+        farmerReference: verified.farmer.farmerReference,
+        registrationStatus: verified.farmer.registrationStatus,
         ...(verified.land
           ? {
               ownershipStatus: verified.land.ownershipStatus,
               cropType: verified.land.cropType,
-              cultivatedAreaAcres: verified.land.cultivatedAreaAcres,
+              cultivatedArea: verified.land.cultivatedArea,
             }
           : {}),
       },
@@ -578,7 +578,7 @@ async function readSession(sessionId) {
   //    asserted in step 1: oid4vc-service checks the Key Binding JWT for the
   //    presentation, so two or three credentials arriving in one VP token are
   //    held by one wallet key. That is what lets a domain module treat a matching
-  //    farmerId or learnerId as correlation rather than coincidence.
+  //    farmerReference or learnerId as correlation rather than coincidence.
   const useCase = USE_CASES[session.useCase] || USE_CASES.age;
   let outcome;
   try {

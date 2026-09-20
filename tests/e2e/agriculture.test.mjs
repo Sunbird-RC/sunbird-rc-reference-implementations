@@ -185,12 +185,12 @@ describe('what the bank asks for', () => {
   test('one request, two credentials, and only the permitted claims', async () => {
     guard();
     const policy = await farmCreditPolicy(base);
-    assert.deepEqual(policy.requestedClaims.farmer, ['farmerId', 'registeredFarmer']);
+    assert.deepEqual(policy.requestedClaims.farmer, ['farmerReference', 'registrationStatus']);
     assert.deepEqual(policy.requestedClaims.land, [
-      'farmerId',
+      'farmerReference',
       'ownershipStatus',
       'cropType',
-      'cultivatedAreaAcres',
+      'cultivatedArea',
     ]);
     // The claims a bank must never receive are not merely undisclosed — they are
     // never asked for, which is the stronger guarantee.
@@ -350,7 +350,7 @@ describe('an eligible farmer', () => {
     }
     const acres = wallet.records.land.cultivatedAreaAcres;
     assert.equal(result.disclosed.cropType, 'PADDY');
-    assert.equal(result.disclosed.cultivatedAreaAcres, acres);
+    assert.equal(result.disclosed.cultivatedArea, acres);
     assert.equal(result.loan.ratePerAcre, 30000);
     assert.equal(result.loan.maximumLoan, acres * 30000);
     assert.equal(result.loan.maximumLoanFormatted, '₹1,20,000');
