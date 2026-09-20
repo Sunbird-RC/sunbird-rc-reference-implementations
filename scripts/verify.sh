@@ -288,7 +288,7 @@ if [ -d "$FORK/.git" ]; then
   # shared source. The fork branch cannot be published — its only remote is
   # upstream Sunbird RC — so the commits travel as patches on this branch, and
   # these checks are what stop that copy drifting from the image we actually run.
-  check "the oid4vc patch series is committed" '[ "$(ls patches/oid4vc-service/000*.patch 2>/dev/null | wc -l | tr -d " ")" = "7" ]'
+  check "the oid4vc patch series is committed" '[ "$(ls patches/oid4vc-service/000*.patch 2>/dev/null | wc -l | tr -d " ")" = "8" ]'
   check "the patch series has apply-and-build instructions" 'grep -q "docker build --platform linux/amd64" patches/oid4vc-service/README.md && grep -q "^git am " patches/oid4vc-service/README.md'
   # The tag compose pins must BE the last patch's commit, not merely look like a
   # sha: a patch series that stops one commit short of the running image is the
