@@ -56,10 +56,20 @@ const AUTHORITY_BASE_URL = process.env.AUTHORITY_BASE_URL || '';
 // endpoint is not configured here: it comes from the trust policy entry for the issuer that
 // signed the credential, so a credential can never point this at somewhere of its choosing.
 const credentialStatus = credentialStatusChecker();
-// The claim carrying an Agriculture credential's identifier at the issuing Authority. Unset
-// until the credentials the wallet presents carry one; setting it before then correctly
-// fails the journey rather than quietly skipping the check.
-const AGRICULTURE_STATUS_CLAIM = process.env.AGRICULTURE_STATUS_CLAIM || '';
+// The claim carrying an Agriculture credential's identifier at the issuing Authority.
+//
+// Checking live status is the DEFAULT for this journey, not an option. A lender deciding on
+// a credential whose source may since have been suspended is the failure this iteration
+// exists to remove, and a check that ships off by default is a check most deployments will
+// never turn on.
+//
+// Set AGRICULTURE_STATUS_CLAIM='' to disable it deliberately. A credential that carries no
+// such identifier is then refused rather than waved through — an unlinked credential has
+// unknown standing, which is not the same as good standing.
+const AGRICULTURE_STATUS_CLAIM =
+  process.env.AGRICULTURE_STATUS_CLAIM === undefined
+    ? 'authorityCredentialId'
+    : process.env.AGRICULTURE_STATUS_CLAIM;
 const CROP_POLICY_FILE = process.env.CROP_POLICY_FILE || '/app/config/policy/crop-rates.json';
 const ALG_POLICY_FILE = process.env.ALG_POLICY_FILE || '/app/config/policy/algorithms.json';
 // Mirrors oid4vc-service's VP_TXN_TTL default. A verifier session outliving the
@@ -317,6 +327,13 @@ const USE_CASES = {
       disclosed: {
         farmerReference: verified.farmer.farmerReference,
         registrationStatus: verified.farmer.registrationStatus,
+        // Reported because the farmer disclosed it. It is technical linkage rather than a
+        // business claim, and it is still something they handed over — a "shared with us"
+        // list that quietly omitted it would understate what travelled, which is the same
+        // dishonesty as overstating what was withheld.
+        ...(AGRICULTURE_STATUS_CLAIM && verified.farmer[AGRICULTURE_STATUS_CLAIM] !== undefined
+          ? { [AGRICULTURE_STATUS_CLAIM]: verified.farmer[AGRICULTURE_STATUS_CLAIM] }
+          : {}),
         ...(verified.land
           ? {
               ownershipStatus: verified.land.ownershipStatus,

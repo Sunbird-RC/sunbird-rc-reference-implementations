@@ -195,6 +195,9 @@ export const NEGATIVE_FARMER_FIXTURE = {
     registrationStatus: { type: 'boolean' },
     farmerCategory: { type: 'string' },
     district: { type: 'string' },
+    // Declared so a forged credential can still DISCLOSE the linkage claim and be
+    // refused at the trust check, which is the thing these fixtures exist to prove.
+    authorityCredentialId: { type: 'string' },
   },
   required: ['farmerReference'],
 };
@@ -211,6 +214,9 @@ export const NEGATIVE_LAND_FIXTURE = {
     cropType: { type: 'string' },
     cultivatedArea: { type: 'number' },
     district: { type: 'string' },
+    // Declared so a forged credential can still DISCLOSE the linkage claim and be
+    // refused at the trust check, which is the thing these fixtures exist to prove.
+    authorityCredentialId: { type: 'string' },
   },
   required: ['farmerReference'],
 };

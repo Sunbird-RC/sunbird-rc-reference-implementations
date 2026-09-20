@@ -174,6 +174,8 @@ NAT-90031164|FRM-KA-0058|true |Marginal  |Mysuru   |Karnataka  |LAND-MYS-820455|
 NAT-90042093|FRM-MH-0203|true |Medium    |Nagpur   |Maharashtra|LAND-NAG-771208|ACTIVE  |8  |MILLET   |5   |not eligible: crop outside the lending policy
 NAT-90066021|FRM-KA-0088|false|Small     |Mysuru   |Karnataka  |LAND-MYS-830611|ACTIVE  |5  |SUGARCANE|2   |not eligible: not a registered farmer
 NAT-90055010|FRM-KA-0072|true |Small     |Mysuru   |Karnataka  |-              |-       |-  |-        |-   |fails safely: farmer with no land record
+NAT-90077001|FRM-KA-0901|true |Small     |Mysuru   |Karnataka  |LAND-MYS-900101|ACTIVE  |6  |PADDY    |4   |reserved: the inactivation case
+NAT-90077002|FRM-KA-0902|true |Small     |Mysuru   |Karnataka  |LAND-MYS-900102|ACTIVE  |6  |PADDY    |4   |reserved: the revocation case
 '
 
 head1 "Farmer records  (tenant T-AGRI-FARMER)"

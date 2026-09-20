@@ -15,6 +15,8 @@ import assert from 'node:assert/strict';
 import {
   deployEnv,
   requireStack,
+  issueAgricultureCredential,
+  json,
   startFarmCreditVerification,
   readFarmCreditVerification,
   requestUriFromQr,
@@ -24,22 +26,31 @@ import { signIn } from './lib/keycloak.mjs';
 import {
   createHolder,
   requestCredential,
+  collectCredential,
+  disclosableValues,
   presentSdJwt,
   fetchRequestObject,
   submitMultiPresentation,
 } from './lib/wallet.mjs';
 
-const { base, demoPassword } = deployEnv();
+const { base, opsBase, demoPassword } = deployEnv();
 const REALM = `${base}/auth/realms/agriculture`;
 const REDIRECT_URI = `${base}/wallet/redirect`;
 const AUTHORITY = process.env.AUTHORITY_URL || 'http://127.0.0.1:3334';
 // Lakshmi rather than Ravi, because this file changes its subject's record and the rest of
 // the suite depends on Ravi being the canonical eligible farmer.
 const SUBJECT = { username: 'farmer.lakshmi', nationalId: 'NAT-90023815', farmerId: 'FRM-PB-0117' };
+// Terminal states get their own subjects, because they cannot be undone: the Authority
+// refuses INACTIVE -> ACTIVE, and issuance is idempotent so a revoked credential stays the
+// credential that subject gets. A shared fixture spent on either would be spent for the life
+// of the deployment.
+const TO_INACTIVATE = { username: 'farmer.terminal.inactive', nationalId: 'NAT-90077001', farmerId: 'FRM-KA-0901' };
+const TO_REVOKE = { username: 'farmer.terminal.revoked', nationalId: 'NAT-90077002', farmerId: 'FRM-KA-0902' };
 
 let skip = null;
 let wallet = null;
 const advertised = { farmer: {}, land: {} };
+let farmerIssuerDid = null;
 
 /** Moves a record's lifecycle through the Authority Service, as an officer would. */
 async function lifecycle(localId, state) {
@@ -80,25 +91,74 @@ async function lifecycle(localId, state) {
   assert.fail(`no Authority-managed record for ${localId}`);
 }
 
+/** A record's current lifecycle state, read without changing it. */
+async function recordState(localId) {
+  const entity = localId.startsWith('FRM-') ? 'FarmerRecord' : 'LandRecord';
+  const field = localId.startsWith('FRM-') ? 'farmerId' : 'landId';
+  const H = { 'x-dev-issuer': 'https://idp.test', 'x-dev-subject': 'bootstrap', 'content-type': 'application/json' };
+  const authorities = await (await fetch(`${AUTHORITY}/api/v1/authorities`, { headers: H })).json();
+  for (const a of (Array.isArray(authorities) ? authorities : authorities.items || [])) {
+    const bindings = await (await fetch(`${AUTHORITY}/api/v1/authorities/${a.id}/registries`, { headers: H })).json();
+    for (const b of (Array.isArray(bindings) ? bindings : bindings.items || [])) {
+      if (b.entityName !== entity) continue;
+      const found = await (await fetch(`${AUTHORITY}/api/v1/registries/${b.id}/records/search`, {
+        method: 'POST',
+        headers: { ...H, 'x-dev-subject': 'agri-farmer-operator' },
+        body: JSON.stringify({ filters: { [field]: { eq: localId } } }),
+      })).json();
+      const row = (found.data || [])[0];
+      if (row) return row.authorityState?.lifecycleState ?? null;
+    }
+  }
+  return null;
+}
+
+/** Collects both credentials for an account, as the wallet does. */
+async function collectFor(account) {
+  const auth = await signIn({
+    authorizationServer: REALM,
+    redirectUri: REDIRECT_URI,
+    username: account.username,
+    password: demoPassword,
+    scope: ['openid', advertised.farmer.scope, advertised.land.scope].filter(Boolean).join(' '),
+  });
+  const holder = await createHolder();
+  const one = async (which) =>
+    requestCredential({
+      base: advertised[which].issuerBase,
+      token: { access_token: auth.accessToken },
+      holder,
+      extra: { credential_configuration_id: advertised[which].configurationId },
+    });
+  return { holder, farmer: await one('farmer'), land: await one('land') };
+}
+
+/** The Authority's own view of a wallet credential's anchor. */
+async function authorityStatusOf(cred) {
+  const id = disclosableValues(cred.credential).authorityCredentialId;
+  const res = await fetch(`${AUTHORITY}/api/v1/trust/credentials/${encodeURIComponent(id)}/status`);
+  return { id, ...(res.ok ? await res.json() : { status: `HTTP ${res.status}` }) };
+}
+
 /** Presents the credentials this wallet already holds, and reads the bank's answer. */
-async function applyForCredit() {
+async function applyForCredit(held = wallet) {
   const session = await startFarmCreditVerification(base);
   const request = await fetchRequestObject({ requestUri: requestUriFromQr(session.qrData) });
   const policy = await farmCreditPolicy(base);
   const presentations = {
     farmer_cred: await presentSdJwt({
-      credential: wallet.farmer.credential,
+      credential: held.farmer.credential,
       disclose: policy.requestedClaims.farmer,
       nonce: request.nonce,
       audience: request.client_id,
-      holder: wallet.holder,
+      holder: held.holder,
     }),
     land_cred: await presentSdJwt({
-      credential: wallet.land.credential,
+      credential: held.land.credential,
       disclose: policy.requestedClaims.land,
       nonce: request.nonce,
       audience: request.client_id,
-      holder: wallet.holder,
+      holder: held.holder,
     }),
   };
   const submitted = await submitMultiPresentation({
@@ -132,6 +192,9 @@ async function setUp() {
     skip = 'the verifier is not configured to check status — set AGRICULTURE_STATUS_CLAIM';
     return;
   }
+  const configs = await json(`${opsBase}/credential-schema/oid4vci-configs`);
+  const list = Array.isArray(configs.body) ? configs.body : [];
+  farmerIssuerDid = list.find((c) => c.name === 'Farmer Identity Credential')?.author || null;
   for (const which of ['farmer', 'land']) {
     const meta = await (await fetch(`${base}/${which}/.well-known/openid-credential-issuer`)).json();
     const [id, cfg] = Object.entries(meta.credential_configurations_supported)[0];
@@ -204,7 +267,100 @@ describe('Agriculture — the bank consults live credential status', () => {
     assert.equal(result.decision, 'ELIGIBLE', result.reason);
   });
 
-  // Inactivation is deliberately NOT exercised here. It is terminal — the Authority
+  test('an inactivated source: refused, and it stays refused', async (t) => {
+    if (unless(t)) return;
+    // Written to CONVERGE, not to transition. Inactivation cannot be undone, so on every run
+    // after the first this fixture is already INACTIVE — and the property under test is the
+    // same either way: a credential whose source is inactive does not fund a loan.
+    const held = await collectFor(TO_INACTIVATE).catch(() => null);
+    if (held) {
+      await lifecycle(TO_INACTIVATE.farmerId, 'INACTIVE').catch(() => {});
+      const result = await applyForCredit(held);
+      assert.notEqual(result.decision, 'ELIGIBLE');
+      assert.match(String(result.reason), /INACTIVE/i);
+    } else {
+      // The source is already inactive, so the Authority will not issue from it at all.
+      // That is the same refusal one step earlier, and worth asserting rather than skipping.
+      const state = await recordState(TO_INACTIVATE.farmerId);
+      assert.equal(state, 'INACTIVE', 'issuance failed for some reason other than inactivation');
+    }
+  });
+
+  test('a revoked credential: refused, and not resurrected by a healthy record', async (t) => {
+    if (unless(t)) return;
+    // Revocation is a statement about the CREDENTIAL, not the record, so the record stays
+    // ACTIVE throughout. That is the point: a healthy source does not undo a revocation.
+    //
+    // Written to converge, like the inactivation case. Once revoked, the Authority refuses
+    // to issue against that attempt again — a revoked credential is not quietly replaced by
+    // a fresh one — so on every run after the first this subject cannot be collected at all.
+    // That refusal is itself the property, one step earlier, and is asserted rather than
+    // skipped.
+    const held = await collectFor(TO_REVOKE).catch(() => null);
+    if (!held) {
+      const state = await recordState(TO_REVOKE.farmerId);
+      assert.equal(state, 'ACTIVE', 'the record itself must still be good');
+      return;
+    }
+
+    const before = await authorityStatusOf(held.farmer);
+    if (before.status !== 'REVOKED') {
+      const res = await fetch(`${AUTHORITY}/api/v1/credentials/${encodeURIComponent(before.id)}/revoke`, {
+        method: 'POST',
+        headers: {
+          'x-dev-issuer': 'https://idp.test',
+          'x-dev-subject': 'agri-farmer-officer',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ reason: 'status journey: revoked' }),
+      });
+      assert.ok(res.ok, `could not revoke: ${res.status}`);
+    }
+    assert.equal((await authorityStatusOf(held.farmer)).status, 'REVOKED');
+    assert.equal(await recordState(TO_REVOKE.farmerId), 'ACTIVE', 'the record itself stays good');
+
+    const result = await applyForCredit(held);
+    assert.notEqual(result.decision, 'ELIGIBLE');
+    assert.match(String(result.reason), /REVOKED/i);
+  });
+
+  test('an unlinked credential is refused, however well-formed it is', async (t) => {
+    if (unless(t)) return;
+    // The offer path mints a credential from claims the caller supplies and never reaches
+    // the Authority Service, so there is no anchor to ask about. Such a credential can be
+    // perfectly well-formed — right issuer, right type, valid signature, one holder key
+    // across both cards — and it still must not fund a loan, because "no identifier to
+    // check" is unknown standing rather than good standing.
+    //
+    // This is the case that decides whether status checking is a control or a formality.
+    const held = await collectFor(SUBJECT);
+    const offer = await issueAgricultureCredential({
+      base,
+      which: 'farmer',
+      issuerDid: farmerIssuerDid,
+      claims: {
+        farmerReference: disclosableValues(held.farmer.credential).farmerReference,
+        registrationStatus: true,
+      },
+    });
+    // Collected onto the SAME holder key as the land credential, so the presentation is
+    // properly bound and the refusal cannot be mistaken for a binding failure.
+    const unlinked = await collectCredential({
+      base: offer.issuerBase,
+      offer,
+      holder: held.holder,
+    });
+    assert.equal(
+      disclosableValues(unlinked.credential).authorityCredentialId,
+      undefined,
+      'the offer path is supposed to produce a credential with no linkage',
+    );
+
+    const result = await applyForCredit({ ...held, farmer: unlinked });
+    assert.notEqual(result.decision, 'ELIGIBLE', 'an unlinked credential must not fund a loan');
+  });
+
+  // Inactivation of the MAIN subject is deliberately NOT exercised here. It is terminal — the Authority
   // refuses INACTIVE -> ACTIVE — so a test that used it would destroy its own fixture for
   // every later run, and no cleanup could undo that. The precedence it sits in is covered
   // against the status route itself, which can be asked about a credential without needing

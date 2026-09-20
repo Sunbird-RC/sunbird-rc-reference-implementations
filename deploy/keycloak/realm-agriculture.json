@@ -249,6 +249,32 @@
       "realmRoles": [
         "default-roles-agriculture"
       ]
+    },
+    {
+      "username": "farmer.terminal.inactive",
+      "enabled": true,
+      "emailVerified": true,
+      "realmRoles": [
+        "default-roles-agriculture"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-90077001"
+        ]
+      }
+    },
+    {
+      "username": "farmer.terminal.revoked",
+      "enabled": true,
+      "emailVerified": true,
+      "realmRoles": [
+        "default-roles-agriculture"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-90077002"
+        ]
+      }
     }
   ]
 }

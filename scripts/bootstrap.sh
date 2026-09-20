@@ -479,7 +479,14 @@ done
 # Iteration 02's farmers, in their own realm. The same generated password: it is
 # a demo secret that lives only in deploy/.env, and a second one would be a
 # second thing to keep out of Git for no gain.
-for u in farmer.ravi farmer.lakshmi farmer.suresh farmer.geeta farmer.unregistered farmer.noland farmer.norecord farmer.unmapped; do
+# The two terminal.* accounts exist so the inactivation and revocation cases have
+# subjects of their own. Neither state can be undone — the Authority refuses
+# INACTIVE -> ACTIVE, and idempotent issuance means a revoked credential stays the one
+# that subject gets — so spending a shared fixture on either would spend it for the
+# life of the deployment.
+for u in farmer.ravi farmer.lakshmi farmer.suresh farmer.geeta farmer.unregistered \
+         farmer.noland farmer.norecord farmer.unmapped \
+         farmer.terminal.inactive farmer.terminal.revoked; do
   if kcadm set-password -r agriculture --username "$u" --new-password "$CITIZEN_PASSWORD" >/dev/null 2>&1; then
     green "$u ready"
   else

@@ -576,7 +576,10 @@ else
   map "$PROFILE_LAND" "$(direct ownershipStatus ownershipStatus)"
   map "$PROFILE_LAND" "$(direct cropType cropType)"
   map "$PROFILE_LAND" "$(direct cultivatedAreaAcres cultivatedArea)"
-  # nationalId, district, landAreaAcres and farmerCategory are deliberately NOT mapped. They
+  # nationalId, district, landAreaAcres and farmerCategory are deliberately NOT mapped, and
+  # could not be even if they were wanted: the published JSON-LD context defines seven terms
+  # and is immutable, so a claim outside it does not expand and signing fails in safe mode.
+  # Widening the credential means a new context version, not a new claim mapping. They
   # exist in the registry and must not reach a verifier; the loan uses cultivated area only,
   # so total holding size stays with the farmer.
 fi
