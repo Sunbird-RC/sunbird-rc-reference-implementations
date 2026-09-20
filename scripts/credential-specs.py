@@ -51,6 +51,18 @@ SPECS = {
                 "type": "boolean",
                 "description": "Whether the registry lists this person as a registered farmer.",
             },
+            # Technical linkage, not an Agriculture business term. It names the Authority
+            # Service credential this one was issued against, so a verifier can ask that
+            # Authority whether the record still stands. Disclosed only in journeys that
+            # need live status; a lender checking eligibility alone never requests it.
+            "authorityCredentialId": {
+                "type": "string",
+                "description": (
+                    "Identifier of the Authority Service credential this one is anchored to. "
+                    "Set by the issuer from the Authority's issuance response; never supplied "
+                    "by a holder or caller."
+                ),
+            },
             "farmerCategory": {"type": "string", "description": "Landholding category."},
             "district": {"type": "string"},
         },
@@ -83,6 +95,15 @@ SPECS = {
                 "description": "The authoritative input to the loan calculation, at most two decimals.",
             },
             "district": {"type": "string"},
+            # Technical linkage, not an Agriculture business term — see the farmer spec.
+            "authorityCredentialId": {
+                "type": "string",
+                "description": (
+                    "Identifier of the Authority Service credential this one is anchored to. "
+                    "Set by the issuer from the Authority's issuance response; never supplied "
+                    "by a holder or caller."
+                ),
+            },
         },
         "required": ["landId", "farmerId", "ownershipStatus", "cropType", "cultivatedAreaAcres"],
     },

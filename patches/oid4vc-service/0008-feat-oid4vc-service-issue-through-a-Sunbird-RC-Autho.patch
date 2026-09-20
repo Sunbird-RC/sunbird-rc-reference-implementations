@@ -1,0 +1,611 @@
+From 1e42ba471e706bbe90eb887a1aed0f26d8fcf015 Mon Sep 17 00:00:00 2001
+From: Kartheek Palla <palla.kartheekreddy@gmail.com>
+Date: Sun, 20 Sep 2026 19:17:40 +0530
+Subject: [PATCH] feat(oid4vc-service): issue through a Sunbird RC Authority
+ Service and carry the linkage
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Adds an `authority` claim source. It asks a Sunbird RC Authority Service to issue, server to
+server, and carries the resulting credential identifier into the SD-JWT as
+`authorityCredentialId`.
+
+This makes two credentials for one subject, deliberately, and they are not the same
+credential. The Authority Service's JSON-LD credential is the authoritative status and
+provenance anchor, and never leaves the Authority. The SD-JWT is the holder-bound
+presentation credential the wallet holds and a verifier sees. Neither replaces the other:
+one is what a status answer is about, the other is what is presented.
+
+The identifier can only come from an Authority response, and that is structural rather than
+checked. This provider is the only thing in the issuance path that talks to the Authority
+Service, `resolve` is called with a subject read from a validated token, and nothing a
+wallet, holder or caller sends reaches it. A caller-supplied value is not rejected; there is
+no path by which it could arrive. There is a test that passes a hostile
+`authorityCredentialId` in the request and finds the issued one in the claims.
+
+Fits the existing ClaimSourceProvider seam rather than adding plumbing, so the token, offer
+and signing paths are untouched and holder binding is unchanged. Selected per credential type
+through CLAIM_SOURCE_MAP, as `registry` and named HTTP sources already are.
+
+Issuance is idempotent on what is being issued rather than on when it was asked. The key is a
+hash of profile, record and subject, so a wallet retrying after a dropped response gets the
+same Authority credential instead of minting a second anchor for one presentation credential —
+which would break the one-to-one linkage the status answer depends on. The subject is hashed
+into the key rather than sent as itself, so an identifier from a validated token is not
+echoed into another service's logs.
+
+Claims run through the same resolver every other source uses, so only attributes the
+credential type DECLARES survive. An Authority returning more than was asked for cannot widen
+the credential any more than an issuer's own endpoint can — tested with a response carrying a
+national identifier and a district, neither of which reaches the claims.
+
+Failure is closed throughout. Unreachable, timed out, refused, a profile with no binding, and
+an issuance that returns no identifier are all refusals; a credential that cannot be
+status-checked is not minted. A subject with no record stays distinguishable from a source
+that is down, because the two send an operator to different places. An ambiguous record match
+is refused rather than resolved to the first, since issuing from it would attach a credential
+to whichever record happened to sort first with nothing downstream able to tell.
+
+The holder's token is deliberately not forwarded. This call is made as the issuing service,
+and a holder must not be able to act as it.
+
+167 tests, 16 suites, 0 failures — the existing 154 unchanged plus 13 here.
+---
+ .../src/claims/authority.claim-source.spec.ts | 221 ++++++++++++++++++
+ .../src/claims/authority.claim-source.ts      | 219 +++++++++++++++++
+ .../src/claims/claim-source.factory.ts        |  15 ++
+ .../src/config/configuration.ts               |  36 ++-
+ 4 files changed, 490 insertions(+), 1 deletion(-)
+ create mode 100644 services/oid4vc-service/src/claims/authority.claim-source.spec.ts
+ create mode 100644 services/oid4vc-service/src/claims/authority.claim-source.ts
+
+diff --git a/services/oid4vc-service/src/claims/authority.claim-source.spec.ts b/services/oid4vc-service/src/claims/authority.claim-source.spec.ts
+new file mode 100644
+index 00000000..1f5ee678
+--- /dev/null
++++ b/services/oid4vc-service/src/claims/authority.claim-source.spec.ts
+@@ -0,0 +1,221 @@
++import { AuthorityClaimSource } from './authority.claim-source';
++import { ClaimSourceUnavailableError, SubjectNotFoundError } from './claim-source.interface';
++
++/**
++ * The Authority claim source, and specifically the linkage claim.
++ *
++ * The property worth defending is not that `authorityCredentialId` appears. It is
++ * that it can appear ONLY from an Authority Service issuance response — a linkage a
++ * caller could influence would let a credential nominate its own status anchor,
++ * which is the same as having no status check at all.
++ */
++
++const PROFILE = 'p-farmer-uuid';
++const BINDING = 'b-farmer-uuid';
++const OSID = '1-abc';
++const CREDENTIAL_ID = 'did:rcw:046a5fe1-32f2-4e43-8537-8d7177fc2269';
++
++const REQUEST = {
++  subjectId: 'NAT-91018472',
++  subjectClaim: 'nationalId',
++  credentialConfigurationId: 'farmer-identity-credential',
++  credentialName: 'Farmer Identity Credential',
++  properties: ['farmerReference', 'registrationStatus', 'authorityCredentialId'],
++  required: ['farmerReference'],
++};
++
++const ISSUED = {
++  credentialId: CREDENTIAL_ID,
++  state: 'ISSUED',
++  claims: { farmerReference: 'did:web:a#farmer/TN/FRM-TN-0041', registrationStatus: true },
++};
++
++/** Stands in for the Authority Service. Records every request for assertions. */
++function authority(overrides: Record<string, any> = {}) {
++  const calls: { url: string; init: any }[] = [];
++  const reply = (body: any, status = 200) => ({
++    ok: status >= 200 && status < 300,
++    status,
++    json: async () => body,
++    text: async () => JSON.stringify(body),
++  });
++  const impl = async (url: string, init: any) => {
++    calls.push({ url: String(url), init });
++    const u = String(url);
++    if (u.includes('/credential-profiles/') && u.endsWith('/issue')) {
++      return overrides.issue ? overrides.issue(reply) : reply(ISSUED, 201);
++    }
++    if (u.includes('/records/search')) {
++      return overrides.search ? overrides.search(reply) : reply({ data: [{ osid: OSID }] });
++    }
++    if (u.includes('/credential-profiles/')) {
++      return overrides.profile ? overrides.profile(reply) : reply({ registryBindingId: BINDING });
++    }
++    return reply({}, 404);
++  };
++  return { calls, impl };
++}
++
++function configure(env: Record<string, string> = {}) {
++  process.env.AUTHORITY_BASE_URL = 'http://authority:3334';
++  // A JSON object, as every other map in this service's configuration is.
++  process.env.AUTHORITY_PROFILE_MAP = JSON.stringify({ 'farmer-identity-credential': PROFILE });
++  process.env.AUTHORITY_SUBJECT_FIELD = 'nationalId';
++  Object.assign(process.env, env);
++}
++
++describe('AuthorityClaimSource', () => {
++  const saved = { ...process.env };
++  let fetchSpy: jest.SpyInstance;
++
++  beforeEach(() => {
++    jest.resetModules();
++    configure();
++  });
++  afterEach(() => {
++    fetchSpy?.mockRestore();
++    process.env = { ...saved };
++  });
++
++  const withAuthority = (o: Record<string, any> = {}) => {
++    const a = authority(o);
++    fetchSpy = jest.spyOn(global, 'fetch' as any).mockImplementation(a.impl as any);
++    return a;
++  };
++
++  it('carries the Authority credential identifier into the claims', async () => {
++    withAuthority();
++    const result = await new AuthorityClaimSource().resolve(REQUEST as any);
++    expect(result.claims.authorityCredentialId).toBe(CREDENTIAL_ID);
++    expect(result.claims.farmerReference).toBe(ISSUED.claims.farmerReference);
++    expect(result.missing).toEqual([]);
++  });
++
++  it('takes the identifier only from the issuance response, never from the request', async () => {
++    // A caller-supplied value must not survive. If it could, a credential could name
++    // its own status anchor and the check would confirm whatever that anchor says.
++    withAuthority();
++    const hostile = {
++      ...REQUEST,
++      authorityCredentialId: 'did:rcw:attacker-controlled',
++      claims: { authorityCredentialId: 'did:rcw:attacker-controlled' },
++    };
++    const result = await new AuthorityClaimSource().resolve(hostile as any);
++    expect(result.claims.authorityCredentialId).toBe(CREDENTIAL_ID);
++  });
++
++  it('refuses to issue when the Authority returns no identifier', async () => {
++    // A credential with no linkage cannot be status-checked, and one that cannot be
++    // checked must not be minted rather than silently unverifiable later.
++    withAuthority({ issue: (reply: any) => reply({ state: 'ISSUED' }, 201) });
++    await expect(new AuthorityClaimSource().resolve(REQUEST as any)).rejects.toThrow(
++      /issued no credential identifier/,
++    );
++  });
++
++  it('is idempotent: the key is derived from what is issued, not from when', async () => {
++    const a = withAuthority();
++    await new AuthorityClaimSource().resolve(REQUEST as any);
++    const first = JSON.parse(a.calls.find((c) => c.url.endsWith('/issue'))!.init.body);
++
++    const b = withAuthority();
++    await new AuthorityClaimSource().resolve(REQUEST as any);
++    const second = JSON.parse(b.calls.find((c) => c.url.endsWith('/issue'))!.init.body);
++
++    expect(first.idempotencyKey).toBe(second.idempotencyKey);
++    expect(first.osid).toBe(OSID);
++    // The subject identifier is hashed into the key rather than sent as itself.
++    expect(first.idempotencyKey).not.toContain(REQUEST.subjectId);
++  });
++
++  it('gives a different key for a different subject', async () => {
++    const a = withAuthority();
++    await new AuthorityClaimSource().resolve(REQUEST as any);
++    const first = JSON.parse(a.calls.find((c) => c.url.endsWith('/issue'))!.init.body);
++    const b = withAuthority();
++    await new AuthorityClaimSource().resolve({ ...REQUEST, subjectId: 'NAT-OTHER' } as any);
++    const second = JSON.parse(b.calls.find((c) => c.url.endsWith('/issue'))!.init.body);
++    expect(first.idempotencyKey).not.toBe(second.idempotencyKey);
++  });
++
++  it('discloses only attributes the credential type declares', async () => {
++    // Claim minimisation. The Authority returning more than was asked for must not
++    // widen the credential, exactly as an issuer's own endpoint cannot.
++    withAuthority({
++      issue: (reply: any) =>
++        reply(
++          {
++            credentialId: CREDENTIAL_ID,
++            claims: {
++              farmerReference: 'ref',
++              registrationStatus: true,
++              nationalId: 'NAT-91018472',
++              district: 'Madurai',
++            },
++          },
++          201,
++        ),
++    });
++    const result = await new AuthorityClaimSource().resolve(REQUEST as any);
++    expect(Object.keys(result.claims).sort()).toEqual(
++      ['authorityCredentialId', 'farmerReference', 'registrationStatus'].sort(),
++    );
++    expect(JSON.stringify(result.claims)).not.toContain('Madurai');
++  });
++
++  it('reports a subject with no record as not found, not as a fault', async () => {
++    withAuthority({ search: (reply: any) => reply({ data: [] }) });
++    await expect(new AuthorityClaimSource().resolve(REQUEST as any)).rejects.toBeInstanceOf(
++      SubjectNotFoundError,
++    );
++  });
++
++  it('refuses an ambiguous match rather than choosing one', async () => {
++    withAuthority({ search: (reply: any) => reply({ data: [{ osid: '1-a' }, { osid: '1-b' }] }) });
++    await expect(new AuthorityClaimSource().resolve(REQUEST as any)).rejects.toThrow(
++      /refusing to choose/,
++    );
++  });
++
++  it('fails closed when the Authority is unreachable or slow', async () => {
++    fetchSpy = jest.spyOn(global, 'fetch' as any).mockImplementation(async () => {
++      throw new Error('connect ECONNREFUSED');
++    });
++    await expect(new AuthorityClaimSource().resolve(REQUEST as any)).rejects.toBeInstanceOf(
++      ClaimSourceUnavailableError,
++    );
++  });
++
++  it('fails closed when the Authority refuses the issuance', async () => {
++    withAuthority({ issue: (reply: any) => reply({ code: 'FORBIDDEN' }, 403) });
++    await expect(new AuthorityClaimSource().resolve(REQUEST as any)).rejects.toThrow(/403/);
++  });
++
++  it('refuses a credential type with no Authority profile mapped', async () => {
++    withAuthority();
++    await expect(
++      new AuthorityClaimSource().resolve({
++        ...REQUEST,
++        credentialConfigurationId: 'unmapped',
++        credentialName: 'Unmapped Credential',
++      } as any),
++    ).rejects.toThrow(/no Authority credential profile is mapped/);
++  });
++
++  it('does not forward a holder token, and authenticates as the service', async () => {
++    process.env.AUTHORITY_TOKEN = 'service-token';
++    const a = withAuthority();
++    await new AuthorityClaimSource().resolve(REQUEST as any);
++    for (const call of a.calls) {
++      expect(call.init.headers.authorization).toBe('Bearer service-token');
++    }
++  });
++
++  it('searches on the configured subject field', async () => {
++    process.env.AUTHORITY_SUBJECT_FIELD = 'farmerId';
++    const a = withAuthority();
++    await new AuthorityClaimSource().resolve(REQUEST as any);
++    const search = a.calls.find((c) => c.url.includes('/records/search'))!;
++    expect(JSON.parse(search.init.body).filters).toHaveProperty('farmerId');
++  });
++});
+diff --git a/services/oid4vc-service/src/claims/authority.claim-source.ts b/services/oid4vc-service/src/claims/authority.claim-source.ts
+new file mode 100644
+index 00000000..1ebc80ff
+--- /dev/null
++++ b/services/oid4vc-service/src/claims/authority.claim-source.ts
+@@ -0,0 +1,219 @@
++import { Logger } from '@nestjs/common';
++import { createHash } from 'node:crypto';
++import { loadConfig } from '../config/configuration';
++import { resolveRegistryClaims } from '../oid4vci/registry-claims.util';
++import {
++  ClaimSourceUnavailableError,
++  SubjectNotFoundError,
++  type ClaimRequest,
++  type ClaimSourceProvider,
++} from './claim-source.interface';
++
++/**
++ * Claims from a Sunbird RC Authority Service, and the linkage back to it.
++ *
++ * Two credentials exist for one subject, deliberately, and they are not the same
++ * credential:
++ *
++ *   - The Authority Service's JSON-LD credential is the authoritative status and
++ *     provenance anchor. It is what `GET /trust/credentials/{id}/status` answers
++ *     about, and it never leaves the Authority.
++ *   - The SD-JWT this service issues is the holder-bound presentation credential.
++ *     It is what the wallet holds and what a verifier sees.
++ *
++ * This source ties them together. It asks the Authority Service to issue, server to
++ * server, and carries the resulting credential identifier into the SD-JWT as
++ * `authorityCredentialId`, so a verifier holding the presentation credential can
++ * ask the Authority about the anchor's current standing.
++ *
++ * Why that identifier can only come from here: this provider is the only thing in
++ * the issuance path that talks to the Authority Service, and `resolve` is called
++ * with a subject taken from a validated token. Nothing a wallet, holder or caller
++ * sends reaches this method. The claim is never accepted from anywhere. It is
++ * produced, from an Authority response, or not at all.
++ */
++export class AuthorityClaimSource implements ClaimSourceProvider {
++  private readonly logger = new Logger(AuthorityClaimSource.name);
++  private readonly config = loadConfig();
++
++  /** The claim carrying the Authority credential's identifier. Technical linkage. */
++  static readonly LINKAGE_CLAIM = 'authorityCredentialId';
++
++  get name(): string {
++    return 'authority';
++  }
++
++  async resolve(req: ClaimRequest) {
++    const base = (this.config.authority?.baseUrl ?? '').replace(/\/$/, '');
++    if (!base) {
++      throw new ClaimSourceUnavailableError(
++        'authority',
++        'AUTHORITY_BASE_URL is not set. Set it, or map this credential type to another ' +
++          'claim source in CLAIM_SOURCE_MAP.',
++      );
++    }
++
++    const profileId = this.profileFor(req);
++    const profile = await this.get(base, `/api/v1/credential-profiles/${profileId}`);
++    const bindingId = profile?.registryBindingId;
++    if (!bindingId) {
++      throw new ClaimSourceUnavailableError(
++        'authority',
++        `credential profile ${profileId} does not name a registry binding`,
++      );
++    }
++
++    const osid = await this.findRecord(base, bindingId, req.subjectId);
++    const issued = await this.issue(base, profileId, osid, req.subjectId);
++
++    const credentialId = typeof issued?.credentialId === 'string' ? issued.credentialId : '';
++    if (!credentialId) {
++      // Without the identifier the SD-JWT cannot be linked back to its anchor and a
++      // verifier would have nothing to resolve. Refuse, rather than issue a credential
++      // that silently cannot be status-checked.
++      throw new ClaimSourceUnavailableError(
++        'authority',
++        'the Authority Service issued no credential identifier',
++      );
++    }
++
++    // The Authority's mapped claims, plus the linkage. Run through the SAME resolver
++    // every other source uses, so only attributes the credential type DECLARES
++    // survive. The Authority cannot add claims the schema does not define, any more
++    // than an issuer's own endpoint can.
++    const record = {
++      ...(issued.claims && typeof issued.claims === 'object' ? issued.claims : {}),
++      [AuthorityClaimSource.LINKAGE_CLAIM]: credentialId,
++    };
++
++    this.logger.log(
++      `issued ${credentialId} from profile ${profileId}, record ${osid}`,
++    );
++
++    return resolveRegistryClaims({
++      properties: req.properties,
++      required: req.required,
++      // One source, named after the provider, so provenance in the portal and in the
++      // "missing" message points at the Authority that issued.
++      sources: [{ entity: this.name, record }],
++      aliases: this.config.registrySources.claimAliases,
++      birthDateField: this.config.registrySources.birthDateField,
++    });
++  }
++
++  /** Which Authority credential profile issues this credential type. */
++  private profileFor(req: ClaimRequest): string {
++    const map = this.config.authority?.profileMap ?? {};
++    const hit = map[req.credentialConfigurationId] ?? map[req.credentialName];
++    if (!hit) {
++      throw new ClaimSourceUnavailableError(
++        'authority',
++        `no Authority credential profile is mapped for "${req.credentialName}". ` +
++          'Set AUTHORITY_PROFILE_MAP.',
++      );
++    }
++    return hit;
++  }
++
++  /**
++   * Finds the subject's record through the Authority Service.
++   *
++   * A search matching more than one record is refused rather than resolved to the
++   * first. Issuing from an ambiguous match would attach a credential to whichever
++   * record happened to sort first, and nothing downstream could tell.
++   */
++  private async findRecord(base: string, bindingId: string, subjectId: string): Promise<string> {
++    const field = this.config.authority?.subjectField || 'nationalId';
++    const body = await this.post(base, `/api/v1/registries/${bindingId}/records/search`, {
++      filters: { [field]: { eq: subjectId } },
++      limit: 2,
++    });
++    const rows: any[] = Array.isArray(body?.data) ? body.data : [];
++    if (rows.length === 0) throw new SubjectNotFoundError('authority', subjectId);
++    if (rows.length > 1) {
++      throw new ClaimSourceUnavailableError(
++        'authority',
++        `more than one record matches ${field} for this subject; refusing to choose`,
++      );
++    }
++    const osid = rows[0]?.osid;
++    if (typeof osid !== 'string' || !osid) throw new SubjectNotFoundError('authority', subjectId);
++    return osid;
++  }
++
++  /**
++   * Asks the Authority Service to issue, with a key derived from what is being
++   * issued rather than from the moment of asking.
++   *
++   * A wallet that retries, after a dropped response or a user tapping twice, must
++   * get the same Authority credential back. A random key would mint a second anchor
++   * for one presentation credential and quietly break the one-to-one linkage that
++   * makes the status answer meaningful.
++   *
++   * The subject is included so two records sharing a profile cannot collide, and the
++   * whole key is hashed so an identifier read from a validated token is not echoed
++   * into another service's logs.
++   */
++  private async issue(base: string, profileId: string, osid: string, subjectId: string) {
++    const idempotencyKey = createHash('sha256')
++      .update(`${profileId} ${osid} ${subjectId}`)
++      .digest('hex')
++      .slice(0, 32);
++    return this.post(base, `/api/v1/credential-profiles/${profileId}/issue`, {
++      osid,
++      idempotencyKey,
++    });
++  }
++
++  private headers(): Record<string, string> {
++    const h: Record<string, string> = { 'content-type': 'application/json' };
++    const token = this.config.authority?.token;
++    // Server to server. The holder's token is deliberately NOT forwarded: this call is
++    // made as the issuing service, and a holder must not be able to act as it.
++    if (token) h.authorization = `Bearer ${token}`;
++    return h;
++  }
++
++  private async get(base: string, path: string) {
++    return this.call(base, path, { method: 'GET', headers: this.headers() });
++  }
++
++  private async post(base: string, path: string, body: unknown) {
++    return this.call(base, path, {
++      method: 'POST',
++      headers: this.headers(),
++      body: JSON.stringify(body),
++    });
++  }
++
++  private async call(base: string, path: string, init: RequestInit) {
++    const url = `${base}${path}`;
++    const timeoutMs = this.config.authority?.timeoutMs ?? 8000;
++    let response: Response;
++    try {
++      response = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
++    } catch (err: any) {
++      throw new ClaimSourceUnavailableError('authority', `${path}: ${err?.message ?? err}`);
++    }
++    if (response.status === 404) {
++      // A 404 here is a profile or binding that does not exist, which is a
++      // configuration fault. "No record for this subject" is decided in findRecord
++      // from an empty search result, not from a status code, so the two stay
++      // distinguishable: one sends an operator to the configuration, the other to
++      // provisioning.
++      throw new ClaimSourceUnavailableError('authority', `${path} answered 404`);
++    }
++    if (!response.ok) {
++      const detail = await response.text().catch(() => '');
++      throw new ClaimSourceUnavailableError(
++        'authority',
++        `${path} answered ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`,
++      );
++    }
++    try {
++      return await response.json();
++    } catch {
++      throw new ClaimSourceUnavailableError('authority', `${path} returned unreadable JSON`);
++    }
++  }
++}
+diff --git a/services/oid4vc-service/src/claims/claim-source.factory.ts b/services/oid4vc-service/src/claims/claim-source.factory.ts
+index 425d3b97..513ad927 100644
+--- a/services/oid4vc-service/src/claims/claim-source.factory.ts
++++ b/services/oid4vc-service/src/claims/claim-source.factory.ts
+@@ -7,6 +7,7 @@ import {
+ } from './claim-source.interface';
+ import { HttpClaimSource } from './http.claim-source';
+ import { RegistryClaimSource } from './registry.claim-source';
++import { AuthorityClaimSource } from './authority.claim-source';
+ 
+ /** The credential-type fields the factory may key on. */
+ export interface ClaimSourceTarget {
+@@ -49,6 +50,20 @@ export class ClaimSourceFactory {
+     // want a credential mintable from a login alone.
+     if (name === 'none') throw new ClaimSourceNotConfiguredError(target.name);
+ 
++    // Issues through a Sunbird RC Authority Service and links the SD-JWT back to the
++    // credential the Authority issued. Built per call: it holds only configuration.
++    if (name === 'authority') {
++      if (!this.config.authority?.baseUrl) {
++        throw new ClaimSourceUnavailableError(
++          'authority',
++          'AUTHORITY_BASE_URL is not set. Set it, map this credential type to another ' +
++            'claim source in CLAIM_SOURCE_MAP, or set CLAIM_SOURCE_DEFAULT=none if this ' +
++            'deployment issues only through POST /oid4vc/offer.',
++        );
++      }
++      return new AuthorityClaimSource();
++    }
++
+     if (name === 'registry') {
+       if (!this.registrySource.available) {
+         // Distinguished from `none` deliberately: this deployment asked for the
+diff --git a/services/oid4vc-service/src/config/configuration.ts b/services/oid4vc-service/src/config/configuration.ts
+index e8024be3..67c851b0 100644
+--- a/services/oid4vc-service/src/config/configuration.ts
++++ b/services/oid4vc-service/src/config/configuration.ts
+@@ -109,7 +109,28 @@ export interface ClaimSourceSpec {
+ }
+ 
+ /** Names with built-in meaning, which a declared source must not shadow. */
+-const RESERVED_SOURCE_NAMES = new Set(['registry', 'none']);
++const RESERVED_SOURCE_NAMES = new Set(['registry', 'none', 'authority']);
++
++/**
++ * A Sunbird RC Authority Service to issue through.
++ *
++ * Separate from the generic named claim sources because this one does more than
++ * read: it asks the Authority to issue its own credential and carries the
++ * resulting identifier into the SD-JWT, which needs a profile mapping a URL alone
++ * cannot express.
++ */
++export interface AuthorityConfig {
++  /** The Authority Service. Its presence is what declares this source usable. */
++  baseUrl: string;
++  /** Bearer token for the server-to-server call. Never a holder's token. */
++  token?: string;
++  /** Credential schemaId or name -> Authority credential profile id. */
++  profileMap: Record<string, string>;
++  /** The record field a holder's subject identifier is matched against. */
++  subjectField: string;
++  /** Request timeout. A wallet is waiting on this call, so it is bounded. */
++  timeoutMs: number;
++}
+ 
+ /**
+  * Discovers named claim sources from `CLAIM_SOURCE_<NAME>_URL` variables.
+@@ -255,6 +276,7 @@ export interface Oid4vcConfig {
+    * `registry` is always available (configured by `REGISTRY_*` above) and needs no
+    * entry here; anything else is declared with `CLAIM_SOURCE_<NAME>_*`.
+    */
++  authority: AuthorityConfig;
+   claimSources: Record<string, ClaimSourceSpec>;
+   /**
+    * Credential type -> claim source name. Keys match a credential's `schemaId` or
+@@ -406,6 +428,18 @@ export const loadConfig = (): Oid4vcConfig => ({
+     ),
+     birthDateField: process.env.REGISTRY_BIRTHDATE_FIELD || '',
+   },
++  authority: {
++    baseUrl: (process.env.AUTHORITY_BASE_URL || '').trim(),
++    token: process.env.AUTHORITY_TOKEN || undefined,
++    profileMap: parseStringMap(
++      process.env.AUTHORITY_PROFILE_MAP || '',
++      'AUTHORITY_PROFILE_MAP',
++      'credential schemaId or name -> Authority credential profile id',
++      (m) => console.warn(`[configuration] ${m}`),
++    ),
++    subjectField: (process.env.AUTHORITY_SUBJECT_FIELD || 'nationalId').trim(),
++    timeoutMs: num(process.env.AUTHORITY_TIMEOUT, 8000),
++  },
+   claimSources: parseClaimSources(process.env, (m) => console.warn(`[configuration] ${m}`)),
+   claimSourceMap: parseStringMap(
+     process.env.CLAIM_SOURCE_MAP || '',
+-- 
+2.39.5 (Apple Git-154)
+

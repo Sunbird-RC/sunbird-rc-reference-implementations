@@ -3,8 +3,8 @@
 Everything needed to reconstruct the exact image this showcase runs, from source
 anyone can fetch, and to check that what you built is what we ran.
 
-The image is `sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27`. Its tag suffix
-is the source commit it was built from — patch `0007` below.
+The image is `sunbird-rc-oid4vc-service:v2.1.0-authcode.1e42ba47`. Its tag suffix
+is the source commit it was built from — patch `0008` below.
 
 ## Why patches and not a branch
 
@@ -44,10 +44,10 @@ touch.
 
 That commit is reachable from `origin/main` upstream, so it needs nothing from us.
 
-## The seven patches
+## The eight patches
 
 Applied in order. Every one touches only `services/oid4vc-service/`; together they
-are 25 files, +3960 / −42.
+are 27 files, +4449 / −42.
 
 | # | Commit | What it does |
 |---|---|---|
@@ -58,6 +58,7 @@ are 25 files, +3960 / −42.
 | 0005 | `9caf3c2b` | `ADVERTISE_OWN_CREDENTIALS_ONLY` — an issuer advertises only what it authored (finding 14) |
 | **0006** | **`1147b904`** | **refuses another issuer's credential type, and refuses an unrequested disclosure** — review items 2 and 4 (findings 16, 17) |
 | **0007** | **`c8beec27`** | **fixes the wiring that made the disclosure check inert on the keyed `vp_token` path** — the path every SD-JWT presentation here takes |
+| **0008** | **`1e42ba47`** | **issues through a Sunbird RC Authority Service and carries `authorityCredentialId` into the SD-JWT**, so a presented credential can be resolved against Authority lifecycle and revocation status |
 
 The two in bold are the ones the Education review asked for. The five before them
 are the pre-existing port, unchanged by this review, and are included because the
@@ -72,7 +73,7 @@ git checkout -b oid4vc-keycloak-as-v2.1.0 v2.1.0
 git am /path/to/this-repo/patches/oid4vc-service/000*.patch
 
 # The tag suffix is the source commit, so derive it rather than typing it.
-SHA="$(git rev-parse --short=8 HEAD)"        # expect c8beec27
+SHA="$(git rev-parse --short=8 HEAD)"        # the tag suffix; see the note on commit ids below
 
 docker build --platform linux/amd64 \
   -t "sunbird-rc-oid4vc-service:v2.1.0-authcode.${SHA}" \
@@ -91,7 +92,7 @@ Then point the deployment at it:
 
 ```bash
 # deploy/docker-compose.yml pins this tag in all nine oid4vc-* services
-grep -c 'v2.1.0-authcode.c8beec27' deploy/docker-compose.yml     # expect 9
+grep -c 'v2.1.0-authcode.1e42ba47' deploy/docker-compose.yml     # expect 9
 cd deploy && docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
 ```
 
@@ -101,7 +102,9 @@ cd deploy && docker compose -f docker-compose.yml -f docker-compose.tls.yml up -
 cd services/oid4vc-service && npm ci && npx jest
 ```
 
-**154 tests, 15 suites, 0 failures** — captured verbatim at
+**167 tests, 16 suites, 0 failures** — the 154 below plus 13 for patch `0008`, whose
+suite is `src/claims/authority.claim-source.spec.ts`. The 154-test run is captured
+verbatim at
 [`../../docs/evidence/03-education/runs/test-fork.txt`](../../docs/evidence/03-education/runs/test-fork.txt).
 The two review fixes are covered by `src/oid4vci/own-credentials-issuance.spec.ts`
 (7) and `src/oid4vp/unrequested-disclosure.spec.ts` (11).
@@ -113,28 +116,29 @@ commit id — `git am` records a new committer and date, so the commit hashes wi
 differ from ours even though the content is identical:
 
 ```bash
-git rev-parse HEAD^{tree}   # 561448f3104acb668bc801a7f51cc391b1962c1b
+git rev-parse HEAD^{tree}   # 2b73272db46b0547b2c125f11a598da75562ccea
                             # the tree the image was built from
 git rev-parse HEAD          # WILL DIFFER from c8beec27 — see below
 ```
 
-`c8beec279cfa63fd98eefdf04a063eb9040f4a9f` is the commit id in the authoring
-checkout, and it is what the image tag names. A fresh `git am` of this series
+`1e42ba471e70...` is the commit id in the authoring checkout, and it is what the
+image tag names. A fresh `git am` of this series
 produces the same tree under a different commit id, because a commit hashes its
 committer identity and timestamps as well as its content. An earlier version of
 this file told you to expect `c8beec27` from `git rev-parse HEAD`, which is only
 true if you happen to reproduce the committer too.
 
-Verified on 2 September 2026 by applying this series to a pristine `v2.1.0`
-worktree and comparing `HEAD^{tree}` against the authoring checkout's branch tip:
-**identical.** `scripts/verify.sh` re-checks the cheap half of this on every run —
-that the series is present, that its length matches, and that patch `0007`'s
+Verified again on 20 September 2026, with patch `0008` in the series, by applying it
+to a pristine `v2.1.0` clone and comparing `HEAD^{tree}` against the authoring
+checkout's branch tip: **identical** (`2b73272d`). The commit ids differed, as this
+section explains they must. `scripts/verify.sh` re-checks the cheap half of this on every run —
+that the series is present, that its length matches, and that the LAST patch's
 commit is the one `deploy/docker-compose.yml` pins.
 
 ## Authorship, here versus in the upstream pull request
 
-These patch files preserve authorship exactly as committed: `0001`–`0005` carry
-`palla.kartheekreddy@gmail.com`, `0006`–`0007` carry `kartheek@sanketika.in`.
+These patch files preserve authorship exactly as committed: `0001`–`0005` and `0008`
+carry `palla.kartheekreddy@gmail.com`, `0006`–`0007` carry `kartheek@sanketika.in`.
 They are left as authored because the image tag and the whole evidence chain are
 pinned to this exact series, and because a `From:` header cannot carry a name
 without an address — `git am` refuses one with *"empty ident name (for <>) not

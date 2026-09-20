@@ -242,7 +242,7 @@ services:
   # The OpenID4VCI / OpenID4VP protocol façade. Native to v2.1.0 — this is why
   # the architecture needs no standards adapter.
   oid4vc-service:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.1e42ba47}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -334,7 +334,7 @@ services:
   # could also issue would be a fifth issuer nobody asked for, and it would appear
   # in wallet issuer directories.
   oid4vc-bank:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.1e42ba47}
     restart: unless-stopped
     depends_on:
       identity:
@@ -392,7 +392,7 @@ services:
   # read a land record (DESIGN §4).
 
   oid4vc-farmer:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.1e42ba47}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -443,7 +443,7 @@ services:
       retries: 30
 
   oid4vc-land:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.1e42ba47}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -505,7 +505,7 @@ services:
   # the request_uri inside a QR resolves back to the instance that signed it.
 
   oid4vc-university-vp:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.1e42ba47}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -546,7 +546,7 @@ services:
       retries: 30
 
   oid4vc-employer-vp:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.1e42ba47}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -601,7 +601,7 @@ services:
   # the learner's own access token. None of them is handed a learnerId by anyone.
 
   oid4vc-school:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.1e42ba47}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -645,7 +645,7 @@ services:
       retries: 30
 
   oid4vc-college:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.1e42ba47}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -689,7 +689,7 @@ services:
       retries: 30
 
   oid4vc-university:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.c8beec27}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.1e42ba47}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
