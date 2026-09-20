@@ -62,10 +62,16 @@ export function agricultureCredentialRequests({ farmerVct, landVct, statusClaim 
   // issuing Authority. Set it only when the credential actually carries one: the status
   // check refuses a missing identifier rather than passing it, so declaring it early fails
   // the journey closed instead of silently doing nothing.
+  //
+  // When it is set the claim must also be REQUESTED, or the wallet never discloses it and
+  // the check has nothing to resolve. Requesting it is what makes "disclosed only in
+  // journeys requiring live status" true: a journey that does not need status does not ask
+  // for the identifier, and the holder does not send it.
   const status = statusClaim ? { statusClaim } : {};
+  const withStatus = (claims) => (statusClaim ? [...claims, statusClaim] : claims);
   return [
-    { id: FARMER_REQUEST_ID, vct: farmerVct, claims: FARMER_CLAIMS, role: 'farmer', ...status },
-    { id: LAND_REQUEST_ID, vct: landVct, claims: LAND_CLAIMS, role: 'land', ...status },
+    { id: FARMER_REQUEST_ID, vct: farmerVct, claims: withStatus(FARMER_CLAIMS), role: 'farmer', ...status },
+    { id: LAND_REQUEST_ID, vct: landVct, claims: withStatus(LAND_CLAIMS), role: 'land', ...status },
   ];
 }
 
