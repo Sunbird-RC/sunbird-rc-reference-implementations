@@ -68,6 +68,11 @@ CONTEXT_URI="${CONTEXT_URI:-https://cdn.jsdelivr.net/gh/pallakartheekreddy/sunbi
 JURISDICTION_PATH="${JURISDICTION_PATH:-state}"
 # Where credential schemas are registered. Reached through the demo gateway.
 SCHEMA_BASE="${SCHEMA_BASE:-http://127.0.0.1:8088}"
+# Credential profile codes. Overridable because a profile cannot be deleted and a RETIRED one
+# cannot be modified or reused, so a code burned by a mistake stays burned for the life of
+# that database. An override is cheaper than rebuilding a deployment to rename something.
+PROFILE_FARMER_CODE="${PROFILE_FARMER_CODE:-P-FARMER-AUTH}"
+PROFILE_LAND_CODE="${PROFILE_LAND_CODE:-P-LAND-AUTH}"
 
 green() { printf '  \033[32m✓\033[0m %s\n' "$1" >&2; }
 info()  { printf '  \033[2m·\033[0m %s\n' "$1" >&2; }
@@ -373,24 +378,16 @@ ensure_profile() {
   local existing
   existing="$(api GET "/credential-profiles?authorityId=$1" | id_by_code "$4")"
   if [ -n "$existing" ]; then
-    # A profile pointing at the wrong schema cannot be repaired in place:
-    # credentialSchemaId is deliberately not patchable, because changing which schema a
-    # profile issues against makes it a different credential rather than an edit to this
-    # one. Retire it and let a correctly configured profile be created alongside.
-    local current version
-    current="$(api GET "/credential-profiles/$existing" | field credentialSchemaId)"
-    if [ -n "$7" ] && [ "$current" != "$7" ]; then
-      version="$(api GET "/credential-profiles/$existing" | field version)"
-      curl -sS --max-time 25 -X PATCH "$API/credential-profiles/$existing" \
-        -H "x-dev-issuer: $BOOT_ISSUER" -H "x-dev-subject: $BOOT_SUBJECT" \
-        -H 'Content-Type: application/json' -H "If-Match: $version" \
-        -d '{"status":"RETIRED"}' -o /dev/null
-      warn "profile $4 pointed at schema \"$current\", which is not the registered one —"
-      warn "  retired. A replacement is created below under a distinct code."
-    else
-      info "profile $4 already present"
-      printf '%s' "$existing"; return
-    fi
+    # Whatever schema this profile was created against is the schema it issues against.
+    # credentialSchemaId is deliberately not patchable — changing it would make this a
+    # different credential rather than an edit — and profiles cannot be deleted, so there is
+    # nothing to converge and nothing useful to do but use it.
+    #
+    # An earlier version retired a mismatched profile and created a replacement. That is a
+    # one-off repair, not a bootstrap step: it fights itself on the next run, because the
+    # retired profile still holds the code and the replacement cannot be created.
+    info "profile $4 already present"
+    printf '%s' "$existing"; return
   fi
   info "profile $4 created"
   api POST /credential-profiles "$(python3 -c '
@@ -456,6 +453,18 @@ print(json.dumps({"targetClaim": target, "source": "DIRECT", "sourcePath": sourc
 # told apart afterwards.
 
 # register_schema NAME VCT ID PROPERTIES_JSON REQUIRED_JSON AUTHOR_DID
+# schema_in_use AUTHORITY_ID PROFILE_CODE -> the schema an existing profile already uses
+#
+# Idempotency comes from the profile, not from the schema registry: the registry lists only
+# OID4VCI-enabled schemas and these are deliberately not enabled. The profile is in any case
+# the thing that records which schema is in use.
+schema_in_use() {
+  local profile
+  profile="$(api GET "/credential-profiles?authorityId=$1" | id_by_code "$2")"
+  [ -n "$profile" ] || return 0
+  api GET "/credential-profiles/$profile" | field credentialSchemaId
+}
+
 register_schema() {
   local name="$1" vct="$2" sid="$3" props="$4" required="$5" author="$6" existing body
   existing="$(curl -fsS --max-time 25 "$SCHEMA_BASE/credential-schema/oid4vci-configs" 2>/dev/null \
@@ -531,13 +540,13 @@ SCHEMA_FARMER="$(register_schema \
   FarmerIdentityCredential \
   '{"farmerReference":{"type":"string","description":"Canonical reference to the farmer record held by the Farmer Authority."},"registrationStatus":{"type":"boolean","description":"Whether the Authority lists this person as a registered farmer."}}' \
   '["farmerReference","registrationStatus"]' "$ISSUER_DID_FARMER" \
-  "$(schema_in_use "$AUTH_FARMER" P-FARMER-AUTH)")"
+  "$(schema_in_use "$AUTH_FARMER" "$PROFILE_FARMER_CODE")")"
 SCHEMA_LAND="$(register_schema \
   'Land Ownership Credential (Authority-issued)' land-ownership-credential-authority \
   LandOwnershipCredential \
   '{"farmerReference":{"type":"string","description":"Canonical reference to the owning farmer, in the FARMER Authority namespace, so a lender can correlate this credential with the Farmer credential."},"parcelReference":{"type":"string","description":"Canonical reference to the parcel, in the Land Authority namespace."},"ownershipStatus":{"type":"string","description":"ACTIVE, INACTIVE, DISPUTED or TRANSFERRED. Only ACTIVE is fundable."},"cropType":{"type":"string","description":"Controlled vocabulary; the rate is looked up from published policy."},"cultivatedArea":{"type":"number","description":"Cultivated area in acres, the authoritative input to the loan calculation."}}' \
   '["farmerReference","parcelReference","ownershipStatus","cropType","cultivatedArea"]' "$ISSUER_DID_LAND" \
-  "$(schema_in_use "$AUTH_LAND" P-LAND-AUTH)")"
+  "$(schema_in_use "$AUTH_LAND" "$PROFILE_LAND_CODE")")"
 fi
 
 head1 "Credential profiles"
@@ -546,18 +555,18 @@ if [ -z "$ISSUER_DID_FARMER" ] || [ -z "$ISSUER_DID_LAND" ]; then
   warn "  authority base, and inventing one would issue a reference that resolves nowhere."
 else
   PROFILE_FARMER="$(ensure_profile "$AUTH_FARMER" "$BIND_FARMER" "$ISS_FARMER" \
-    P-FARMER-AUTH 'Farmer Identity Credential' FarmerIdentityCredential "$SCHEMA_FARMER")"
-  require_id "profile P-FARMER-AUTH" "$PROFILE_FARMER"
+    "$PROFILE_FARMER_CODE" 'Farmer Identity Credential' FarmerIdentityCredential "$SCHEMA_FARMER")"
+  require_id "profile $PROFILE_FARMER_CODE" "$PROFILE_FARMER"
   PROFILE_LAND="$(ensure_profile "$AUTH_LAND" "$BIND_LAND" "$ISS_LAND" \
-    P-LAND-AUTH 'Land Ownership Credential' LandOwnershipCredential "$SCHEMA_LAND")"
-  require_id "profile P-LAND-AUTH" "$PROFILE_LAND"
+    "$PROFILE_LAND_CODE" 'Land Ownership Credential' LandOwnershipCredential "$SCHEMA_LAND")"
+  require_id "profile $PROFILE_LAND_CODE" "$PROFILE_LAND"
 
   head1 "Claim mappings"
-  info "P-FARMER-AUTH"
+  info "$PROFILE_FARMER_CODE"
   map "$PROFILE_FARMER" "$(qualified_reference farmerId "$ISSUER_DID_FARMER" farmer farmerReference)"
   map "$PROFILE_FARMER" "$(direct registeredFarmer registrationStatus)"
 
-  info "P-LAND-AUTH"
+  info "$PROFILE_LAND_CODE"
   # The farmer reference on the LAND credential is qualified with the FARMER Authority's
   # base. This is the line the whole correlation depends on: qualifying it with the Land
   # Authority's own base produces a well-formed reference that silently never matches the
