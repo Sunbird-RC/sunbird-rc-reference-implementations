@@ -54,16 +54,16 @@ ISSUER_KEY_FARMER="${ISSUER_KEY_FARMER:-}"
 ISSUER_KEY_LAND="${ISSUER_KEY_LAND:-}"
 ISSUER_KEY_ID="${ISSUER_KEY_ID:-key-0}"
 
-# Where the JSON-LD context document is fetched from. The permanent identifier is
-# https://w3id.org/sunbird-rc/agriculture/v1; until that redirect is live, development points
-# at the same immutable document on a CDN. Credentials issued against anything other than the
-# permanent identifier are development fixtures, not interoperability evidence.
+# The permanent identifier for the Agriculture context. The w3id.org redirect is live and
+# resolves to the immutable committed document, so credentials carry the permanent URI rather
+# than a deployment-local or CDN address — which is what makes them usable as interoperability
+# evidence rather than development fixtures.
 # The base Verifiable Credentials context. The Authority Service composes a credential's
 # @context from contextUris ALONE — it prepends nothing — so without this the VC terms
 # themselves (VerifiableCredential, issuer, credentialSubject) have nothing to expand under
 # and signing fails in JSON-LD safe mode, reported only as "Error signing the document".
 VC_CONTEXT_URI="${VC_CONTEXT_URI:-https://www.w3.org/2018/credentials/v1}"
-CONTEXT_URI="${CONTEXT_URI:-https://cdn.jsdelivr.net/gh/pallakartheekreddy/sunbird-rc-reference-implementations@2eec9cb87845f19e27cf33c4decbf9d39f876c38/contexts/agriculture/v1/context.jsonld}"
+CONTEXT_URI="${CONTEXT_URI:-https://w3id.org/sunbird-rc/agriculture/v1}"
 # The jurisdiction a canonical reference is qualified by, read from the record.
 JURISDICTION_PATH="${JURISDICTION_PATH:-state}"
 # Where credential schemas are registered. Reached through the demo gateway.
