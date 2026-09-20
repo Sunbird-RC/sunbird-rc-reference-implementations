@@ -229,7 +229,7 @@ describe('Flow 2 — the farmer signs in and the wallet fetches from both regist
     const session = await signInAs(LAKSHMI);
     const holder = await createHolder();
     const claims = disclosableValues((await collect('farmer', session, holder)).credential);
-    assert.equal(claims.farmerId, LAKSHMI.farmerId);
+    assert.ok(String(claims.farmerReference).endsWith(LAKSHMI.farmerId));
     assert.notEqual(claims.farmerId, RAVI.farmerId);
   });
 });
@@ -284,7 +284,7 @@ describe('Flow 2 — what the registries refuse', () => {
     const session = await signInAs(NO_LAND);
     const holder = await createHolder();
     const farmer = await collect('farmer', session, holder);
-    assert.equal(disclosableValues(farmer.credential).farmerId, NO_LAND.farmerId);
+    assert.ok(String(disclosableValues(farmer.credential).farmerReference).endsWith(NO_LAND.farmerId));
 
     const res = await tryRequestCredential({
       base: advertised.land.issuerBase,
@@ -367,10 +367,10 @@ describe('Flow 2 — a mismatched pair, collected by the wallet itself', () => {
     const farmerClaims = disclosableValues(farmer.credential);
     const landClaims = disclosableValues(land.credential);
     assert.ok(String(farmerClaims.farmerReference).endsWith(RAVI.farmerId));
-    assert.equal(landClaims.farmerId, LAKSHMI.farmerId);
+    assert.ok(String(landClaims.farmerReference).endsWith(LAKSHMI.farmerId));
     assert.notEqual(
-      farmerClaims.farmerId,
-      landClaims.farmerId,
+      farmerClaims.farmerReference,
+      landClaims.farmerReference,
       'the premise of this test is that the two cards name different farmers',
     );
 
