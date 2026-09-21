@@ -1,0 +1,6 @@
+flowchart TD
+  C[Citizen] --> I[Identity authority]
+  I -->|Age Verification Credential| W[Citizen wallet]
+  S[Age-restricted service] -->|Requests ageOver18 only| W
+  W -->|Consented presentation| S
+  S --> D[Approved or denied]

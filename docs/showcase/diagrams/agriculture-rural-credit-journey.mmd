@@ -1,0 +1,10 @@
+flowchart TD
+  F[Farmer] --> FR[Farmer registry]
+  F --> LR[Land registry]
+  FR -->|Farmer Identity Credential| W[Farmer wallet]
+  LR -->|Land Ownership Credential| W
+  B[Bank] -->|Requests both credentials| W
+  W -->|One consented presentation| B
+  B --> C{Same farmerId?}
+  C -->|Yes| D[Eligibility and loan ceiling]
+  C -->|No| R[Rejected: unable to verify]
