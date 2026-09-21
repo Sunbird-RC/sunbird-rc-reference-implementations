@@ -5,6 +5,11 @@ Authority Service**: there is no status check in it, nothing is suspended, and t
 credentials in it are not linked to a lifecycle. This film is the one that shows the part
 that iteration added — that the same credential stops working when its source does.
 
+**Filmed on 21 September 2026** and delivered as
+[`Agriculture-Authority-Showcase-21Sep.mp4`](../evidence/02-agriculture/Agriculture-Authority-Showcase-21Sep.mp4)
+— 5 min 45 s, 720×1600, −16.0 LUFS, to the same spec as the other three films. This
+remains the shot script it was cut from.
+
 This is a shot script, not a recording. Filming and narration happen outside this
 repository, as they did for the three existing showcases; see
 [`VIDEO-HANDOFF.md`](VIDEO-HANDOFF.md) for the delivery spec (720x1600, H.264, 30 fps,
@@ -132,21 +137,40 @@ scripts/lifecycle-agriculture.sh reinstate FRM-PB-0117
 Present the same credential once more. Accepted, and a loan offered again — no reissue, no
 new credential, nothing done in the wallet.
 
-### 8 — A terminal refusal  *(~35s, include if it fits cleanly)*
+### 8 — A terminal refusal  *(~35s)*
 
-Anand asked for a revoked or inactive refusal if it reads clearly. **Prefer inactivation**
-— it is the easier one to show, because the record's state is visible:
+**Filmed as a revocation, and it has to be.** The obvious plan — present the reserved
+terminal fixtures — is impossible, and both fail for correct reasons:
+
+| Fixture | Why it cannot be collected |
+|---|---|
+| `FRM-KA-0902` | its credential is already REVOKED; reissue is refused (`VERSION_CONFLICT`) |
+| `FRM-KA-0901` | its record is already INACTIVE; the Authority refuses to issue against it |
+
+A credential cannot be collected for something already in a terminal state — the wallet
+has to hold it *before* the transition. So the shot is: keep Lakshmi's card from part 7,
+revoke it on camera, and present the same card again.
 
 ```bash
-scripts/lifecycle-agriculture.sh inactivate FRM-KA-0901   # farmer.terminal.inactive
+ROOT=$PWD; BASE=http://localhost:3334; API="$BASE/api/v1"
+. scripts/lib/authority-auth.sh
+authority_headers FARMER_OFFICER
+curl -s -X POST "$API/credentials/<urlencoded credentialId>/revoke" "${AUTH_H[@]}" \
+  -H 'content-type: application/json' -d '{"reason":"demonstration"}'
 ```
 
-Present as `farmer.terminal.inactive`: refused, and it stays refused. Unlike suspension
-this cannot be undone — the Authority refuses INACTIVE → ACTIVE — which is exactly the
-distinction worth stating on camera.
+Then show the record is untouched:
 
-**Do not use `farmer.lakshmi` for this shot.** Inactivation is terminal and would spend the
-fixture the rest of the suite uses.
+```bash
+scripts/lifecycle-agriculture.sh show FRM-PB-0117    # lifecycle=ACTIVE
+```
+
+**That contrast is the point:** the record is healthy and the credential is refused
+anyway. Unlike suspension, this cannot be undone.
+
+**This shot must come last.** After it, Lakshmi's credential can never be re-collected,
+so the suspend/reinstate sequence in parts 5–7 can no longer be filmed without a stack
+reset and re-seed. The acceptance suite will also fail until then.
 
 ---
 

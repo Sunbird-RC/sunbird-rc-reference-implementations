@@ -4,7 +4,7 @@
 
 | | Shows | Status |
 |---|---|---|
-| **Authority-backed journey** | Two authorities, wallet-held credentials, a holder-bound presentation, **live public status**, and the same credential accepted → refused on source suspension → accepted on reinstatement | Script ready, **not yet filmed** — see [`AGRICULTURE-AUTHORITY-FILM.md`](../../showcase/AGRICULTURE-AUTHORITY-FILM.md) |
+| [**Authority-backed journey, 21 September**](Agriculture-Authority-Showcase-21Sep.mp4) | Two authorities, wallet-held credentials, a holder-bound presentation, **live public status**, and the same credential accepted → refused on source suspension → accepted on reinstatement → refused on revocation | Filmed and delivered · 5 min 45 s |
 | [Rural credit showcase, 31 August](Agriculture-Rural-Credit-Showcase-31Aug.mp4) | Two registries, consented presentation, eligible / ineligible / mismatched outcomes | Filmed and delivered |
 
 **The 31 August film predates the Authority Service.** There is no status check in it,
@@ -13,6 +13,11 @@ accurate for what it covers — issuance, wallet storage, consented presentation
 lending decision — and it is not superseded. It simply does not show the part this
 iteration added: that a credential stops being accepted when its source is suspended, and
 is accepted again when the source is reinstated.
+
+The 21 September film was shot against the sandbox with Authority authentication on,
+and every value on screen is live: the two issuer DIDs, the public status route
+flipping to `SUSPENDED`, and the bank's own refusal text naming the reason. Its shot
+script is [`AGRICULTURE-AUTHORITY-FILM.md`](../../showcase/AGRICULTURE-AUTHORITY-FILM.md).
 
 ## Written evidence
 

@@ -190,11 +190,13 @@ ineligible, mismatched-record and refusal outcomes.
 
 [Watch the committed Agriculture demonstration](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/blob/main/docs/evidence/02-agriculture/Agriculture-Rural-Credit-Showcase-31Aug.mp4)
 
-**Authority-backed journey — script ready, not yet filmed.** The same two authorities,
-plus the part the Authority Service added: a **live status check** on every presentation,
-so the same unchanged credential is accepted, refused once its source record is suspended,
-and accepted again on reinstatement. The shot script is
-[`AGRICULTURE-AUTHORITY-FILM.md`](../AGRICULTURE-AUTHORITY-FILM.md).
+**Authority-backed journey (21 September) — filmed.** The same two authorities, plus the
+part the Authority Service added: a **live status check** on every presentation, so the
+same unchanged credential is accepted, refused once its source record is suspended,
+accepted again on reinstatement, and refused once the credential itself is revoked while
+its record stays healthy.
+
+[Watch the Authority-backed demonstration](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/blob/main/docs/evidence/02-agriculture/Agriculture-Authority-Showcase-21Sep.mp4)
 
 The 31 August film **predates the Authority Service**: nothing in it is suspended and its
 credentials are not linked to a lifecycle. It is accurate for what it covers and is not
