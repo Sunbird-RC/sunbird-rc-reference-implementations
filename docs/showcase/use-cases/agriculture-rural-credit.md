@@ -149,6 +149,14 @@ The lending rule runs only after these checks succeed.
 > fictional. They are not real people, land records or production credential
 > schemas.
 
+> **Credential status is live; issuer trust is not.** When the Authority Service backs
+> this application, the bank checks the credential's source on every presentation, so a
+> suspended, inactivated or revoked source is refused immediately and a reinstated one is
+> accepted again — with no reissue and nothing done in the wallet. Deactivating an
+> **issuer**, by contrast, is configuration: the verifier reads its trusted issuers once
+> at startup and does not see the change until it is restarted. See
+> [issuer trust is loaded at startup](../../authority-service-integration.md#issuer-trust-is-loaded-at-startup-and-only-at-startup).
+
 | Credential stored in wallet | Illustrative claims |
 | --- | --- |
 | Farmer Identity Credential | `farmerId: FMR-20481`, `registrationStatus: ACTIVE` |
@@ -174,11 +182,23 @@ then determines eligibility and maximum loan.
 
 ## Watch the rural-credit application
 
-The committed demonstration covers Farmer and Land credential issuance, wallet
-persistence, bank QR verification, minimum disclosure, loan calculation,
+There are two demonstrations, and they cover different things.
+
+**Rural credit showcase (31 August) — filmed.** Farmer and Land credential issuance,
+wallet persistence, bank QR verification, minimum disclosure, loan calculation, and the
 ineligible, mismatched-record and refusal outcomes.
 
 [Watch the committed Agriculture demonstration](https://github.com/Sunbird-RC/sunbird-rc-reference-implementations/blob/main/docs/evidence/02-agriculture/Agriculture-Rural-Credit-Showcase-31Aug.mp4)
+
+**Authority-backed journey — script ready, not yet filmed.** The same two authorities,
+plus the part the Authority Service added: a **live status check** on every presentation,
+so the same unchanged credential is accepted, refused once its source record is suspended,
+and accepted again on reinstatement. The shot script is
+[`AGRICULTURE-AUTHORITY-FILM.md`](../AGRICULTURE-AUTHORITY-FILM.md).
+
+The 31 August film **predates the Authority Service**: nothing in it is suspended and its
+credentials are not linked to a lifecycle. It is accurate for what it covers and is not
+superseded — it simply does not show the lifecycle behaviour.
 
 ## Experience demonstrated
 

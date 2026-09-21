@@ -199,6 +199,11 @@ Two things the integrating application must get right:
   issuer's credentials as untrusted, which presents as a credential fault a long way from the
   cause.
 
+Resolution happens **once, at startup**. This buys authoritative keys and display names that
+can change without a configuration edit; it does not make the allowlist dynamic, and
+deactivating an issuer does not reach a running verifier. See
+[issuer trust is loaded at startup](#issuer-trust-is-loaded-at-startup-and-only-at-startup).
+
 ### 3. Two credentials, and they are not the same credential
 
 This is the part most likely to be misread, so it is worth stating before the mechanism.
@@ -453,6 +458,70 @@ rather than a failed issuance for a holder who is waiting.
 The reference realm issues **60-second** tokens deliberately: shorter than a full journey
 run, so the acceptance suite cannot pass unless renewal genuinely works.
 
+## Issuer trust is loaded at startup, and only at startup
+
+**The verifier resolves its trusted issuers once, at boot, and never re-reads them while
+running. Deactivating an issuer in the Authority Service does not reach a running verifier.
+It is not revocation and must not be described as propagating.**
+
+This is deliberate rather than unfinished. The verifier resolves trust *before* it opens
+its port, and exits non-zero if it cannot:
+
+```
+[verifier] refusing to start: Authority Service did not publish issuer "Land Registry" (…): HTTP 404
+```
+
+A verifier that opened its port first and resolved afterwards would accept presentations
+during the gap with no allowlist and answer them. There is no useful degraded state here —
+every decision branch refuses everything without an allowlist — so failing to start is the
+safe outcome.
+
+### What this means operationally
+
+| Change | Reaches a running verifier? |
+|---|---|
+| Credential revoked, or its source record suspended / inactivated | **Yes, immediately.** Status is checked live, per presentation. |
+| Issuer deactivated in the Authority Service | **No.** Requires a verifier restart. |
+| Issuer key rotated | **No.** Requires a verifier restart. |
+| Issuer added or removed from the trust policy file | **No.** Requires a verifier restart. |
+
+The distinction matters: **credential status is live, issuer trust is not.** The first row
+is what the Agriculture journey demonstrates and is checked on every presentation. The rest
+are configuration, and configuration is read at boot.
+
+### Refreshing a verifier after an issuer change
+
+There is no reload endpoint and no signal handler. Restart the container:
+
+```bash
+# local
+docker compose -f deploy/docker-compose.yml up -d --force-recreate --no-deps verifier
+
+# a deployment with TLS enabled — include the overlay, or nginx reverts to plain HTTP
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.tls.yml   up -d --force-recreate --no-deps verifier
+```
+
+Then confirm what it actually loaded, rather than assuming the restart worked:
+
+```bash
+docker logs sunbird-rc-age-verifier-1 2>&1 | tail -1
+# [verifier] listening on 4300; trusting 6 issuer(s); …
+```
+
+Two failure modes worth knowing before you restart:
+
+- **If the issuer you deactivated is still named in the trust policy, the verifier will
+  refuse to start.** That is the fail-closed behaviour above, and it will take the verifier
+  down rather than bring it back with a smaller allowlist. Remove the issuer from the
+  policy in the same change, not afterwards.
+- **A restart is a gap in service, not a hot reload.** Presentations in flight fail. For a
+  deployment where that matters, run more than one verifier and restart them in turn; this
+  reference deployment runs one.
+
+If you need deactivation to take effect without a restart, that is a change to the
+verifier — re-resolving trust on an interval, or on a signal — and it is not in this
+iteration.
+
 ## The public boundary
 
 Two routes must answer without authentication, because a verifier holding a credential has no
@@ -485,9 +554,10 @@ Architectural and operational limits of the arrangement as described here:
 - **Tokens are held per issuing service, not per holder.** The issuer authenticates as itself
   and is entitled to issue for its tenant; a compromised issuing service can issue within that
   tenant. This is the same blast radius as the issuing key it already holds.
-- **Trust resolution happens at startup.** Deactivating an issuer in the service does not reach
-  a running verifier until it restarts. This is no worse than a configuration file, but it is
-  not revocation, and should not be relied on as such.
+- **Trust resolution happens at startup**, and only at startup — see
+  [Issuer trust is loaded at startup](#issuer-trust-is-loaded-at-startup-and-only-at-startup)
+  for what that does and does not reach, and how an operator refreshes a verifier.
+  Credential status is live; issuer trust is not.
 - **Issuers are resolved by generated identifier.** The public trust route is keyed by the
   issuer's identifier, so that identifier still has to reach the verifier's configuration. This
   trades copying a DID for copying an identifier; the gain is that the DID, display name and
