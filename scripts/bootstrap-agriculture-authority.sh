@@ -35,6 +35,12 @@ API="$BASE/api/v1"
 BOOT_ISSUER="${BOOTSTRAP_ISSUER:-https://idp.test}"
 BOOT_SUBJECT="${BOOTSTRAP_SUBJECT:-bootstrap}"
 
+# How this script authenticates, in either mode. It discovers which mode the service is in
+# rather than being told, so the same invocation works against a development stack with
+# ENABLE_AUTH=false and against a deployment that requires real tokens.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT/scripts/lib/authority-auth.sh"
+
 # The two operators, one per Authority. Synthetic identities: no real account is named here.
 MEMBER_ISSUER="${MEMBER_ISSUER:-https://idp.test}"
 FARMER_OPERATOR="${FARMER_OPERATOR:-agri-farmer-operator}"
@@ -45,8 +51,20 @@ LAND_OFFICER="${LAND_OFFICER:-agri-land-officer}"
 # Issuer DIDs. Unset by default: a DID is an environment fact, and the demo stack cannot
 # produce a usable one (see the guard below). Set these to publicly resolvable did:web
 # values to complete issuer configuration.
-ISSUER_DID_FARMER="${ISSUER_DID_FARMER:-}"
-ISSUER_DID_LAND="${ISSUER_DID_LAND:-}"
+# Default to the DIDs THIS deployment minted. scripts/bootstrap.sh creates a did:web for
+# each Agriculture issuer under the public origin and records it in deploy/.env, and those
+# are the only DIDs identity-service holds a signing key for.
+#
+# Supplying a DID by hand that the deployment does not know is the failure this defaulting
+# removes: the Authority accepts it, records it on the issuer, and then every issuance dies
+# at `POST identity:3332/utils/sign -> 404`, surfacing as a 500 from credentials-service and
+# an ORPHANED issuance — four services away from the typo that caused it.
+_did_from_env() {
+  [ -f "$ROOT/deploy/.env" ] || return 0
+  sed -n "s/^$1=//p" "$ROOT/deploy/.env" | tail -1
+}
+ISSUER_DID_FARMER="${ISSUER_DID_FARMER:-$(_did_from_env FARMER_ISSUER_DID)}"
+ISSUER_DID_LAND="${ISSUER_DID_LAND:-$(_did_from_env LAND_ISSUER_DID)}"
 ISSUER_KEY_ALGORITHM="${ISSUER_KEY_ALGORITHM:-Ed25519}"
 # Key references default to the issuer DID: the usual case is a DID that resolves to its own
 # verification method. Set these only if the signing key is published somewhere else.
@@ -83,8 +101,8 @@ head1() { printf '\n\033[1m%s\033[0m\n' "$1" >&2; }
 # api METHOD PATH [BODY] -> body on stdout; non-2xx is fatal and prints what came back.
 api() {
   local method="$1" path="$2" body="${3:-}" out status
-  local args=(-sS --max-time 30 -X "$method" "$API$path"
-              -H "x-dev-issuer: $BOOT_ISSUER" -H "x-dev-subject: $BOOT_SUBJECT"
+  authority_headers BOOTSTRAP
+  local args=(-sS --max-time 30 -X "$method" "$API$path" "${AUTH_H[@]}"
               -H 'Content-Type: application/json' -w '\n%{http_code}')
   [ -n "$body" ] && args+=(-d "$body")
   out="$(curl "${args[@]}")" || die "$method $path — could not reach $BASE"
@@ -92,24 +110,52 @@ api() {
   body="${out%$'\n'*}"
   case "$status" in
     2*) printf '%s' "$body" ;;
+    409)
+      # A create that collides with something this principal cannot see. The usual cause
+      # is switching an existing deployment from ENABLE_AUTH=false to real tokens: the
+      # bootstrap client is a DIFFERENT principal from the old x-dev-subject, so the
+      # listing it reads back is empty and it tries to create what is already there.
+      # Nothing here can repair that safely — the existing tenant belongs to the other
+      # principal — so say what happened rather than looping.
+      die "$method $path -> 409: $(printf '%s' "$body" | head -c 200)
+    This resource already exists but is not visible to the principal this script is using
+    ($(authority_principal BOOTSTRAP | tr '\t' '|')).
+    Switching an existing deployment between authentication modes does that: the tenants
+    are owned by the principal that created them. Bootstrap a clean deployment instead." ;;
     *)  die "$method $path -> $status: $(printf '%s' "$body" | head -c 300)" ;;
   esac
 }
 
 # Reads one field out of a JSON object on stdin. Python rather than jq: the repository
 # already depends on python3 (scripts/credential-specs.py) and not on jq.
-field() { python3 -c 'import sys,json;print(json.load(sys.stdin).get(sys.argv[1]) or "")' "$1"; }
-
-# Finds an element of a JSON array whose "code" matches, and prints its id, or nothing.
-id_by_code() {
+# These parse whatever api() produced. api() dies on a non-2xx, but `die` inside a $( )
+# ends only the subshell, so a failed call arrives here as an EMPTY string rather than as
+# a stopped script. Parsing that with json.load raises, and the traceback buries the real
+# error that was printed a line earlier. Return nothing instead and let require_id say so.
+_json_or_empty() {
   python3 -c '
 import sys, json
-want = sys.argv[1]
-data = json.load(sys.stdin)
-items = data if isinstance(data, list) else data.get("items", [])
-print(next((i["id"] for i in items if i.get("code") == want), ""))
-' "$1"
+raw = sys.stdin.read().strip()
+if not raw:
+    print("")
+    sys.exit(0)
+try:
+    data = json.loads(raw)
+except ValueError:
+    print("")
+    sys.exit(0)
+'"$1" "${2:-}" "${3:-}"
 }
+
+field() { _json_or_empty '
+print(data.get(sys.argv[1]) or "" if isinstance(data, dict) else "")
+' "$1"; }
+
+# Finds an element of a JSON array whose "code" matches, and prints its id, or nothing.
+id_by_code() { _json_or_empty '
+items = data if isinstance(data, list) else data.get("items", [])
+print(next((i["id"] for i in items if i.get("code") == sys.argv[1]), ""))
+' "$1"; }
 
 # Same, keyed on entityName — registry bindings have no code.
 id_by_entity() {
@@ -135,15 +181,27 @@ green "health ok"
 # the first draft of this script hit a 401 on every call and cheerfully reported creating
 # things. Health is a public route and says nothing about whether these headers are
 # accepted, so this asks for something that requires a principal.
-preflight="$(curl -sS --max-time 15 "$API/tenants" \
-  -H "x-dev-issuer: $BOOT_ISSUER" -H "x-dev-subject: $BOOT_SUBJECT" -w '\n%{http_code}')"
+authority_headers BOOTSTRAP
+preflight="$(curl -sS --max-time 15 "$API/tenants" "${AUTH_H[@]}" -w '\n%{http_code}')"
 case "${preflight##*$'\n'}" in
   2*) green "bootstrap principal accepted" ;;
   401|403)
-    die "the service rejected the bootstrap principal — it is running with authentication on.
-    These headers work only when the service has ENABLE_AUTH=false, and root tenant creation
-    additionally needs BOOTSTRAP_ADMINS to contain \"$BOOT_ISSUER|$BOOT_SUBJECT\".
-    Both default to secure values, so a freshly started stack will not have them." ;;
+    if [ "$(authority_mode)" = token ]; then
+      die "the service rejected the bootstrap token.
+    Authentication is ON, so root tenant creation needs BOOTSTRAP_ADMINS to name the
+    bootstrap client's service account, spelled issuer|subject. Both values are written to
+    deploy/.env by scripts/bootstrap-authority-realm.sh — and the Authority Service reads
+    BOOTSTRAP_ADMINS only at start, so it must be recreated after that script runs:
+      scripts/bootstrap-authority-realm.sh
+      docker compose -f deploy/docker-compose.yml up -d --force-recreate --no-deps authority-service
+    Expected principal: $(authority_principal BOOTSTRAP | tr '\t' '|')"
+    else
+      die "the service rejected the bootstrap principal.
+    It is running with ENABLE_AUTH=false, so it expects the x-dev headers this script sent,
+    and root tenant creation additionally needs BOOTSTRAP_ADMINS to contain
+    \"$BOOT_ISSUER|$BOOT_SUBJECT\". Both default to secure values, so a freshly started
+    stack will not have them."
+    fi ;;
   *) die "unexpected response from $API/tenants: ${preflight##*$'\n'}" ;;
 esac
 
@@ -202,21 +260,37 @@ ensure_issuer() {
 # Membership is keyed on (issuer, subject), so the same person at two Authorities is two
 # memberships and never one account spanning both. That is the property the whole topology
 # rests on, so the script grants each operator exactly one tenant.
+# ensure_membership TENANT_ID PRINCIPAL_KEY ROLE
+#
+# PRINCIPAL_KEY names a principal (FARMER_OFFICER, LAND_OPERATOR, ...) rather than a
+# literal subject, because the subject is not the same string in both modes. With
+# ENABLE_AUTH=false it is the x-dev-subject header, a readable name. With authentication
+# on it is the `sub` of a client-credentials token, which is the service account's id —
+# generated by Keycloak, and therefore not knowable when this file was written.
+#
+# Writing the readable name into the membership would produce a row that looks right and
+# matches nothing: every call would authenticate successfully and then be refused for
+# lack of a role. The pair is read from the same place the caller's token comes from.
 ensure_membership() {
-  local existing
-  existing="$(api GET "/tenants/$1/memberships" \
+  local tenant="$1" key="$2" role="$3" pair issuer subject existing
+  pair="$(authority_principal "$key")"
+  issuer="${pair%%$'\t'*}"
+  subject="${pair##*$'\t'}"
+
+  existing="$(api GET "/tenants/$tenant/memberships" \
     | python3 -c '
 import sys, json
-subject, role = sys.argv[1], sys.argv[2]
+issuer, subject, role = sys.argv[1], sys.argv[2], sys.argv[3]
 data = json.load(sys.stdin)
 items = data if isinstance(data, list) else data.get("items", [])
 print(next((m["id"] for m in items
-            if m.get("subject") == subject and m.get("role") == role), ""))
-' "$2" "$3")"
-  if [ -n "$existing" ]; then info "membership $2 ($3) already present"; return; fi
-  api POST "/tenants/$1/memberships" \
-    "$(printf '{"issuer":"%s","subject":"%s","role":"%s"}' "$MEMBER_ISSUER" "$2" "$3")" >/dev/null
-  info "membership $2 ($3) created"
+            if m.get("subject") == subject and m.get("issuer") == issuer
+            and m.get("role") == role), ""))
+' "$issuer" "$subject" "$role")"
+  if [ -n "$existing" ]; then info "membership $key ($role) already present"; return; fi
+  api POST "/tenants/$tenant/memberships" \
+    "$(printf '{"issuer":"%s","subject":"%s","role":"%s"}' "$issuer" "$subject" "$role")" >/dev/null
+  info "membership $key ($role) created as $subject"
 }
 
 head1 "Tenants"
@@ -315,8 +389,8 @@ ensure_issuer_did() {
   current="$(api GET "/issuers/$issuer_id" | field did)"
   if [ "$current" = "$did" ]; then info "$label DID already set"; return; fi
   version="$(api GET "/issuers/$issuer_id" | field version)"
-  curl -sS --max-time 25 -X PATCH "$API/issuers/$issuer_id" \
-    -H "x-dev-issuer: $BOOT_ISSUER" -H "x-dev-subject: $BOOT_SUBJECT" \
+  authority_headers BOOTSTRAP
+  curl -sS --max-time 25 -X PATCH "$API/issuers/$issuer_id" "${AUTH_H[@]}" \
     -H 'Content-Type: application/json' -H "If-Match: $version" \
     -d "$(printf '{"did":"%s"}' "$did")" -o /dev/null -w '' || die "could not set $label DID"
   green "$label DID set"
@@ -362,15 +436,15 @@ ensure_issuer_key "$ISS_LAND"   "${ISSUER_KEY_LAND:-$ISSUER_DID_LAND}"     ISS-L
 head1 "Memberships"
 # Distinct operators per Authority. Neither can read the other's records, and the
 # application correlates across them from credentials rather than from access.
-ensure_membership "$TENANT_FARMER" "$FARMER_OPERATOR" OPERATOR
-ensure_membership "$TENANT_LAND"   "$LAND_OPERATOR"   OPERATOR
+ensure_membership "$TENANT_FARMER" FARMER_OPERATOR OPERATOR
+ensure_membership "$TENANT_LAND"   LAND_OPERATOR   OPERATOR
 # Separation of duties: an OPERATOR may create and submit a record but not approve it.
 # Approval requires AUTHORISED_OFFICER or ADMINISTRATOR, so a record cannot be brought into
 # force by the same person who entered it. Seeding therefore needs both roles, and they are
 # deliberately different subjects — granting one person both would configure the separation
 # away while appearing to satisfy it.
-ensure_membership "$TENANT_FARMER" "$FARMER_OFFICER"  AUTHORISED_OFFICER
-ensure_membership "$TENANT_LAND"   "$LAND_OFFICER"    AUTHORISED_OFFICER
+ensure_membership "$TENANT_FARMER" FARMER_OFFICER  AUTHORISED_OFFICER
+ensure_membership "$TENANT_LAND"   LAND_OFFICER    AUTHORISED_OFFICER
 
 
 # ensure_profile AUTHORITY_ID BINDING_ID ISSUER_ID CODE NAME CREDENTIAL_TYPE SCHEMA_ID -> id
@@ -582,6 +656,60 @@ else
   # Widening the credential means a new context version, not a new claim mapping. They
   # exist in the registry and must not reach a verifier; the loan uses cultivated area only,
   # so total holding size stays with the farmer.
+fi
+
+# Everything the issuing services and the verifier need in order to USE what was just
+# configured. Written to deploy/.env rather than pasted into a hand-made compose overlay:
+# the profile ids are minted here and change on every reset, so a file a human maintains
+# is a file that is quietly wrong after the next bootstrap.
+if [ -n "$PROFILE_FARMER" ] && [ -n "$PROFILE_LAND" ]; then
+  head1 "Wiring"
+  ENV_FILE="$ROOT/deploy/.env"
+  set_env() {
+    touch "$ENV_FILE"
+    if grep -qE "^$1=" "$ENV_FILE"; then
+      grep -vE "^$1=" "$ENV_FILE" > "$ENV_FILE.tmp" && mv "$ENV_FILE.tmp" "$ENV_FILE"
+    fi
+    printf '%s=%s\n' "$1" "$2" >> "$ENV_FILE"
+  }
+  set_env AUTHORITY_BASE_URL "http://authority-service:3334"
+  set_env AGRI_CLAIM_SOURCE authority
+  set_env AUTHORITY_PROFILE_MAP_FARMER "{\"Farmer Identity Credential\":\"$PROFILE_FARMER\"}"
+  set_env AUTHORITY_PROFILE_MAP_LAND "{\"Land Ownership Credential\":\"$PROFILE_LAND\"}"
+  set_env VERIFIER_TRUST_POLICY_FILE /app/config/trust/issuers.authority.json
+  set_env AUTHORITY_ISSUER_FARMER "$ISS_FARMER"
+  set_env AUTHORITY_ISSUER_LAND "$ISS_LAND"
+  green "profile ids and claim source written to deploy/.env"
+
+  # The verifier's Agriculture trust policy names Farmer and Land by AUTHORITY ISSUER ID
+  # rather than by DID, because their keys are resolved from the Authority at boot. Those
+  # ids are minted here and change on every reset, so the committed file cannot hold the
+  # right ones — it holds the shape, and this writes today's ids into it.
+  python3 - "$ROOT/config/trust/issuers.authority.json" "$ISS_FARMER" "$ISS_LAND" <<'TRUST'
+import json, sys
+path, farmer, land = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(path) as handle:
+    policy = json.load(handle)
+seen = []
+for issuer in policy.get("issuers", []):
+    if issuer.get("name") == "Farmer Registry":
+        issuer["authorityIssuer"] = farmer
+        seen.append("Farmer Registry")
+    elif issuer.get("name") == "Land Registry":
+        issuer["authorityIssuer"] = land
+        seen.append("Land Registry")
+if len(seen) != 2:
+    raise SystemExit(
+        "expected Farmer Registry and Land Registry in %s, found %s" % (path, seen)
+    )
+with open(path, "w") as handle:
+    json.dump(policy, handle, indent=2)
+    handle.write("\n")
+TRUST
+  green "config/trust/issuers.authority.json points at this deployment's issuers"
+  info "recreate the issuers and the verifier to pick them up:"
+  info "  docker compose -f deploy/docker-compose.yml up -d --force-recreate --no-deps \\"
+  info "    oid4vc-farmer oid4vc-land verifier"
 fi
 
 head1 "Summary"

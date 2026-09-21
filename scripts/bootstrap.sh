@@ -508,6 +508,43 @@ done
 
 # --- 6. apply the new configuration -----------------------------------------
 say "6. Applying configuration"
+
+# An Authority-resolved trust policy survives a stack reset in deploy/.env; the issuers it
+# names do not. The verifier resolves them at boot and REFUSES TO START when one is
+# missing — correctly — so recreating it below would crash-loop, and the `wait_for` that
+# follows would hang until it gave up. The whole bootstrap then fails at the last step,
+# reporting a verifier problem, when what actually happened is that the Authority
+# Service's database was emptied and has not been re-bootstrapped yet.
+#
+# So: if the selected policy names issuers this Authority does not publish, fall back to
+# the default policy for THIS boot only. deploy/.env is left alone —
+# bootstrap-agriculture-authority.sh rewrites the policy with live identifiers and the
+# verifier is recreated again there.
+authority_policy_is_stale() {
+  local policy="$ROOT/config/trust/issuers.authority.json" base ids id code
+  [ "$(envval VERIFIER_TRUST_POLICY_FILE)" = /app/config/trust/issuers.authority.json ] || return 1
+  [ -f "$policy" ] || return 1
+  ids="$(python3 -c '
+import json, sys
+policy = json.load(open(sys.argv[1]))
+print(" ".join(i["authorityIssuer"] for i in policy.get("issuers", []) if i.get("authorityIssuer")))
+' "$policy" 2>/dev/null)" || return 1
+  [ -n "$ids" ] || return 1
+  base="${AUTHORITY_URL:-http://localhost:3334}"
+  for id in $ids; do
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$base/api/v1/trust/issuers/$id" 2>/dev/null || echo 000)"
+    [ "$code" = 200 ] || return 0
+  done
+  return 1
+}
+
+if authority_policy_is_stale; then
+  warn "the Agriculture trust policy names issuers this Authority does not publish"
+  info "using the default trust policy for this boot; run scripts/bootstrap-agriculture-authority.sh"
+  # Exported, so it beats deploy/.env for the compose commands below without editing it.
+  export VERIFIER_TRUST_POLICY_FILE=/app/config/trust/issuers.json
+fi
+
 # oid4vc-service reads VERIFIER_DID/ISSUER_DID and the verifier reads
 # AGE_ISSUER_DID at boot, so both need recreating now that .env has them.
 "${COMPOSE[@]}" up -d --force-recreate --no-deps \

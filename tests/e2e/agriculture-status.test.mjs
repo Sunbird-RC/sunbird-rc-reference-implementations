@@ -32,11 +32,15 @@ import {
   fetchRequestObject,
   submitMultiPresentation,
 } from './lib/wallet.mjs';
+import { authorityHeaders } from './lib/authority-auth.mjs';
 
 const { base, opsBase, demoPassword } = deployEnv();
 const REALM = `${base}/auth/realms/agriculture`;
 const REDIRECT_URI = `${base}/wallet/redirect`;
 const AUTHORITY = process.env.AUTHORITY_URL || 'http://127.0.0.1:3334';
+// Whichever way this deployment authenticates. A role name, not a subject string: with
+// authentication on the subject is a Keycloak service account id, generated per install.
+const as = (principal) => authorityHeaders(principal, { authorityBase: AUTHORITY, opsBase });
 // Lakshmi rather than Ravi, because this file changes its subject's record and the rest of
 // the suite depends on Ravi being the canonical eligible farmer.
 const SUBJECT = { username: 'farmer.lakshmi', nationalId: 'NAT-90023815', farmerId: 'FRM-PB-0117' };
@@ -54,21 +58,18 @@ let farmerIssuerDid = null;
 
 /** Moves a record's lifecycle through the Authority Service, as an officer would. */
 async function lifecycle(localId, state) {
-  const officer = localId.startsWith('FRM-') ? 'agri-farmer-officer' : 'agri-land-officer';
+  const officer = localId.startsWith('FRM-') ? 'FARMER_OFFICER' : 'LAND_OFFICER';
   const entity = localId.startsWith('FRM-') ? 'FarmerRecord' : 'LandRecord';
   const field = localId.startsWith('FRM-') ? 'farmerId' : 'landId';
-  const headers = {
-    'x-dev-issuer': 'https://idp.test',
-    'x-dev-subject': officer,
-    'content-type': 'application/json',
-  };
+  const headers = await as(officer);
+  const admin = await as('BOOTSTRAP');
   const authorities = await (await fetch(`${AUTHORITY}/api/v1/authorities`, {
-    headers: { ...headers, 'x-dev-subject': 'bootstrap' },
+    headers: admin,
   })).json();
   const list = Array.isArray(authorities) ? authorities : authorities.items || [];
   for (const a of list) {
     const bindings = await (await fetch(`${AUTHORITY}/api/v1/authorities/${a.id}/registries`, {
-      headers: { ...headers, 'x-dev-subject': 'bootstrap' },
+      headers: admin,
     })).json();
     for (const b of (Array.isArray(bindings) ? bindings : bindings.items || [])) {
       if (b.entityName !== entity) continue;
@@ -95,7 +96,8 @@ async function lifecycle(localId, state) {
 async function recordState(localId) {
   const entity = localId.startsWith('FRM-') ? 'FarmerRecord' : 'LandRecord';
   const field = localId.startsWith('FRM-') ? 'farmerId' : 'landId';
-  const H = { 'x-dev-issuer': 'https://idp.test', 'x-dev-subject': 'bootstrap', 'content-type': 'application/json' };
+  const H = await as('BOOTSTRAP');
+  const operator = await as('FARMER_OPERATOR');
   const authorities = await (await fetch(`${AUTHORITY}/api/v1/authorities`, { headers: H })).json();
   for (const a of (Array.isArray(authorities) ? authorities : authorities.items || [])) {
     const bindings = await (await fetch(`${AUTHORITY}/api/v1/authorities/${a.id}/registries`, { headers: H })).json();
@@ -103,7 +105,7 @@ async function recordState(localId) {
       if (b.entityName !== entity) continue;
       const found = await (await fetch(`${AUTHORITY}/api/v1/registries/${b.id}/records/search`, {
         method: 'POST',
-        headers: { ...H, 'x-dev-subject': 'agri-farmer-operator' },
+        headers: operator,
         body: JSON.stringify({ filters: { [field]: { eq: localId } } }),
       })).json();
       const row = (found.data || [])[0];
@@ -307,11 +309,7 @@ describe('Agriculture — the bank consults live credential status', () => {
     if (before.status !== 'REVOKED') {
       const res = await fetch(`${AUTHORITY}/api/v1/credentials/${encodeURIComponent(before.id)}/revoke`, {
         method: 'POST',
-        headers: {
-          'x-dev-issuer': 'https://idp.test',
-          'x-dev-subject': 'agri-farmer-officer',
-          'content-type': 'application/json',
-        },
+        headers: await as('FARMER_OFFICER'),
         body: JSON.stringify({ reason: 'status journey: revoked' }),
       });
       assert.ok(res.ok, `could not revoke: ${res.status}`);

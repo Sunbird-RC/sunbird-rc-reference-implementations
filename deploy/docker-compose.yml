@@ -224,6 +224,11 @@ services:
       # reuse its realm: an Agriculture login would otherwise satisfy an
       # Education issuer's subject lookup. Separate realms make that structural.
       - ./keycloak/realm-education.json:/opt/keycloak/data/import/realm-education.json:ro
+      # And a fourth, holding no people at all: the machine principals the Authority
+      # Service accepts. Kept apart from the three citizen realms so that a citizen's
+      # token carries a different issuer from an issuing service's and therefore cannot
+      # address the administrative API however its subject is spelled.
+      - ./keycloak/realm-authority.json:/opt/keycloak/data/import/realm-authority.json:ro
     healthcheck:
       # A TCP connect, not an HTTP probe. The image ships no curl or wget, and
       # hand-rolling an HTTP request through bash's /dev/tcp means embedding CRLF
@@ -242,7 +247,7 @@ services:
   # The OpenID4VCI / OpenID4VP protocol façade. Native to v2.1.0 — this is why
   # the architecture needs no standards adapter.
   oid4vc-service:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.4b36d54d}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -334,7 +339,7 @@ services:
   # could also issue would be a fifth issuer nobody asked for, and it would appear
   # in wallet issuer directories.
   oid4vc-bank:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.4b36d54d}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464}
     restart: unless-stopped
     depends_on:
       identity:
@@ -392,7 +397,7 @@ services:
   # read a land record (DESIGN §4).
 
   oid4vc-farmer:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.4b36d54d}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -418,6 +423,23 @@ services:
       REDIS_URL: redis://redis:6379
       SESSION_STORE: redis
       ISSUER_DID: ${FARMER_ISSUER_DID:-}
+      # --- Authority Service as the claim source -------------------------------
+      # Empty by default, which leaves this issuer reading the registry directly and
+      # keeps a bare `docker compose up` working with no Authority at all. The values
+      # are written to deploy/.env by scripts/bootstrap-agriculture-authority.sh, whose
+      # profile ids are minted per deployment and cannot be committed.
+      #
+      # Authentication is CLIENT CREDENTIALS, not a static token: this service holds an
+      # id and a secret and exchanges them whenever its token nears expiry. A token in
+      # an environment variable cannot outlive its own expiry, so issuance would stop
+      # some minutes after deployment with a 401 that reads like a permissions fault.
+      CLAIM_SOURCE_DEFAULT: '${AGRI_CLAIM_SOURCE:-registry}'
+      AUTHORITY_BASE_URL: '${AUTHORITY_BASE_URL:-}'
+      AUTHORITY_SUBJECT_FIELD: '${AUTHORITY_SUBJECT_FIELD:-nationalId}'
+      AUTHORITY_TOKEN_URL: '${AUTHORITY_TOKEN_URL:-}'
+      AUTHORITY_PROFILE_MAP: '${AUTHORITY_PROFILE_MAP_FARMER:-}'
+      AUTHORITY_CLIENT_ID: '${AUTHORITY_CLIENT_FARMER_OFFICER:-}'
+      AUTHORITY_CLIENT_SECRET: '${AUTHORITY_SECRET_FARMER_OFFICER:-}'
       # Advertise only the credentials THIS issuer authored. credential-schema's
       # /oid4vci-configs is deployment-wide, so without this every issuer lists
       # every published credential — the Age issuer would offer the Agriculture
@@ -443,7 +465,7 @@ services:
       retries: 30
 
   oid4vc-land:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.4b36d54d}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -467,6 +489,23 @@ services:
       REDIS_URL: redis://redis:6379
       SESSION_STORE: redis
       ISSUER_DID: ${LAND_ISSUER_DID:-}
+      # --- Authority Service as the claim source -------------------------------
+      # Empty by default, which leaves this issuer reading the registry directly and
+      # keeps a bare `docker compose up` working with no Authority at all. The values
+      # are written to deploy/.env by scripts/bootstrap-agriculture-authority.sh, whose
+      # profile ids are minted per deployment and cannot be committed.
+      #
+      # Authentication is CLIENT CREDENTIALS, not a static token: this service holds an
+      # id and a secret and exchanges them whenever its token nears expiry. A token in
+      # an environment variable cannot outlive its own expiry, so issuance would stop
+      # some minutes after deployment with a 401 that reads like a permissions fault.
+      CLAIM_SOURCE_DEFAULT: '${AGRI_CLAIM_SOURCE:-registry}'
+      AUTHORITY_BASE_URL: '${AUTHORITY_BASE_URL:-}'
+      AUTHORITY_SUBJECT_FIELD: '${AUTHORITY_SUBJECT_FIELD:-nationalId}'
+      AUTHORITY_TOKEN_URL: '${AUTHORITY_TOKEN_URL:-}'
+      AUTHORITY_PROFILE_MAP: '${AUTHORITY_PROFILE_MAP_LAND:-}'
+      AUTHORITY_CLIENT_ID: '${AUTHORITY_CLIENT_LAND_OFFICER:-}'
+      AUTHORITY_CLIENT_SECRET: '${AUTHORITY_SECRET_LAND_OFFICER:-}'
       # Advertise only the credentials THIS issuer authored. credential-schema's
       # /oid4vci-configs is deployment-wide, so without this every issuer lists
       # every published credential — the Age issuer would offer the Agriculture
@@ -505,7 +544,7 @@ services:
   # the request_uri inside a QR resolves back to the instance that signed it.
 
   oid4vc-university-vp:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.4b36d54d}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -546,7 +585,7 @@ services:
       retries: 30
 
   oid4vc-employer-vp:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.4b36d54d}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -601,7 +640,7 @@ services:
   # the learner's own access token. None of them is handed a learnerId by anyone.
 
   oid4vc-school:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.4b36d54d}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -645,7 +684,7 @@ services:
       retries: 30
 
   oid4vc-college:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.4b36d54d}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -689,7 +728,7 @@ services:
       retries: 30
 
   oid4vc-university:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.4b36d54d}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -784,7 +823,11 @@ services:
       PORT: '4300'
       OID4VC_BASE_URL: http://oid4vc-service:3400
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost}
-      TRUST_POLICY_FILE: /app/config/trust/issuers.json
+      # The Agriculture policy resolves Farmer and Land from the Authority Service
+      # instead of naming their DIDs, so it is selected only once that Authority is
+      # configured. bootstrap-agriculture-authority.sh writes the override.
+      TRUST_POLICY_FILE: '${VERIFIER_TRUST_POLICY_FILE:-/app/config/trust/issuers.json}'
+      AUTHORITY_BASE_URL: '${AUTHORITY_BASE_URL:-}'
       CROP_POLICY_FILE: /app/config/policy/crop-rates.json
       # The approved-algorithm allowlist (REQUIREMENTS §8), enforced rather than
       # recorded. Named explicitly even though it defaults to this path, because a
@@ -858,8 +901,13 @@ services:
       # Creating a root tenant requires a principal named here. Empty by default,
       # which disables root tenant creation rather than granting it to anyone.
       BOOTSTRAP_ADMINS: '${BOOTSTRAP_ADMINS:-}'
-      OIDC_ISSUER: '${AUTHORITY_OIDC_ISSUER:-http://keycloak:8080/realms/authority}'
-      OIDC_JWKS_URI: '${AUTHORITY_OIDC_JWKS_URI:-http://keycloak:8080/realms/authority/protocol/openid-connect/certs}'
+      # NOTE the /auth prefix. Keycloak runs with --http-relative-path=/auth, so the
+      # realm lives at /auth/realms/authority and the `iss` claim it stamps into every
+      # token carries that prefix too. Without it the JWKS URI 404s and the issuer
+      # comparison can never match, so EVERY token is rejected as invalid — which reads
+      # like a key problem and is a path problem.
+      OIDC_ISSUER: '${AUTHORITY_OIDC_ISSUER:-http://keycloak:8080/auth/realms/authority}'
+      OIDC_JWKS_URI: '${AUTHORITY_OIDC_JWKS_URI:-http://keycloak:8080/auth/realms/authority/protocol/openid-connect/certs}'
     ports:
       # Loopback only. The administrative API is authenticated but not public, and
       # binding it to 127.0.0.1 keeps it off the host's network interfaces the way
@@ -900,6 +948,7 @@ services:
       # public, operator routes are served only on the loopback listener below.
       - ./nginx/routes-citizen.conf:/etc/nginx/routes-citizen.conf:ro
       - ./nginx/routes-ops.conf:/etc/nginx/routes-ops.conf:ro
+      - ./nginx/routes-trust.conf:/etc/nginx/routes-trust.conf:ro
       - ./nginx/routes-denied.conf:/etc/nginx/routes-denied.conf:ro
       # The web pages are static and need no build step, so nginx serves them
       # directly instead of a container existing to hold a handful of files.

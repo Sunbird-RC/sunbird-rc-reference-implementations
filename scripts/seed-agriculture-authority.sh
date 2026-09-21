@@ -22,6 +22,12 @@ API="$BASE/api/v1"
 BOOT_ISSUER="${BOOTSTRAP_ISSUER:-https://idp.test}"
 BOOT_SUBJECT="${BOOTSTRAP_SUBJECT:-bootstrap}"
 MEMBER_ISSUER="${MEMBER_ISSUER:-https://idp.test}"
+
+# Authentication, in whichever mode this deployment runs. Discovered from the service, so
+# the same invocation works against a development stack and against a real deployment.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT/scripts/lib/authority-auth.sh"
+
 FARMER_OPERATOR="${FARMER_OPERATOR:-agri-farmer-operator}"
 LAND_OPERATOR="${LAND_OPERATOR:-agri-land-operator}"
 FARMER_OFFICER="${FARMER_OFFICER:-agri-farmer-officer}"
@@ -36,8 +42,11 @@ head1() { printf '\n\033[1m%s\033[0m\n' "$1" >&2; }
 # call SUBJECT METHOD PATH [BODY] -> body on stdout, status appended after a newline.
 call() {
   local subject="$1" method="$2" path="$3" body="${4:-}"
-  local args=(-sS --max-time 45 -X "$method" "$API$path"
-              -H "x-dev-issuer: $MEMBER_ISSUER" -H "x-dev-subject: $subject"
+  # $1 names a PRINCIPAL (FARMER_OPERATOR, LAND_OFFICER, BOOTSTRAP...), not a subject
+  # string: with authentication on the subject is a service account id that no script can
+  # know in advance. authority_headers turns the name into whichever the service expects.
+  authority_headers "$subject"
+  local args=(-sS --max-time 45 -X "$method" "$API$path" "${AUTH_H[@]}"
               -H 'Content-Type: application/json' -w '\n%{http_code}')
   [ -n "$body" ] && args+=(-d "$body")
   curl "${args[@]}"
@@ -64,7 +73,7 @@ curl -sS --max-time 10 "$BASE/health" >/dev/null 2>&1 \
 # By code, not by id. Ids change every time the stack is reset, and a seed script that has
 # to be edited after a reset will be run with stale ids sooner or later.
 head1 "Topology"
-AUTHORITIES="$(ok "$BOOT_SUBJECT" GET /authorities)"
+AUTHORITIES="$(ok BOOTSTRAP GET /authorities)"
 authority_id() {
   printf '%s' "$AUTHORITIES" | pyget '
 import sys, json
@@ -80,7 +89,7 @@ AUTH_LAND="$(authority_id AUTH-LAND)"
   || die "AUTH-FARMER and AUTH-LAND are not configured — run scripts/bootstrap-agriculture-authority.sh first"
 
 binding_id() {
-  ok "$BOOT_SUBJECT" GET "/authorities/$1/registries" | pyget '
+  ok BOOTSTRAP GET "/authorities/$1/registries" | pyget '
 import sys, json
 want = sys.argv[1]
 data = json.load(sys.stdin)
@@ -196,7 +205,7 @@ print(json.dumps({"record": {
     # quietly dropping the claim.
     "state": state,
 }}))' "$fid" "$nat" "$reg" "$cat" "$dist" "$st")"
-  seed "$BIND_FARMER" "$FARMER_OPERATOR" "$FARMER_OFFICER" farmerId "$fid" "$(echo "$label" | sed 's/^ *//')" "$body"
+  seed "$BIND_FARMER" FARMER_OPERATOR FARMER_OFFICER farmerId "$fid" "$(echo "$label" | sed 's/^ *//')" "$body"
 done
 
 head1 "Land records  (tenant T-AGRI-LAND)"
@@ -226,7 +235,7 @@ print(json.dumps({"record": {
     "state": state,
 }}))' "$land" "$nat" "${fid// /}" "$own" "$total" "$crop" "$cult" "$dist" "$st")" \
     || die "fixture $land is invalid — see the message above"
-  seed "$BIND_LAND" "$LAND_OPERATOR" "$LAND_OFFICER" landId "$land" "$(echo "$label" | sed 's/^ *//')" "$body"
+  seed "$BIND_LAND" LAND_OPERATOR LAND_OFFICER landId "$land" "$(echo "$label" | sed 's/^ *//')" "$body"
 done
 
 head1 "Result"
@@ -242,5 +251,5 @@ for r in rows:
 print(f'"'"'{len(rows)} record(s)  '"'"' + ", ".join(f'"'"'{k}: {v}'"'"' for k, v in sorted(states.items())))
 '
 }
-printf '  FarmerRecord  %s\n' "$(count "$BIND_FARMER" "$FARMER_OPERATOR")"
-printf '  LandRecord    %s\n' "$(count "$BIND_LAND" "$LAND_OPERATOR")"
+printf '  FarmerRecord  %s\n' "$(count "$BIND_FARMER" FARMER_OPERATOR)"
+printf '  LandRecord    %s\n' "$(count "$BIND_LAND" LAND_OPERATOR)"

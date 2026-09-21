@@ -364,10 +364,127 @@ Two consequences follow, and both are deliberate:
 - The identifier is requested, and therefore disclosed, only in journeys that check status.
   A journey that does not need it does not ask for it, and the holder does not send it.
 
+**Authentication is the other default.** `ENABLE_AUTH` defaults to *on* in the committed
+compose file, and `ENABLE_AUTH=false` is a local-development escape hatch that belongs in a
+developer's shell rather than in a file a demo host inherits. `BOOTSTRAP_ADMINS` is empty by
+default, which disables root tenant creation rather than granting it to anyone. The
+administrative API is published on `127.0.0.1` and is served by no public listener.
+
+## Bringing it up, in order
+
+The services are not independent at boot, and two of them deliberately refuse to start
+rather than start wrongly. On a stack reset the order therefore matters:
+
+1. `docker compose up -d` — the platform comes up. **The verifier and the issuer will be
+   unhealthy at this point, and that is correct.** The verifier resolves its trusted
+   issuers from the Authority Service at boot and refuses to start when it cannot; after a
+   reset, the trust policy still names the issuer identifiers of the deployment that was
+   just destroyed.
+2. `scripts/bootstrap.sh` — mints the `did:web` identifiers and registers the credential
+   schemas.
+3. `scripts/bootstrap-authority-realm.sh` — reads the realm's generated client secrets and
+   service account subjects into `deploy/.env`, and composes `BOOTSTRAP_ADMINS`.
+4. Recreate `authority-service`. It reads `BOOTSTRAP_ADMINS` and the OIDC settings **at
+   start**, so until it is recreated it will reject the bootstrap principal.
+5. `scripts/bootstrap-agriculture-authority.sh` — creates the tenants, authorities,
+   bindings, issuers, memberships, schemas and profiles, and writes the resulting wiring
+   back to `deploy/.env` and to the verifier's trust policy.
+6. Seed, then recreate `oid4vc-farmer`, `oid4vc-land` and `verifier` so they read it.
+
+**Do not wait for a fully healthy stack between 1 and 2.** The verifier cannot become
+healthy until step 5 has run, so waiting for it first is waiting for the thing the
+bootstrap is a prerequisite of. This is a deadlock a setup script falls into naturally, and
+the symptom — a crash-looping verifier reporting `HTTP 404` for an issuer identifier —
+looks like a broken Authority rather than an ordering problem.
+
+`scripts/bootstrap.sh` handles its own half of this: before recreating the verifier it
+checks whether the selected trust policy names issuers the Authority actually publishes,
+and falls back to the default policy for that boot if not, saying so. It does not edit
+`deploy/.env` — the Agriculture bootstrap rewrites the policy with live identifiers and
+recreates the verifier again at step 6. Without that check the bootstrap fails at its last
+step and blames the verifier.
+
+## Authenticating to the service
+
+Every route except the two public trust routes requires an OAuth2 bearer token. The service
+reduces a token to `(iss, sub)` and looks that pair up in its own `TenantMembership` table:
+**roles come from the service's database, not from the token.** No provider-specific claim is
+read, so Keycloak is the reference IdP rather than a dependency.
+
+### Machine principals belong in their own realm
+
+The reference deployment adds a fourth Keycloak realm, `authority`, containing no people. An
+issuing service placed in a citizen realm would present the same `iss` as a citizen's login,
+and the only thing between a citizen's token and an administrative route would be that no
+membership row happens to match its subject. A separate realm makes the separation
+structural instead of incidental.
+
+Its clients are one per principal — a bootstrap administrator, an operator and an issuing
+officer per Authority — because separation of duties that shares a credential is not
+separation of duties.
+
+### The subject cannot be written down in advance
+
+For a client-credentials token, `sub` is the service account's generated id. Memberships
+therefore cannot be seeded from a configuration file that names readable subjects: such a row
+looks correct and matches nothing, and every call then authenticates successfully and is
+refused for lack of a role. `scripts/bootstrap-authority-realm.sh` reads each client's
+service account id and secret from Keycloak and writes them to `deploy/.env`; the Agriculture
+bootstrap creates memberships for those subjects.
+
+### Pin the realm's issuer
+
+Keycloak derives `iss` from the request it received, so the same credentials yield an
+internal issuer for a service on the container network and a public one for a script coming
+through the gateway. The service compares `iss` against a single configured value, so one of
+those callers is always rejected — reported only as `Invalid token`. The `authority` realm
+therefore pins `attributes.frontendUrl`. This is safe only because no browser visits that
+realm.
+
+### Hold credentials, not a token
+
+An issuing service configured with a static bearer token stops issuing once that token
+expires, and fails with a `401` that reads like a permissions problem rather than an expiry.
+Nothing restarts and nothing alarms. The issuer is instead given a client id and secret and
+exchanges them whenever its token nears expiry, renewing early because two containers' clocks
+are not identical, and retrying once on a `401` so a revocation or clock skew is a retry
+rather than a failed issuance for a holder who is waiting.
+
+The reference realm issues **60-second** tokens deliberately: shorter than a full journey
+run, so the acceptance suite cannot pass unless renewal genuinely works.
+
+## The public boundary
+
+Two routes must answer without authentication, because a verifier holding a credential has no
+tenant and no membership:
+
+| Route | Answers |
+|---|---|
+| `GET /trust/issuers/{issuerId}` | the issuer DID, a sanitised display name, verification methods |
+| `GET /trust/credentials/{credentialId}/status` | `ACTIVE`, `SUSPENDED`, `INACTIVE` or `REVOKED`, and when that took effect |
+
+Neither exposes a tenant or Authority relationship, a profile, a record, an internal hostname
+or a KMS reference. The status route is not an existence oracle either: a credential this
+Authority did not issue gets the same answer as one it did.
+
+**The risk in publishing them is not those two routes — it is the third one nobody meant to
+publish.** The gateway therefore matches a single anchored regular expression admitting only
+those two shapes, and there is deliberately no `location /api/v1/` anywhere in it: one prefix
+line would expose tenants, records, profiles, issuance and revocation at once. The
+administrative API is published on `127.0.0.1` and is reachable through no public listener.
+
+`tests/e2e/authority-gateway-boundary.test.mjs` asserts both halves — that the trust routes
+answer and that the administrative, issuance and revocation routes do not exist through the
+same listener, including under path traversal. A `401` from those routes would itself be a
+failure: it would mean the gateway forwarded the request and only the service refused it.
+
 ## Limitations
 
 Architectural and operational limits of the arrangement as described here:
 
+- **Tokens are held per issuing service, not per holder.** The issuer authenticates as itself
+  and is entitled to issue for its tenant; a compromised issuing service can issue within that
+  tenant. This is the same blast radius as the issuing key it already holds.
 - **Trust resolution happens at startup.** Deactivating an issuer in the service does not reach
   a running verifier until it restarts. This is no worse than a configuration file, but it is
   not revocation, and should not be relied on as such.

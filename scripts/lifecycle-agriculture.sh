@@ -18,6 +18,12 @@ set -euo pipefail
 BASE="${AUTHORITY_URL:-http://localhost:3334}"
 API="$BASE/api/v1"
 MEMBER_ISSUER="${MEMBER_ISSUER:-https://idp.test}"
+
+# Authentication, in whichever mode this deployment runs. Discovered from the service, so
+# the same invocation works against a development stack and against a real deployment.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT/scripts/lib/authority-auth.sh"
+
 BOOT_SUBJECT="${BOOTSTRAP_SUBJECT:-bootstrap}"
 # Lifecycle transitions are an officer's decision, not an operator's.
 FARMER_OFFICER="${FARMER_OFFICER:-agri-farmer-officer}"
@@ -33,8 +39,11 @@ ACTION="$1"; LOCAL_ID="$2"
 
 call() {
   local subject="$1" method="$2" path="$3" body="${4:-}"
-  local args=(-sS --max-time 45 -X "$method" "$API$path"
-              -H "x-dev-issuer: $MEMBER_ISSUER" -H "x-dev-subject: $subject"
+  # $1 names a PRINCIPAL (FARMER_OPERATOR, LAND_OFFICER, BOOTSTRAP...), not a subject
+  # string: with authentication on the subject is a service account id that no script can
+  # know in advance. authority_headers turns the name into whichever the service expects.
+  authority_headers "$subject"
+  local args=(-sS --max-time 45 -X "$method" "$API$path" "${AUTH_H[@]}"
               -H 'Content-Type: application/json' -w '\n%{http_code}')
   [ -n "$body" ] && args+=(-d "$body")
   curl "${args[@]}"
@@ -52,8 +61,8 @@ ok() {
 # Which registry a local id belongs to is readable from the id itself, and guessing wrong
 # would suspend the wrong record. FRM- is a farmer, LAND- is a parcel.
 case "$LOCAL_ID" in
-  FRM-*)  AUTH_CODE=AUTH-FARMER; ENTITY=FarmerRecord; FIELD=farmerId; OFFICER="$FARMER_OFFICER" ;;
-  LAND-*) AUTH_CODE=AUTH-LAND;   ENTITY=LandRecord;   FIELD=landId;   OFFICER="$LAND_OFFICER" ;;
+  FRM-*)  AUTH_CODE=AUTH-FARMER; ENTITY=FarmerRecord; FIELD=farmerId; OFFICER=FARMER_OFFICER ;;
+  LAND-*) AUTH_CODE=AUTH-LAND;   ENTITY=LandRecord;   FIELD=landId;   OFFICER=LAND_OFFICER ;;
   *) die "cannot tell which registry \"$LOCAL_ID\" belongs to — expected FRM-… or LAND-…" ;;
 esac
 
@@ -65,7 +74,7 @@ case "$ACTION" in
   *) die "unknown action \"$ACTION\"" ;;
 esac
 
-AUTHORITY_ID="$(ok "$BOOT_SUBJECT" GET /authorities | python3 -c '
+AUTHORITY_ID="$(ok BOOTSTRAP GET /authorities | python3 -c '
 import sys, json
 want = sys.argv[1]
 data = json.load(sys.stdin)
@@ -74,7 +83,7 @@ print(next((a["id"] for a in items if a.get("code") == want), ""))
 ' "$AUTH_CODE")"
 [ -n "$AUTHORITY_ID" ] || die "$AUTH_CODE is not configured — run the bootstrap first"
 
-BINDING="$(ok "$BOOT_SUBJECT" GET "/authorities/$AUTHORITY_ID/registries" | python3 -c '
+BINDING="$(ok BOOTSTRAP GET "/authorities/$AUTHORITY_ID/registries" | python3 -c '
 import sys, json
 want = sys.argv[1]
 data = json.load(sys.stdin)

@@ -3,8 +3,8 @@
 Everything needed to reconstruct the exact image this showcase runs, from source
 anyone can fetch, and to check that what you built is what we ran.
 
-The image is `sunbird-rc-oid4vc-service:v2.1.0-authcode.4b36d54d`. Its tag suffix
-is the source commit it was built from — patch `0008` below.
+The image is `sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464`. Its tag suffix
+is the source commit it was built from — patch `0009` below.
 
 ## Why patches and not a branch
 
@@ -44,10 +44,10 @@ touch.
 
 That commit is reachable from `origin/main` upstream, so it needs nothing from us.
 
-## The eight patches
+## The nine patches
 
 Applied in order. Every one touches only `services/oid4vc-service/`; together they
-are 27 files, +4449 / −42.
+are 29 files, +5041 / −42.
 
 | # | Commit | What it does |
 |---|---|---|
@@ -59,6 +59,7 @@ are 27 files, +4449 / −42.
 | **0006** | **`1147b904`** | **refuses another issuer's credential type, and refuses an unrequested disclosure** — review items 2 and 4 (findings 16, 17) |
 | **0007** | **`c8beec27`** | **fixes the wiring that made the disclosure check inert on the keyed `vp_token` path** — the path every SD-JWT presentation here takes |
 | **0008** | **`4b36d54d`** | **issues through a Sunbird RC Authority Service and carries `authorityCredentialId` into the SD-JWT**, so a presented credential can be resolved against Authority lifecycle and revocation status |
+| **0009** | **`714a8464`** | **acquires Authority tokens by client credentials and renews them before they expire**, so issuance does not stop silently once a static token ages out |
 
 The two in bold are the ones the Education review asked for. The five before them
 are the pre-existing port, unchanged by this review, and are included because the
@@ -102,8 +103,9 @@ cd deploy && docker compose -f docker-compose.yml -f docker-compose.tls.yml up -
 cd services/oid4vc-service && npm ci && npx jest
 ```
 
-**169 tests, 16 suites, 0 failures** — the 154 below plus 15 for patch `0008`, whose
-suite is `src/claims/authority.claim-source.spec.ts`. The 154-test run is captured
+**192 tests, 17 suites, 0 failures** — the 154 below, 19 for patch `0008` and its
+follow-up (`src/claims/authority.claim-source.spec.ts`), and 19 for patch `0009`
+(`src/claims/authority-token.spec.ts`). The 154-test run is captured
 verbatim at
 [`../../docs/evidence/03-education/runs/test-fork.txt`](../../docs/evidence/03-education/runs/test-fork.txt).
 The two review fixes are covered by `src/oid4vci/own-credentials-issuance.spec.ts`
@@ -130,15 +132,17 @@ true if you happen to reproduce the committer too.
 
 Verified again on 20 September 2026, with patch `0008` in the series, by applying it
 to a pristine `v2.1.0` clone and comparing `HEAD^{tree}` against the authoring
-checkout's branch tip: **identical** (`2b73272d`). The commit ids differed, as this
+checkout's branch tip: **identical** (`2b73272d`). Patch `0009` was added on
+21 September 2026; the authoring checkout's tree is now `6659f10a`. The commit ids differed, as this
 section explains they must. `scripts/verify.sh` re-checks the cheap half of this on every run —
 that the series is present, that its length matches, and that the LAST patch's
 commit is the one `deploy/docker-compose.yml` pins.
 
 ## Authorship, here versus in the upstream pull request
 
-These patch files preserve authorship exactly as committed: `0001`–`0005` and `0008`
-carry `palla.kartheekreddy@gmail.com`, `0006`–`0007` carry `kartheek@sanketika.in`.
+These patch files preserve authorship exactly as committed: `0001`–`0005`, `0008`
+and `0009` carry `palla.kartheekreddy@gmail.com`, `0006`–`0007` carry
+`kartheek@sanketika.in`.
 They are left as authored because the image tag and the whole evidence chain are
 pinned to this exact series, and because a `From:` header cannot carry a name
 without an address — `git am` refuses one with *"empty ident name (for <>) not
