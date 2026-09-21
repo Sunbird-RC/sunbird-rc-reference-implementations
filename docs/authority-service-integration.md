@@ -199,10 +199,48 @@ Two things the integrating application must get right:
   issuer's credentials as untrusted, which presents as a credential fault a long way from the
   cause.
 
-### 3. Credential status becomes a real check
+### 3. Two credentials, and they are not the same credential
+
+This is the part most likely to be misread, so it is worth stating before the mechanism.
+
+| | |
+| --- | --- |
+| **Authority credential** | the authoritative status and provenance anchor |
+| **Wallet credential** | the holder-bound presentation credential |
+
+The Authority Service issues a JSON-LD credential when a record is approved. It never leaves
+the Authority, no wallet holds it, and no verifier sees it. It is what
+`GET /trust/credentials/{id}/status` answers about, and it is the thing whose standing can
+change after issuance.
+
+The wallet holds an SD-JWT, issued through OpenID4VCI and bound to a key the wallet
+generated. That is what a holder presents and what a verifier checks signatures on.
+
+Neither replaces the other. The wallet credential proves who is presenting; the Authority
+credential is what its current standing is a statement about. Treating them as one thing
+leads to two mistakes in opposite directions: expecting a wallet to hold something a
+verifier can ask an Authority to re-evaluate, or assuming a signature that verified once
+means the record behind it is still good.
+
+They are tied together by a single claim. The OID4VC issuer asks the Authority Service to
+issue, server to server, and carries the resulting identifier into the SD-JWT as
+`authorityCredentialId` — technical linkage, not a business claim, and deliberately not part
+of any domain vocabulary. It comes only from the Authority's response: the claim source is
+the one component in the issuance path that talks to the Authority, and it is called with a
+subject read from a validated token, so nothing a wallet, holder or caller sends can reach
+or override it. A linkage a caller could influence would let a credential nominate its own
+status anchor, which is the same as having no status check at all.
+
+Issuance is idempotent on the profile, the record and the subject, so a wallet that retries
+gets the same anchor rather than minting a second one. That is what keeps the linkage one to
+one, and auditable in both directions.
+
+### 4. Credential status becomes a real check
 
 Sunbird RC's OID4VP verifier proves a signature is valid. It does not answer whether the
-issuer is one you accept, nor whether the credential is still good.
+issuer is one you accept, nor whether the credential is still good — its `revocation` check
+reports OK without consulting anything, which is worse than no check because it reads like
+one.
 
 `GET /api/v1/trust/credentials/{credentialId}/status` gives a verifier a public answer derived
 from both the issuance state and the source record's lifecycle:
@@ -223,7 +261,7 @@ This is the mechanism that makes "the underlying record was suspended" visible t
 party that has no access to the record — and it is why the managed-registry boundary and the
 public status route are two halves of one design.
 
-### 4. Claim mapping is a closed vocabulary
+### 5. Claim mapping is a closed vocabulary
 
 A credential claim is produced in one of three ways, and the set does not grow at
 configuration time:
@@ -245,7 +283,7 @@ to add a named derivation to the service, or to compute it in the relying party 
 third weakens the guarantee, because the value is then asserted by the verifier rather than by
 the issuer.
 
-### 5. Correlation across authorities
+### 6. Correlation across authorities
 
 Two credentials from organisations that have never heard of each other can only be correlated
 if they carry a common handle. A **bare local identifier will not do**: two jurisdictions may
@@ -309,6 +347,22 @@ silently fails to match — nothing errors, and the two credentials simply stop 
 - **Records reach search indexes asynchronously.** A record created a moment ago is really
   there and really not findable yet. Poll to a bound rather than sleeping for a fixed period,
   which encodes an idle machine's timing and then reports load instead of behaviour.
+
+## What is on by default
+
+Status checking is the **default** for the Agriculture journey, not an option. A lender
+deciding on a credential whose source may since have been suspended is the failure this
+arrangement exists to remove, and a check that ships off by default is a check most
+deployments never turn on.
+
+Two consequences follow, and both are deliberate:
+
+- A credential carrying no linkage identifier is **refused**, not waved through. "Nothing to
+  check" is unknown standing, not good standing. A credential minted outside the Authority
+  issuance path — for example through an unauthenticated offer endpoint with caller-supplied
+  claims — cannot fund a decision, however well-formed it is.
+- The identifier is requested, and therefore disclosed, only in journeys that check status.
+  A journey that does not need it does not ask for it, and the holder does not send it.
 
 ## Limitations
 
