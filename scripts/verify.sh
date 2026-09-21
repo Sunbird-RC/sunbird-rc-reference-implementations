@@ -273,7 +273,10 @@ if [ -d "$FORK/.git" ]; then
   # request did not ask for, rather than dropping it downstream. The seventh
   # fixes the wiring that made the second of those inert on the keyed vp_token
   # path — see the commit, which explains why the unit tests missed it.
-  check "port branch is 7 commits off v2.1.0 (port, alg, narrowing, issuer display, own credentials, own issuance + disclosure, wiring)" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "7" ]'
+  # Counted from the patch series rather than restated as a literal. The literal was
+  # wrong before this iteration — it said 7 while the branch already carried 8 — and a
+  # number kept in two places drifts silently the first time a patch is added.
+  check "the port branch has one commit per committed patch" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "$(ls patches/oid4vc-service/000*.patch | wc -l | tr -d " ")" ]'
   # The tag compose asks for, whatever it currently is: reading it from compose
   # rather than repeating it here is what stops this check drifting into
   # asserting a build nothing uses.
@@ -306,7 +309,10 @@ sys.exit(0 if sha and sha.startswith(pinned) else 1)"'
   check "the patch series records the shared upstream base" 'grep -q "2ade66c24afc2d5da7d05121e9cbbd082ba83cd1" patches/oid4vc-service/README.md'
   # Committed patches are source, and source is where a credential gets pasted by
   # accident. The repo-wide secret backstop does not know this directory exists.
-  gone "no private key or credential value in the patches" 'grep -rqE "BEGIN [A-Z ]*PRIVATE KEY|(password|secret|api[_-]?key)[\"'"'"' ]*[:=][\"'"'"' ]*[A-Za-z0-9+/]{12,}" patches/oid4vc-service/'
+  # The value must be a QUOTED literal. Unquoted, the pattern matches ordinary source
+  # such as `client_secret: clientSecret` — a variable reference, not a pasted
+  # credential — and a backstop that cries wolf is one people start ignoring.
+  gone "no private key or credential value in the patches" 'grep -rqE "BEGIN [A-Z ]*PRIVATE KEY|(password|secret|api[_-]?key)[\"'"'"' ]*[:=][[:space:]]*[\"'"'"'][A-Za-z0-9+/]{12,}" patches/oid4vc-service/'
   check "the ported build is pinned by source commit in its tag" 'grep -qE "sunbird-rc-oid4vc-service:v2.1.0-authcode\.[0-9a-f]{7,}" deploy/docker-compose.yml'
 else
   skip "fork checks" "no checkout at $FORK — set SUNBIRD_RC_CORE_PATH"
