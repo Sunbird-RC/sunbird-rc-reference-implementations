@@ -207,6 +207,13 @@ export const trustedDidEntities = [
     url: 'https://legoland.animo.id',
     demo: true,
   },
+  // EVERY did:web pinned below is minted per deployment and goes stale on any
+  // re-bootstrap. When they do, the prefix lookup silently falls through to the
+  // host-scoped fallback at the end of this list — the party is still named, so
+  // nothing looks broken, but it takes the fallback's logo. Re-pin from
+  // deploy/.env (VERIFIER_DID, BANK_VERIFIER_DID, UNIVERSITY_VERIFIER_DID,
+  // EMPLOYER_VERIFIER_DID) after any re-provision; scripts/verify.sh checks it.
+  //
   // Sunbird RC Age showcase — the age-restricted service that asks for `ageOver18`
   // (`services/verifier-web` and the `Age Check` mobile app share one verifier DID).
   //
@@ -218,8 +225,8 @@ export const trustedDidEntities = [
   // the organisation instead of reverting to "Organization not verified", without
   // needing a wallet rebuild. Order matters: the lookup takes the first match.
   {
-    entityId: 'did:web:135.235.192.9.sslip.io:dae56d5f-3b42-437c-9c72-675d7b4e006d',
-    did: 'did:web:135.235.192.9.sslip.io:dae56d5f-3b42-437c-9c72-675d7b4e006d',
+    entityId: 'did:web:135.235.192.9.sslip.io:dc9a89ef-23b1-42f3-9b33-b7d36859d388',
+    did: 'did:web:135.235.192.9.sslip.io:dc9a89ef-23b1-42f3-9b33-b7d36859d388',
     logoUri: 'https://135.235.192.9.sslip.io/assets/logos/age-check.png',
     name: 'Age Check',
     url: 'https://135.235.192.9.sslip.io/verifier/',
@@ -232,8 +239,8 @@ export const trustedDidEntities = [
   // "Age Check" — which is exactly the defect this entry and the separate
   // BANK_VERIFIER_DID exist to fix.
   {
-    entityId: 'did:web:135.235.192.9.sslip.io:bec7ef08-3914-4260-a7a5-195426258c82',
-    did: 'did:web:135.235.192.9.sslip.io:bec7ef08-3914-4260-a7a5-195426258c82',
+    entityId: 'did:web:135.235.192.9.sslip.io:b8e03eaa-7978-462b-8b84-4b35ab2b6e67',
+    did: 'did:web:135.235.192.9.sslip.io:b8e03eaa-7978-462b-8b84-4b35ab2b6e67',
     logoUri: 'https://135.235.192.9.sslip.io/assets/logos/gramin-bank.png',
     name: 'Gramin Bank',
     url: 'https://135.235.192.9.sslip.io/bank/',
@@ -250,16 +257,16 @@ export const trustedDidEntities = [
   // relying parties in one sitting, so a wrong name here is visible in the demo
   // itself: the employer's consent screen would read "University Admissions".
   {
-    entityId: 'did:web:135.235.192.9.sslip.io:4f877f7a-512a-420f-80ba-1b919b976ed9',
-    did: 'did:web:135.235.192.9.sslip.io:4f877f7a-512a-420f-80ba-1b919b976ed9',
+    entityId: 'did:web:135.235.192.9.sslip.io:ec8d783e-f2c4-4b53-b445-c7678db566fe',
+    did: 'did:web:135.235.192.9.sslip.io:ec8d783e-f2c4-4b53-b445-c7678db566fe',
     logoUri: 'https://135.235.192.9.sslip.io/assets/logos/state-university.png',
     name: 'University Admissions',
     url: 'https://135.235.192.9.sslip.io/admissions/',
     demo: true,
   },
   {
-    entityId: 'did:web:135.235.192.9.sslip.io:78d557eb-607b-4e67-ab84-50c76ac33093',
-    did: 'did:web:135.235.192.9.sslip.io:78d557eb-607b-4e67-ab84-50c76ac33093',
+    entityId: 'did:web:135.235.192.9.sslip.io:cb7b23ce-8426-4f33-bc6d-f23f8f46c388',
+    did: 'did:web:135.235.192.9.sslip.io:cb7b23ce-8426-4f33-bc6d-f23f8f46c388',
     logoUri: 'https://135.235.192.9.sslip.io/assets/logos/employer.png',
     name: 'Employer',
     url: 'https://135.235.192.9.sslip.io/employer/',
@@ -268,7 +275,12 @@ export const trustedDidEntities = [
   {
     entityId: 'did:web:135.235.192.9.sslip.io',
     did: 'did:web:135.235.192.9.sslip.io',
-    logoUri: 'https://135.235.192.9.sslip.io/assets/logos/age-check.png',
+    // A NEUTRAL mark, and it must stay neutral. This read `age-check.png` — the
+    // Age demo's 18+ roundel — so any party whose exact pin had gone stale
+    // borrowed it, and a farmer applying for crop credit was shown an 18+ badge
+    // on the bank's consent screen. The name was corrected when this entry was
+    // last touched; the logo was missed, which is the harder half to notice.
+    logoUri: 'https://135.235.192.9.sslip.io/assets/logos/showcase-deployment.png',
     // Names the DEPLOYMENT, not a party. Two verifiers now sign from this host —
     // the age-restricted service and the bank — so a party name here would be
     // wrong for one of them, and it was: this entry read 'Age Check' and would

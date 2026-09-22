@@ -451,7 +451,12 @@ export default function App() {
             {!!result?.loan && !!result?.disclosed && (
               <View style={styles.calc}>
                 <Calc label="Crop" value={result.disclosed.cropType} />
-                <Calc label="Cultivated area" value={`${result.disclosed.cultivatedAreaAcres} acres`} />
+                {/* `cultivatedArea`, not `cultivatedAreaAcres`. The service has only ever
+                    emitted the former (see services/bank-web/app.js, which renders the same
+                    number correctly); the latter read `undefined`, and React renders that as
+                    the string "undefined" rather than failing, so the verdict card showed
+                    "undefined acres" on camera. */}
+                <Calc label="Cultivated area" value={`${result.disclosed.cultivatedArea} acres`} />
                 <Calc
                   label="Applicable rate"
                   value={`${result.loan.ratePerAcreFormatted} per acre`}
