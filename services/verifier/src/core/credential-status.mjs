@@ -12,6 +12,13 @@
 // configured Authority Service and returns a decision.
 
 /** Statuses a business rule may proceed on. Everything else stops it. */
+// What each unusable status is a statement ABOUT. Wording the bank shows the applicant.
+const REASON = {
+  SUSPENDED: 'source record SUSPENDED',
+  INACTIVE: 'source record INACTIVE',
+  REVOKED: 'own status REVOKED',
+};
+
 const USABLE = new Set(['ACTIVE']);
 
 /**
@@ -68,7 +75,14 @@ export function credentialStatusChecker({ fetchImpl = fetch, timeoutMs = 4000 } 
       if (!USABLE.has(status)) {
         // Named rather than collapsed to "not valid": SUSPENDED and REVOKED mean different
         // things to a person reading a refusal, and one of them may be temporary.
-        return { ok: false, reason: `the issuing Authority reports this credential ${status}`, status };
+        //
+        // And they are statements about DIFFERENT OBJECTS, which the earlier wording
+        // ("this credential SUSPENDED") got wrong. Revocation is done to the credential.
+        // Suspension and inactivation are done to the RECORD the credential was issued
+        // from — the credential itself is untouched and still verifies, which is the
+        // whole point of the journey. Saying "this credential suspended" invites the
+        // reader to think the credential was altered, and it was not.
+        return { ok: false, reason: `the issuing Authority reports this credential's ${REASON[status] ?? `status ${status}`}`, status };
       }
       return { ok: true, status, effectiveAt: body?.effectiveAt };
     },

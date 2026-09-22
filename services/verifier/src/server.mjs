@@ -304,6 +304,15 @@ const USE_CASES = {
         landVct: LAND_VCT,
         statusClaim: AGRICULTURE_STATUS_CLAIM,
       }),
+    // The purpose the wallet shows the farmer BEFORE they consent. Without it Paradym
+    // renders "No information was provided on the purpose of the data request. Be
+    // cautious" — which is accurate, and is exactly the wrong thing to show someone
+    // being asked to share credentials for a loan they came to apply for. It travels
+    // in `credential_sets[].purpose`; see core/dcql.mjs for why not client_metadata.
+    //
+    // Worded as the applicant's own goal, not the bank's internal one: they are
+    // applying for crop credit, not "undergoing eligibility assessment".
+    purpose: () => 'Applying for crop credit',
     describe: () => 'requesting the farmer and land credentials',
     requestedClaims: () => agricultureRequestedClaims(),
     decide: (verified) => decideFarmCredit({ farmer: verified.farmer, land: verified.land }, cropPolicy),
