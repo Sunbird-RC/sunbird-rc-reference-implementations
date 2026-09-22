@@ -275,6 +275,38 @@
           "NAT-90077002"
         ]
       }
+    },
+    {
+      "username": "farmer.film",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Meera",
+      "lastName": "Kaur",
+      "email": "farmer-film@farmers.invalid",
+      "realmRoles": [
+        "default-roles-agriculture"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-90077003"
+        ]
+      }
+    },
+    {
+      "username": "farmer.film2",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Anjali",
+      "lastName": "Kaur",
+      "email": "farmer-film2@farmers.invalid",
+      "realmRoles": [
+        "default-roles-agriculture"
+      ],
+      "attributes": {
+        "nationalId": [
+          "NAT-90077004"
+        ]
+      }
     }
   ]
 }

@@ -173,6 +173,16 @@ except Exception:
 # record: run both and the demo users' records sit outside the Authority Service, where no
 # credential can be issued through it and no status can be asked about them.
 #
+# FRM-PB-0118 is reserved for FILMING, and it exists for the same reason the two terminal
+# rows do: the showcase ends by revoking its subject's credential, and issuance is
+# idempotent, so that subject can never hold a valid credential again on this deployment.
+# The 21 September film spent FRM-PB-0117 that way. A retake needs a subject that has not
+# been spent, and taking one of the eligible fixtures would spend a row the acceptance
+# suite depends on.
+#
+# Its data MIRRORS FRM-PB-0117 — Punjab, wheat, two cultivated acres — so a retake needs no
+# narration changes: the bank still offers eighty thousand rupees at forty thousand an acre.
+#
 # `state` is the jurisdiction the canonical reference is qualified by, and is per fixture
 # rather than one value for the file, so two farmers in different states produce references
 # that cannot collide even if their local numbers ever did.
@@ -185,6 +195,8 @@ NAT-90066021|FRM-KA-0088|false|Small     |Mysuru   |Karnataka  |LAND-MYS-830611|
 NAT-90055010|FRM-KA-0072|true |Small     |Mysuru   |Karnataka  |-              |-       |-  |-        |-   |fails safely: farmer with no land record
 NAT-90077001|FRM-KA-0901|true |Small     |Mysuru   |Karnataka  |LAND-MYS-900101|ACTIVE  |6  |PADDY    |4   |reserved: the inactivation case
 NAT-90077002|FRM-KA-0902|true |Small     |Mysuru   |Karnataka  |LAND-MYS-900102|ACTIVE  |6  |PADDY    |4   |reserved: the revocation case
+NAT-90077003|FRM-PB-0118|true |SemiMedium|Ludhiana |Punjab     |LAND-LDH-450923|ACTIVE  |4  |WHEAT    |2   |reserved: the film subject
+NAT-90077004|FRM-PB-0119|true |SemiMedium|Ludhiana |Punjab     |LAND-LDH-450924|ACTIVE  |4  |WHEAT    |2   |reserved: the film subject, take two
 '
 
 head1 "Farmer records  (tenant T-AGRI-FARMER)"
