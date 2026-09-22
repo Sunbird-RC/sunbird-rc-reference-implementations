@@ -64,10 +64,36 @@ fi
 [ -x "$ANDROID_HOME/platform-tools/adb" ] || die "no platform-tools under $ANDROID_HOME"
 
 # Empty hides the issuer directory entirely — the screen the demo opens on.
+ISSUER_FROM="--issuer"
 if [ -z "$ISSUER" ] && [ -f deploy/.env ]; then
   ISSUER="$(grep '^PUBLIC_URL=' deploy/.env | cut -d= -f2- || true)"
+  ISSUER_FROM="deploy/.env PUBLIC_URL on THIS machine"
 fi
 [ -n "$ISSUER" ] || die "no issuer URL: pass --issuer, or run scripts/bootstrap.sh so deploy/.env has PUBLIC_URL"
+
+# A LOOPBACK issuer cannot be reached from a phone, and nothing downstream says so: the
+# build succeeds, the APK installs, and the issuer directory is simply empty because every
+# metadata fetch failed. Building for a remote deployment on a machine that also runs a
+# local stack takes that fallback silently, which is exactly how a wallet got shipped to a
+# device pointing at http://localhost.
+case "$ISSUER" in
+  *localhost*|*127.0.0.1*|*0.0.0.0*|*'[::1]'*)
+    die "the issuer url is a loopback address, taken from $ISSUER_FROM:
+    $ISSUER
+  A phone cannot reach it, so the issuer directory would be empty on the device with
+  no error anywhere. Pass the deployment's url instead, one base per issuer:
+    ./scripts/build-wallet.sh --issuer 'https://host/farmer,https://host/land'" ;;
+esac
+
+# Each entry is fetched at <url>/.well-known/openid-credential-issuer, so a deployment
+# serving several issuers needs one base PER ISSUER, not just its host. PUBLIC_URL alone
+# reaches only whichever issuer is mounted at the root.
+case "$ISSUER" in
+  *,*) : ;;
+  *) printf '  note: one issuer base only (%s). A multi-issuer deployment needs a
+        comma-separated list, e.g. https://host/farmer,https://host/land
+' "$ISSUER" >&2 ;;
+esac
 
 export JAVA_HOME ANDROID_HOME
 export PATH="$JAVA_HOME/bin:$PATH"

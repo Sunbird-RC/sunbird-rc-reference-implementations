@@ -476,6 +476,38 @@ for u in citizen.meera citizen.arjun citizen.nikhil citizen.sana citizen.unmappe
   fi
 done
 
+# Every realm whose users carry an attribute has to ALLOW unmanaged attributes, and
+# none of them does by default.
+#
+# Keycloak's declarative user profile defaults unmanagedAttributePolicy to DISABLED, and
+# realm IMPORT bypasses the policy while the admin API does not. So the seeded users have
+# their citizenId/nationalId and anything added later silently loses it — no error, no
+# warning, the attribute is simply dropped. Issuance resolves a holder's claims BY that
+# attribute, so such a user gets a credential with no link to its source record, and the
+# first sign of it is a presentation the verifier cannot satisfy.
+#
+# One PUT per realm, and it is idempotent.
+for r in age agriculture education; do
+  if kcadm get users/profile -r "$r" > /tmp/kc-profile-$r.json 2>/dev/null \
+     && python3 -c '
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+if d.get("unmanagedAttributePolicy") == "ENABLED":
+    sys.exit(3)                      # already set; nothing to do
+d["unmanagedAttributePolicy"] = "ENABLED"
+json.dump(d, open(p, "w"))
+' "/tmp/kc-profile-$r.json"; then
+    if "${COMPOSE[@]}" exec -T keycloak sh -c 'cat > /tmp/kc-profile-in.json' < "/tmp/kc-profile-$r.json" \
+       && kcadm update users/profile -r "$r" -f /tmp/kc-profile-in.json >/dev/null 2>&1; then
+      green "$r allows unmanaged user attributes"
+    else
+      warn "could not allow unmanaged user attributes on $r"
+    fi
+  fi
+  rm -f "/tmp/kc-profile-$r.json"
+done
+
 # Iteration 02's farmers, in their own realm. The same generated password: it is
 # a demo secret that lives only in deploy/.env, and a second one would be a
 # second thing to keep out of Git for no gain.
@@ -484,9 +516,11 @@ done
 # INACTIVE -> ACTIVE, and idempotent issuance means a revoked credential stays the one
 # that subject gets — so spending a shared fixture on either would spend it for the
 # life of the deployment.
+# farmer.film is reserved for the same reason: the showcase ends on a revocation, so
+# each take spends its subject. See scripts/seed-agriculture-authority.sh.
 for u in farmer.ravi farmer.lakshmi farmer.suresh farmer.geeta farmer.unregistered \
          farmer.noland farmer.norecord farmer.unmapped \
-         farmer.terminal.inactive farmer.terminal.revoked; do
+         farmer.terminal.inactive farmer.terminal.revoked farmer.film farmer.film2; do
   if kcadm set-password -r agriculture --username "$u" --new-password "$CITIZEN_PASSWORD" >/dev/null 2>&1; then
     green "$u ready"
   else
