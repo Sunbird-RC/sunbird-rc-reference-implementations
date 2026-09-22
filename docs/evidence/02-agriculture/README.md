@@ -4,7 +4,8 @@
 
 | | Shows | Status |
 |---|---|---|
-| [**Authority-backed journey, 21 September**](Agriculture-Authority-Showcase-21Sep.mp4) | Two authorities, wallet-held credentials, a holder-bound presentation, **live public status**, and the same credential accepted → refused on source suspension → accepted on reinstatement → refused on revocation | Filmed and delivered · 5 min 45 s |
+| [**Authority-backed journey, 22 September**](Agriculture-Authority-Showcase-22Sep.mp4) | Two authorities, wallet-held credentials, a holder-bound presentation, **live public status**, and the same credential accepted → refused on source suspension → accepted on reinstatement → refused on revocation. Shot through the installed **Farm Credit** verifier rather than a browser | Filmed and delivered · 4 min 17 s |
+| [Authority-backed journey, 21 September](Agriculture-Authority-Showcase-21Sep.mp4) | **Superseded by the 22 September cut.** Same story, but its consent screen reported that no purpose was supplied and warned the holder, and its refusals did not distinguish the source record from the credential. Both were product defects, fixed at source; the footage predates the fix | Superseded |
 | [Rural credit showcase, 31 August](Agriculture-Rural-Credit-Showcase-31Aug.mp4) | Two registries, consented presentation, eligible / ineligible / mismatched outcomes | Filmed and delivered |
 
 **The 31 August film predates the Authority Service.** There is no status check in it,
