@@ -1,0 +1,693 @@
+From 714a8464ab7811244b06ca43ae5cb8589bfe20f0 Mon Sep 17 00:00:00 2001
+From: Kartheek Palla <palla.kartheekreddy@gmail.com>
+Date: Mon, 21 Sep 2026 12:59:47 +0530
+Subject: [PATCH] feat(oid4vc-service): acquire Authority tokens, and renew
+ them before they expire
+
+The Authority claim source read a bearer token from AUTHORITY_TOKEN and sent it
+forever. A token in an environment variable cannot outlive its own expiry, so a
+deployment configured on Monday stops issuing on Monday plus the token lifetime.
+It fails as a 401 from the Authority Service, which reads like a permissions
+problem rather than an expiry: nothing restarts, nothing alarms, and issuance is
+simply gone.
+
+The issuing service now holds CREDENTIALS rather than a token, and exchanges them
+for a fresh one whenever the current token nears expiry.
+
+  - Renewal happens early, by ten seconds or a third of a short lifetime,
+    because a token used at the instant it expires is refused by the time it
+    arrives and two containers' clocks are not identical.
+  - Providers are shared per (token endpoint, client). ClaimSourceFactory builds
+    a claim source PER REQUEST, so a provider held as an instance field is an
+    empty cache every time: the cache would never once be read and every
+    issuance would mint fresh tokens. Keyed rather than global, so two officers
+    keep two tokens.
+  - Concurrent callers share one exchange. A wallet collecting two credentials
+    would otherwise turn a single expiry into a burst of identical requests.
+  - A 401 or 403 from the Authority discards the token and retries once, so a
+    revocation or a clock disagreement beyond the margin is a retry rather than
+    a failed issuance for a holder who is standing there waiting.
+  - A partly configured client is refused at construction. Falling back to an
+    anonymous call would fail at the Authority on every issuance and point an
+    operator at permissions instead of at the missing secret.
+
+AUTHORITY_TOKEN is still honoured when no client credentials are set, for a
+deployment whose Authority is fronted by something other than OAuth2.
+---
+ .../src/claims/authority-token.spec.ts        | 222 ++++++++++++++++++
+ .../src/claims/authority-token.ts             | 194 +++++++++++++++
+ .../src/claims/authority.claim-source.spec.ts |  77 ++++++
+ .../src/claims/authority.claim-source.ts      |  35 ++-
+ .../src/config/configuration.ts               |  20 +-
+ 5 files changed, 542 insertions(+), 6 deletions(-)
+ create mode 100644 services/oid4vc-service/src/claims/authority-token.spec.ts
+ create mode 100644 services/oid4vc-service/src/claims/authority-token.ts
+
+diff --git a/services/oid4vc-service/src/claims/authority-token.spec.ts b/services/oid4vc-service/src/claims/authority-token.spec.ts
+new file mode 100644
+index 00000000..e7343c2e
+--- /dev/null
++++ b/services/oid4vc-service/src/claims/authority-token.spec.ts
+@@ -0,0 +1,222 @@
++import {
++  AuthorityTokenProvider,
++  authorityTokenProvider,
++  resetAuthorityTokenProviders,
++} from './authority-token';
++
++/**
++ * Token acquisition for the Authority Service.
++ *
++ * The property under test is not "a token is obtained" — it is that the issuing service
++ * keeps working AFTER the first token expires. A static token passes any test that runs
++ * inside its lifetime, which is exactly why the gap survived review the first time.
++ */
++
++const CREDENTIALS = {
++  tokenUrl: 'http://keycloak:8080/auth/realms/authority/protocol/openid-connect/token',
++  clientId: 'agri-farmer-officer',
++  clientSecret: 's3cret',
++};
++
++/** An IdP that mints a distinguishable token each time and counts the exchanges. */
++function idp(overrides: { expiresIn?: number; fail?: number; body?: any } = {}) {
++  let issued = 0;
++  const impl = jest.fn(async (_url: string, init: any) => {
++    issued += 1;
++    if (overrides.fail && issued <= overrides.fail) {
++      return {
++        ok: false,
++        status: 401,
++        text: async () => '{"error":"invalid_client"}',
++        json: async () => ({ error: 'invalid_client' }),
++      };
++    }
++    const body =
++      overrides.body ??
++      { access_token: `token-${issued}`, expires_in: overrides.expiresIn ?? 60 };
++    return { ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) };
++  });
++  return { impl, calls: () => issued, lastInit: () => impl.mock.calls.at(-1)?.[1] };
++}
++
++describe('AuthorityTokenProvider', () => {
++  let spy: jest.SpyInstance;
++  beforeEach(() => resetAuthorityTokenProviders());
++  afterEach(() => {
++    spy?.mockRestore();
++    jest.useRealTimers();
++  });
++
++  const withIdp = (o = {}) => {
++    const i = idp(o);
++    spy = jest.spyOn(global, 'fetch' as any).mockImplementation(i.impl as any);
++    return i;
++  };
++
++  it('exchanges client credentials for a token', async () => {
++    const i = withIdp();
++    const provider = new AuthorityTokenProvider(CREDENTIALS);
++    expect(await provider.get()).toBe('token-1');
++
++    const body = String(i.lastInit().body);
++    expect(body).toContain('grant_type=client_credentials');
++    expect(body).toContain('client_id=agri-farmer-officer');
++  });
++
++  it('reuses the token while it is still valid', async () => {
++    const i = withIdp({ expiresIn: 300 });
++    const provider = new AuthorityTokenProvider(CREDENTIALS);
++    await provider.get();
++    await provider.get();
++    await provider.get();
++    expect(i.calls()).toBe(1);
++  });
++
++  it('re-acquires once the token has aged out', async () => {
++    // The whole point. A provider that cannot do this is a static token with extra steps.
++    const i = withIdp({ expiresIn: 60 });
++    const provider = new AuthorityTokenProvider(CREDENTIALS);
++    expect(await provider.get()).toBe('token-1');
++
++    // 55s later the 60s token is inside its renewal margin.
++    const realNow = Date.now;
++    Date.now = () => realNow() + 55_000;
++    try {
++      expect(await provider.get()).toBe('token-2');
++      expect(i.calls()).toBe(2);
++    } finally {
++      Date.now = realNow;
++    }
++  });
++
++  it('renews early, so a token is never used at the instant it expires', async () => {
++    const i = withIdp({ expiresIn: 60 });
++    const provider = new AuthorityTokenProvider(CREDENTIALS);
++    await provider.get();
++    const realNow = Date.now;
++    // 51s in: past the 50s renewal point, still 9s of nominal life left.
++    Date.now = () => realNow() + 51_000;
++    try {
++      expect(await provider.get()).toBe('token-2');
++    } finally {
++      Date.now = realNow;
++    }
++    expect(i.calls()).toBe(2);
++  });
++
++  it('keeps a usable window even for a very short-lived token', async () => {
++    // A 6-second token must not be treated as already dead by a fixed 10-second margin.
++    const i = withIdp({ expiresIn: 6 });
++    const provider = new AuthorityTokenProvider(CREDENTIALS);
++    expect(await provider.get()).toBe('token-1');
++    expect(await provider.get()).toBe('token-1');
++    expect(i.calls()).toBe(1);
++  });
++
++  it('collapses concurrent callers into one exchange', async () => {
++    // Two credentials collected together must not each start their own exchange.
++    const i = withIdp();
++    const provider = new AuthorityTokenProvider(CREDENTIALS);
++    const [a, b, c] = await Promise.all([provider.get(), provider.get(), provider.get()]);
++    expect([a, b, c]).toEqual(['token-1', 'token-1', 'token-1']);
++    expect(i.calls()).toBe(1);
++  });
++
++  it('acquires again after invalidate()', async () => {
++    const i = withIdp({ expiresIn: 300 });
++    const provider = new AuthorityTokenProvider(CREDENTIALS);
++    expect(await provider.get()).toBe('token-1');
++    provider.invalidate();
++    expect(await provider.get()).toBe('token-2');
++    expect(i.calls()).toBe(2);
++  });
++
++  it('reports a refused exchange with the IdP’s own reason', async () => {
++    withIdp({ fail: 99 });
++    const provider = new AuthorityTokenProvider(CREDENTIALS);
++    await expect(provider.get()).rejects.toThrow(/401.*invalid_client/s);
++  });
++
++  it('does not cache a failure: a later attempt can still succeed', async () => {
++    const i = withIdp({ fail: 1 });
++    const provider = new AuthorityTokenProvider(CREDENTIALS);
++    await expect(provider.get()).rejects.toThrow(/401/);
++    expect(await provider.get()).toBe('token-2');
++    expect(i.calls()).toBe(2);
++  });
++
++  it('reports an unreachable token endpoint rather than hanging', async () => {
++    spy = jest.spyOn(global, 'fetch' as any).mockImplementation(async () => {
++      throw new Error('connect ECONNREFUSED');
++    });
++    const provider = new AuthorityTokenProvider(CREDENTIALS);
++    await expect(provider.get()).rejects.toThrow(/could not reach the token endpoint/);
++  });
++
++  it('refuses a response with no access_token', async () => {
++    withIdp({ body: { expires_in: 60 } });
++    const provider = new AuthorityTokenProvider(CREDENTIALS);
++    await expect(provider.get()).rejects.toThrow(/no access_token/);
++  });
++
++  it('never puts the secret in an error', async () => {
++    withIdp({ fail: 99 });
++    const provider = new AuthorityTokenProvider(CREDENTIALS);
++    const error = await provider.get().catch((e) => String(e));
++    expect(error).not.toContain('s3cret');
++  });
++});
++
++describe('authorityTokenProvider()', () => {
++  beforeEach(() => resetAuthorityTokenProviders());
++
++  it('is null when no client credentials are configured', () => {
++    expect(authorityTokenProvider({})).toBeNull();
++  });
++
++  it('builds a provider when all three are present', () => {
++    expect(authorityTokenProvider(CREDENTIALS)).toBeInstanceOf(AuthorityTokenProvider);
++  });
++
++  it('returns the SAME provider for the same client', () => {
++    // The claim source is constructed per credential request. A per-instance provider
++    // would be an empty cache every time, so the token cache would never once be read
++    // and every issuance would mint fresh tokens.
++    expect(authorityTokenProvider(CREDENTIALS)).toBe(authorityTokenProvider(CREDENTIALS));
++  });
++
++  it('keeps separate providers for separate clients', () => {
++    // Two Authorities, two officers, two tokens. Sharing one would have an issuer acting
++    // as the other's officer.
++    const farmer = authorityTokenProvider(CREDENTIALS);
++    const land = authorityTokenProvider({ ...CREDENTIALS, clientId: 'agri-land-officer' });
++    expect(farmer).not.toBe(land);
++  });
++
++  it('a shared provider means one exchange across separate claim sources', async () => {
++    const i = idp({ expiresIn: 300 });
++    const spy = jest.spyOn(global, 'fetch' as any).mockImplementation(i.impl as any);
++    try {
++      await authorityTokenProvider(CREDENTIALS)!.get();
++      await authorityTokenProvider(CREDENTIALS)!.get();
++      await authorityTokenProvider(CREDENTIALS)!.get();
++      expect(i.calls()).toBe(1);
++    } finally {
++      spy.mockRestore();
++    }
++  });
++
++  it('refuses a half-configured client rather than falling back silently', () => {
++    // Falling back would make every issuance fail at the Authority with a 401, which
++    // points an operator at permissions instead of at the missing secret.
++    expect(() =>
++      authorityTokenProvider({ tokenUrl: CREDENTIALS.tokenUrl, clientId: 'x' }),
++    ).toThrow(/AUTHORITY_CLIENT_SECRET/);
++  });
++
++  it('names every missing setting, not just the first', () => {
++    expect(() => authorityTokenProvider({ clientId: 'x' })).toThrow(
++      /AUTHORITY_TOKEN_URL.*AUTHORITY_CLIENT_SECRET/s,
++    );
++  });
++});
+diff --git a/services/oid4vc-service/src/claims/authority-token.ts b/services/oid4vc-service/src/claims/authority-token.ts
+new file mode 100644
+index 00000000..26ee8954
+--- /dev/null
++++ b/services/oid4vc-service/src/claims/authority-token.ts
+@@ -0,0 +1,194 @@
++import { Logger } from '@nestjs/common';
++
++/**
++ * OAuth2 client-credentials tokens for the Authority Service, re-acquired as they expire.
++ *
++ * WHY THIS EXISTS: the first version of the Authority claim source read a bearer token
++ * from `AUTHORITY_TOKEN` and sent it forever. A token in an environment variable cannot
++ * outlive its own expiry, so a deployment configured on Monday stops issuing on Monday
++ * plus the token lifetime — and it fails as a 401 from the Authority, which reads like a
++ * permissions problem rather than an expiry. Nothing restarts, nothing alarms, and
++ * issuance is simply gone.
++ *
++ * So the issuing service holds CREDENTIALS rather than a token, and exchanges them
++ * whenever the token it has is close to expiring.
++ *
++ * The static `AUTHORITY_TOKEN` is still honoured when no client credentials are
++ * configured, because a deployment fronting the Authority with something other than
++ * OAuth2 should not be forced through this path.
++ */
++export interface ClientCredentials {
++  tokenUrl: string;
++  clientId: string;
++  clientSecret: string;
++  /** Optional `scope`, for an Authority that scopes its administrative API. */
++  scope?: string;
++  /** Bounded: a wallet is waiting further down the call chain. */
++  timeoutMs?: number;
++}
++
++export class AuthorityTokenProvider {
++  private readonly logger = new Logger(AuthorityTokenProvider.name);
++
++  /** The current token and the moment it stops being offered. */
++  private token = '';
++  private expiresAt = 0;
++
++  /**
++   * The exchange in flight, if any.
++   *
++   * Several credential requests can arrive together — a wallet collecting two credentials
++   * does exactly that. Without this they would each see an expired token and each start
++   * their own exchange, so one expiry would produce a burst of identical requests against
++   * the IdP. They share one.
++   */
++  private inFlight: Promise<string> | null = null;
++
++  constructor(private readonly credentials: ClientCredentials) {}
++
++  /** A token that will still be valid when the caller uses it. */
++  async get(): Promise<string> {
++    if (this.token && Date.now() < this.expiresAt) {
++      return this.token;
++    }
++    if (!this.inFlight) {
++      this.inFlight = this.exchange().finally(() => {
++        this.inFlight = null;
++      });
++    }
++    return this.inFlight;
++  }
++
++  /**
++   * Discards the current token.
++   *
++   * Called when the Authority rejects a request as unauthorised: the token may have been
++   * revoked, or the clocks may disagree by more than the safety margin. Re-acquiring once
++   * turns a transient mismatch into a retry rather than a failed issuance.
++   */
++  invalidate(): void {
++    this.token = '';
++    this.expiresAt = 0;
++  }
++
++  private async exchange(): Promise<string> {
++    const { tokenUrl, clientId, clientSecret, scope, timeoutMs } = this.credentials;
++
++    const body = new URLSearchParams({
++      grant_type: 'client_credentials',
++      client_id: clientId,
++      client_secret: clientSecret,
++    });
++    if (scope) body.set('scope', scope);
++
++    let response: Response;
++    try {
++      response = await fetch(tokenUrl, {
++        method: 'POST',
++        headers: { 'content-type': 'application/x-www-form-urlencoded' },
++        body,
++        signal: AbortSignal.timeout(timeoutMs ?? 8000),
++      });
++    } catch (err: any) {
++      throw new Error(`could not reach the token endpoint: ${err?.message ?? err}`);
++    }
++
++    if (!response.ok) {
++      // The body of a failed token response carries `error` and `error_description`, and
++      // neither contains the secret. Worth surfacing: "invalid_client" and "unauthorized
++      // client" send an operator to quite different places.
++      const detail = await response.text().catch(() => '');
++      throw new Error(
++        `token endpoint answered ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`,
++      );
++    }
++
++    let payload: any;
++    try {
++      payload = await response.json();
++    } catch {
++      throw new Error('the token endpoint returned unreadable JSON');
++    }
++
++    const token = typeof payload?.access_token === 'string' ? payload.access_token : '';
++    if (!token) throw new Error('the token response carried no access_token');
++
++    // Renew EARLY. A token used at the instant it expires is refused by the time it
++    // arrives, and clocks between two containers are not identical. Ten seconds of margin,
++    // or a third of the lifetime for tokens shorter than that, so a 5-second token still
++    // leaves a usable window instead of being treated as already dead.
++    const lifetime = Number(payload?.expires_in) > 0 ? Number(payload.expires_in) : 60;
++    const margin = Math.min(10, Math.floor(lifetime / 3));
++    this.token = token;
++    this.expiresAt = Date.now() + (lifetime - margin) * 1000;
++
++    this.logger.log(
++      `acquired an Authority token for ${clientId}, valid ${lifetime}s, renewing in ${
++        lifetime - margin
++      }s`,
++    );
++    return token;
++  }
++}
++
++/**
++ * Providers, shared by (token endpoint, client).
++ *
++ * The claim source is constructed PER RESOLUTION by ClaimSourceFactory, so a provider held
++ * as an instance field would be a fresh, empty cache on every credential request — every
++ * call would mint a new token and the cache would never once be read. That is not a
++ * performance detail: it turns one issuance into several token exchanges and makes the IdP
++ * a hard dependency of every step rather than of the first.
++ *
++ * Keyed rather than a single global so a deployment issuing as two different officers
++ * keeps two tokens, which is the whole point of separate clients.
++ */
++const providers = new Map<string, AuthorityTokenProvider>();
++
++/** Testing seam: the module cache outlives a test's environment changes otherwise. */
++export function resetAuthorityTokenProviders(): void {
++  providers.clear();
++}
++
++/**
++ * Builds a provider from configuration, or returns null when this deployment does not use
++ * client credentials. Null means "fall back to whatever static header was configured".
++ */
++export function authorityTokenProvider(config: {
++  tokenUrl?: string;
++  clientId?: string;
++  clientSecret?: string;
++  scope?: string;
++  timeoutMs?: number;
++}): AuthorityTokenProvider | null {
++  const { tokenUrl, clientId, clientSecret } = config;
++  if (!tokenUrl && !clientId && !clientSecret) return null;
++
++  // A HALF-configured client is a deployment mistake, and failing here is much kinder than
++  // falling back to an anonymous call that the Authority refuses on every issuance.
++  if (!tokenUrl || !clientId || !clientSecret) {
++    const missing = [
++      !tokenUrl && 'AUTHORITY_TOKEN_URL',
++      !clientId && 'AUTHORITY_CLIENT_ID',
++      !clientSecret && 'AUTHORITY_CLIENT_SECRET',
++    ].filter(Boolean);
++    throw new Error(
++      `Authority client credentials are partly configured; missing ${missing.join(', ')}. ` +
++        'Set all three, or none of them to use AUTHORITY_TOKEN / AUTHORITY_HEADERS instead.',
++    );
++  }
++
++  const key = `${tokenUrl}|${clientId}`;
++  let provider = providers.get(key);
++  if (!provider) {
++    provider = new AuthorityTokenProvider({
++      tokenUrl,
++      clientId,
++      clientSecret,
++      scope: config.scope,
++      timeoutMs: config.timeoutMs,
++    });
++    providers.set(key, provider);
++  }
++  return provider;
++}
+diff --git a/services/oid4vc-service/src/claims/authority.claim-source.spec.ts b/services/oid4vc-service/src/claims/authority.claim-source.spec.ts
+index fa735b55..216522d7 100644
+--- a/services/oid4vc-service/src/claims/authority.claim-source.spec.ts
++++ b/services/oid4vc-service/src/claims/authority.claim-source.spec.ts
+@@ -1,5 +1,6 @@
+ import { AuthorityClaimSource } from './authority.claim-source';
+ import { ClaimSourceUnavailableError, SubjectNotFoundError } from './claim-source.interface';
++import { resetAuthorityTokenProviders } from './authority-token';
+ 
+ /**
+  * The Authority claim source, and specifically the linkage claim.
+@@ -220,6 +221,82 @@ describe('AuthorityClaimSource', () => {
+   });
+ });
+ 
++describe('authenticating with client credentials', () => {
++  const saved = { ...process.env };
++  let fetchSpy: jest.SpyInstance;
++  beforeEach(() => {
++    jest.resetModules();
++    // Providers are cached per (endpoint, client) for the life of the module, which is
++    // what makes them shared across per-request claim sources. Tests must start from an
++    // empty cache or a token minted by the previous test is still valid here.
++    resetAuthorityTokenProviders();
++    configure({
++      AUTHORITY_TOKEN_URL: 'http://keycloak:8080/auth/realms/authority/protocol/openid-connect/token',
++      AUTHORITY_CLIENT_ID: 'agri-farmer-officer',
++      AUTHORITY_CLIENT_SECRET: 'sekrit',
++    });
++  });
++  afterEach(() => {
++    fetchSpy?.mockRestore();
++    process.env = { ...saved };
++  });
++
++  /** The Authority, plus the IdP in front of it. */
++  function stack(opts: { rejectFirst?: boolean } = {}) {
++    const a = authority();
++    let minted = 0;
++    let rejected = false;
++    const calls: string[] = [];
++    const impl = async (url: string, init: any) => {
++      const u = String(url);
++      calls.push(u);
++      if (u.includes('/openid-connect/token')) {
++        minted += 1;
++        const body = { access_token: `tok-${minted}`, expires_in: 60 };
++        return { ok: true, status: 200, json: async () => body, text: async () => '' };
++      }
++      if (opts.rejectFirst && !rejected && u.endsWith('/issue')) {
++        rejected = true;
++        return { ok: false, status: 401, text: async () => 'expired', json: async () => ({}) };
++      }
++      return a.impl(u, init);
++    };
++    fetchSpy = jest.spyOn(global, 'fetch' as any).mockImplementation(impl as any);
++    return { authorityCalls: a.calls, minted: () => minted, calls };
++  }
++
++  it('presents a token it obtained, not one from configuration', async () => {
++    const s = stack();
++    const result = await new AuthorityClaimSource().resolve(REQUEST as any);
++    expect(result.claims.authorityCredentialId).toBe(CREDENTIAL_ID);
++    for (const call of s.authorityCalls) {
++      expect(call.init.headers.authorization).toBe('Bearer tok-1');
++    }
++  });
++
++  it('obtains the token once and reuses it across the calls of one issuance', async () => {
++    const s = stack();
++    await new AuthorityClaimSource().resolve(REQUEST as any);
++    expect(s.minted()).toBe(1);
++  });
++
++  it('re-acquires and retries when the Authority refuses the token', async () => {
++    // A revoked token, or clocks apart by more than the renewal margin. One retry is the
++    // difference between a transient mismatch and a holder being told issuance failed.
++    const s = stack({ rejectFirst: true });
++    const result = await new AuthorityClaimSource().resolve(REQUEST as any);
++    expect(result.claims.authorityCredentialId).toBe(CREDENTIAL_ID);
++    expect(s.minted()).toBe(2);
++  });
++
++  it('never sends the client secret to the Authority', async () => {
++    const s = stack();
++    await new AuthorityClaimSource().resolve(REQUEST as any);
++    const toAuthority = JSON.stringify(s.authorityCalls);
++    expect(toAuthority).not.toContain('sekrit');
++  });
++});
++
+ describe('authenticating to the Authority Service', () => {
+   const saved = { ...process.env };
+   let fetchSpy: jest.SpyInstance;
+diff --git a/services/oid4vc-service/src/claims/authority.claim-source.ts b/services/oid4vc-service/src/claims/authority.claim-source.ts
+index f677510f..233549d8 100644
+--- a/services/oid4vc-service/src/claims/authority.claim-source.ts
++++ b/services/oid4vc-service/src/claims/authority.claim-source.ts
+@@ -1,6 +1,7 @@
+ import { Logger } from '@nestjs/common';
+ import { createHash } from 'node:crypto';
+ import { loadConfig } from '../config/configuration';
++import { AuthorityTokenProvider, authorityTokenProvider } from './authority-token';
+ import { resolveRegistryClaims } from '../oid4vci/registry-claims.util';
+ import {
+   ClaimSourceUnavailableError,
+@@ -36,6 +37,18 @@ export class AuthorityClaimSource implements ClaimSourceProvider {
+   private readonly logger = new Logger(AuthorityClaimSource.name);
+   private readonly config = loadConfig();
+ 
++  /**
++   * Client credentials, exchanged for a token whenever the current one is near expiry.
++   * Null when this deployment configures a static token or custom headers instead.
++   */
++  private readonly tokens: AuthorityTokenProvider | null = authorityTokenProvider({
++    tokenUrl: this.config.authority?.tokenUrl,
++    clientId: this.config.authority?.clientId,
++    clientSecret: this.config.authority?.clientSecret,
++    scope: this.config.authority?.scope,
++    timeoutMs: this.config.authority?.timeoutMs,
++  });
++
+   /** The claim carrying the Authority credential's identifier. Technical linkage. */
+   static readonly LINKAGE_CLAIM = 'authorityCredentialId';
+ 
+@@ -165,9 +178,11 @@ export class AuthorityClaimSource implements ClaimSourceProvider {
+     });
+   }
+ 
+-  private headers(): Record<string, string> {
++  private async headers(): Promise<Record<string, string>> {
+     const h: Record<string, string> = { 'content-type': 'application/json' };
+-    const token = this.config.authority?.token;
++    // Client credentials first: a token acquired now, and re-acquired when it ages out.
++    // The static token below remains for deployments that do not use OAuth2 at all.
++    const token = this.tokens ? await this.tokens.get() : this.config.authority?.token;
+     // Server to server. The holder's token is deliberately NOT forwarded: this call is
+     // made as the issuing service, and a holder must not be able to act as it.
+     if (token) h.authorization = `Bearer ${token}`;
+@@ -184,18 +199,18 @@ export class AuthorityClaimSource implements ClaimSourceProvider {
+   }
+ 
+   private async get(base: string, path: string) {
+-    return this.call(base, path, { method: 'GET', headers: this.headers() });
++    return this.call(base, path, { method: 'GET', headers: await this.headers() });
+   }
+ 
+   private async post(base: string, path: string, body: unknown) {
+     return this.call(base, path, {
+       method: 'POST',
+-      headers: this.headers(),
++      headers: await this.headers(),
+       body: JSON.stringify(body),
+     });
+   }
+ 
+-  private async call(base: string, path: string, init: RequestInit) {
++  private async call(base: string, path: string, init: RequestInit, retried = false) {
+     const url = `${base}${path}`;
+     const timeoutMs = this.config.authority?.timeoutMs ?? 8000;
+     let response: Response;
+@@ -204,6 +219,16 @@ export class AuthorityClaimSource implements ClaimSourceProvider {
+     } catch (err: any) {
+       throw new ClaimSourceUnavailableError('authority', `${path}: ${err?.message ?? err}`);
+     }
++    if ((response.status === 401 || response.status === 403) && this.tokens && !retried) {
++      // The token was refused. It may have been revoked, or the two clocks may disagree by
++      // more than the renewal margin. Drop it and try once with a fresh one — a retry here
++      // is the difference between a transient mismatch and a failed issuance for a holder
++      // who is standing there waiting.
++      this.logger.warn(`${path} answered ${response.status}; re-acquiring a token and retrying`);
++      this.tokens.invalidate();
++      const headers = await this.headers();
++      return this.call(base, path, { ...init, headers }, true);
++    }
+     if (response.status === 404) {
+       // A 404 here is a profile or binding that does not exist, which is a
+       // configuration fault. "No record for this subject" is decided in findRecord
+diff --git a/services/oid4vc-service/src/config/configuration.ts b/services/oid4vc-service/src/config/configuration.ts
+index d51642a5..daf2eadf 100644
+--- a/services/oid4vc-service/src/config/configuration.ts
++++ b/services/oid4vc-service/src/config/configuration.ts
+@@ -122,8 +122,22 @@ const RESERVED_SOURCE_NAMES = new Set(['registry', 'none', 'authority']);
+ export interface AuthorityConfig {
+   /** The Authority Service. Its presence is what declares this source usable. */
+   baseUrl: string;
+-  /** Bearer token for the server-to-server call. Never a holder's token. */
++  /**
++   * Static bearer token for the server-to-server call. Never a holder's token.
++   *
++   * Superseded by the client-credentials settings below where those are configured: a
++   * static token cannot outlive its own expiry, so it suits only a deployment whose
++   * Authority is fronted by something other than OAuth2.
++   */
+   token?: string;
++  /** OAuth2 token endpoint, for exchanging client credentials. */
++  tokenUrl?: string;
++  /** The issuing service's own client id at that endpoint. */
++  clientId?: string;
++  /** Its secret. Injected like every other secret, never committed. */
++  clientSecret?: string;
++  /** Optional scope, for an Authority that scopes its administrative API. */
++  scope?: string;
+   /** Credential schemaId or name -> Authority credential profile id. */
+   profileMap: Record<string, string>;
+   /** The record field a holder's subject identifier is matched against. */
+@@ -438,6 +452,10 @@ export const loadConfig = (): Oid4vcConfig => ({
+   authority: {
+     baseUrl: (process.env.AUTHORITY_BASE_URL || '').trim(),
+     token: process.env.AUTHORITY_TOKEN || undefined,
++    tokenUrl: (process.env.AUTHORITY_TOKEN_URL || '').trim() || undefined,
++    clientId: (process.env.AUTHORITY_CLIENT_ID || '').trim() || undefined,
++    clientSecret: process.env.AUTHORITY_CLIENT_SECRET || undefined,
++    scope: (process.env.AUTHORITY_SCOPE || '').trim() || undefined,
+     profileMap: parseStringMap(
+       process.env.AUTHORITY_PROFILE_MAP || '',
+       'AUTHORITY_PROFILE_MAP',
+-- 
+2.39.5 (Apple Git-154)
+

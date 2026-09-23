@@ -1,0 +1,101 @@
+Iteration 3 — public gateway evidence
+captured 2026-09-21 against https://135.235.192.9.sslip.io
+
+Tested from a workstation over the public origin, NOT from inside the container network.
+Paired with e2e-sandbox-deployment.txt in this directory, which is the clean-run output
+from the same deployment at the same time.
+
+A 401 from any administrative route below would be a FAILURE, not a pass: it would mean
+the gateway forwarded the request and only the service refused it. The expected answer is
+404 — the route does not exist on that listener.
+
+=============================================================================
+1. AUTHENTICATION IS ON
+=============================================================================
+no token:        401
+dev headers:     401
+bogus bearer:    401
+ENABLE_AUTH:     true
+OIDC_ISSUER:     http://keycloak:8080/auth/realms/authority
+
+=============================================================================
+2. THE ISSUING SERVICES HOLD CREDENTIALS, NOT A TOKEN
+=============================================================================
+--- oid4vc-farmer ---
+  CLAIM_SOURCE_DEFAULT: authority
+  AUTHORITY_TOKEN_URL:  http://keycloak:8080/auth/realms/authority/protocol/openid-connect/token
+  AUTHORITY_CLIENT_ID:  agri-farmer-officer
+  AUTHORITY_TOKEN set:  no
+  secret present:       yes
+--- oid4vc-land ---
+  CLAIM_SOURCE_DEFAULT: authority
+  AUTHORITY_TOKEN_URL:  http://keycloak:8080/auth/realms/authority/protocol/openid-connect/token
+  AUTHORITY_CLIENT_ID:  agri-land-officer
+  AUTHORITY_TOKEN set:  no
+  secret present:       yes
+
+=============================================================================
+3. TOKEN RENEWAL DURING THE RUN
+=============================================================================
+--- oid4vc-farmer ---
+  acquisitions: 4
+  09/21/2026, 10:32:44 AM     LOG [AuthorityTokenProvider] acquired an Authority token for agri-farmer-officer, valid 60s, renewing in 50s
+  09/21/2026, 10:59:39 AM     LOG [AuthorityTokenProvider] acquired an Authority token for agri-farmer-officer, valid 60s, renewing in 50s
+  09/21/2026, 11:01:09 AM     LOG [AuthorityTokenProvider] acquired an Authority token for agri-farmer-officer, valid 60s, renewing in 50s
+--- oid4vc-land ---
+  acquisitions: 4
+  09/21/2026, 10:32:45 AM     LOG [AuthorityTokenProvider] acquired an Authority token for agri-land-officer, valid 60s, renewing in 50s
+  09/21/2026, 10:59:39 AM     LOG [AuthorityTokenProvider] acquired an Authority token for agri-land-officer, valid 60s, renewing in 50s
+  09/21/2026, 11:01:09 AM     LOG [AuthorityTokenProvider] acquired an Authority token for agri-land-officer, valid 60s, renewing in 50s
+
+  60-second tokens, deliberately shorter than a run. More than one acquisition per
+  issuer is the evidence that renewal works rather than that the first token lasted.
+
+=============================================================================
+4. THE PUBLIC BOUNDARY
+=============================================================================
+--- the two trust routes ---
+farmer issuer id: e6344fd5-c204-465e-b0da-71b89ed66356
+  GET /trust/issuers/e6344fd5-c204-465e-b0da-71b89ed66356 -> 200
+  body:
+    {"issuer":"did:web:135.235.192.9.sslip.io:d8ea776d-1d84-459d-b343-faa536aba7b0","name":{"en":"Farmer Authority"},"verificationMethods":[{"id":"key-0","type":"IDENTITY_SERVICE_DID","algorithm":"Ed25519","reference":"did:web:135.235.192.9.sslip.io:d8ea776d-1d84-459d-b343-faa536aba7b0"}]}
+--- the administrative API, same listener ---
+  /api/v1/tenants                      -> 404
+  /api/v1/authorities                  -> 404
+  /api/v1/credential-profiles          -> 404
+  /api/v1/configuration-history        -> 404
+  /api/v1/record-history               -> 404
+--- issuance and revocation ---
+  POST /api/v1/.../issue               -> 404
+  POST /api/v1/credentials/x/revoke    -> 404
+--- traversal out of the trust prefix ---
+  /trust/../api/v1/tenants                     -> 404
+  /trust/tenants                               -> 404
+  /trust/issuers/e6344fd5-c204-465e-b0da-71b89ed66356/keys -> 404
+--- the trust routes are read-only ---
+  POST   /trust/issuers/... -> 403
+  PUT    /trust/issuers/... -> 403
+  PATCH  /trust/issuers/... -> 403
+  DELETE /trust/issuers/... -> 403
+
+=============================================================================
+5. OPERATOR SURFACES ARE NOT ON ANY PUBLIC INTERFACE
+=============================================================================
+  tcp/3334  from the internet: refused/filtered
+  tcp/8088  from the internet: refused/filtered
+  tcp/8080  from the internet: refused/filtered
+  authority-service 3334 published as: 127.0.0.1:3334
+  nginx published as:                  80/tcp -> 0.0.0.0:80 80/tcp -> [::]:80 443/tcp -> 0.0.0.0:443 443/tcp -> [::]:443 8088/tcp -> 127.0.0.1:8088 
+  operator endpoints through the PUBLIC origin (must be refused):
+    /auth/admin                  -> 403
+    /oid4vc/offer                -> 403
+    /farmer/oid4vc/offer         -> 403
+    /land/oid4vc/offer           -> 403
+
+=============================================================================
+WHAT THIS DOES NOT SHOW
+=============================================================================
+  Issuer trust is resolved once when the verifier starts. Credential status is live and
+  is checked on every presentation; deactivating an ISSUER is configuration and does not
+  reach a running verifier until it is restarted. See docs/authority-service-integration.md,
+  "Issuer trust is loaded at startup, and only at startup".

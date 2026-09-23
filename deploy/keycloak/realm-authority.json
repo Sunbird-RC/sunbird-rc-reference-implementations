@@ -1,0 +1,82 @@
+{
+  "realm": "authority",
+  "displayName": "Authority Service (machine principals)",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "loginWithEmailAllowed": false,
+  "editUsernameAllowed": false,
+
+  "attributes": {
+    "frontendUrl": "http://keycloak:8080/auth"
+  },
+
+  "accessTokenLifespan": 60,
+  "accessTokenLifespanForImplicitFlow": 60,
+  "ssoSessionIdleTimeout": 600,
+  "ssoSessionMaxLifespan": 3600,
+
+  "clients": [
+    {
+      "clientId": "authority-bootstrap",
+      "name": "Authority bootstrap administrator",
+      "description": "Creates root tenants. The only principal the service accepts for that, and only because BOOTSTRAP_ADMINS names it. Used by scripts/bootstrap-agriculture-authority.sh and by nothing at runtime.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false
+    },
+    {
+      "clientId": "agri-farmer-operator",
+      "name": "Farmer Authority operator",
+      "description": "Submits Farmer records. OPERATOR: it can put a record forward and cannot approve it. Used by scripts/seed-agriculture-authority.sh.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false
+    },
+    {
+      "clientId": "agri-land-operator",
+      "name": "Land Authority operator",
+      "description": "Submits Land records. OPERATOR for the other tenant. A separate client because separation of duties that shares a credential is not separation of duties.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false
+    },
+    {
+      "clientId": "agri-farmer-officer",
+      "name": "Farmer Authority issuing officer",
+      "description": "Approves Farmer records and issues Farmer credentials. AUTHORISED_OFFICER. This is the principal the oid4vc-farmer issuing service authenticates as, server to server; a holder's token is never forwarded to reach it.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false
+    },
+    {
+      "clientId": "agri-land-officer",
+      "name": "Land Authority issuing officer",
+      "description": "Approves Land records and issues Land credentials. AUTHORISED_OFFICER for the Land tenant, used by oid4vc-land.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false
+    }
+  ]
+}

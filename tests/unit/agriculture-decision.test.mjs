@@ -25,12 +25,12 @@ const policy = loadCropPolicy({ file: join(ROOT, 'config', 'policy', 'crop-rates
 
 /** An eligible pair, from which each test varies exactly one thing. */
 const eligible = () => ({
-  farmer: { farmerId: 'FRM-KA-0041', registeredFarmer: true },
+  farmer: { farmerReference: 'FRM-KA-0041', registrationStatus: true },
   land: {
-    farmerId: 'FRM-KA-0041',
+    farmerReference: 'FRM-KA-0041',
     ownershipStatus: 'ACTIVE',
     cropType: 'PADDY',
-    cultivatedAreaAcres: 4,
+    cultivatedArea: 4,
   },
 });
 
@@ -42,8 +42,8 @@ describe('what the bank asks for', () => {
     const requests = agricultureCredentialRequests({ farmerVct: 'https://x/vct/farmer', landVct: 'https://x/vct/land' });
     assert.equal(requests.length, 2);
     assert.deepEqual(requests.map((r) => r.id), [FARMER_REQUEST_ID, LAND_REQUEST_ID]);
-    assert.deepEqual(requests[0].claims, ['farmerId', 'registeredFarmer']);
-    assert.deepEqual(requests[1].claims, ['farmerId', 'ownershipStatus', 'cropType', 'cultivatedAreaAcres']);
+    assert.deepEqual(requests[0].claims, ['farmerReference', 'registrationStatus']);
+    assert.deepEqual(requests[1].claims, ['farmerReference', 'ownershipStatus', 'cropType', 'cultivatedArea']);
   });
 
   test('each request carries the role the verifier pins its issuer against', () => {
@@ -81,9 +81,9 @@ describe('an eligible farmer', () => {
     const result = decideFarmCredit(eligible(), policy);
     assert.deepEqual(result, {
       outcome: 'ELIGIBLE',
-      farmerId: 'FRM-KA-0041',
+      farmerReference: 'FRM-KA-0041',
       cropType: 'PADDY',
-      cultivatedAreaAcres: 4,
+      cultivatedArea: 4,
       ratePerAcre: 30000,
       maximumLoan: 120000,
     });
@@ -93,7 +93,7 @@ describe('an eligible farmer', () => {
     for (const crop of policy.crops) {
       const presented = eligible();
       presented.land.cropType = crop;
-      presented.land.cultivatedAreaAcres = 2.5;
+      presented.land.cultivatedArea = 2.5;
       const result = decideFarmCredit(presented, policy);
       assert.equal(result.outcome, 'ELIGIBLE', crop);
       assert.equal(result.ratePerAcre, policy.rate(crop));
@@ -103,7 +103,7 @@ describe('an eligible farmer', () => {
 
   test('the smallest fundable area is still eligible', () => {
     const presented = eligible();
-    presented.land.cultivatedAreaAcres = 0.01;
+    presented.land.cultivatedArea = 0.01;
     const result = decideFarmCredit(presented, policy);
     assert.equal(result.outcome, 'ELIGIBLE');
     assert.equal(result.maximumLoan, 300);
@@ -121,7 +121,7 @@ describe('an eligible farmer', () => {
 describe('a verified business answer: NOT ELIGIBLE', () => {
   test('not a registered farmer', () => {
     const presented = eligible();
-    presented.farmer.registeredFarmer = false;
+    presented.farmer.registrationStatus = false;
     const result = decideFarmCredit(presented, policy);
     assert.equal(result.outcome, 'NOT_ELIGIBLE');
     assert.match(result.reason, /registered farmer/);
@@ -139,7 +139,7 @@ describe('a verified business answer: NOT ELIGIBLE', () => {
 
   test('nothing cultivated', () => {
     const presented = eligible();
-    presented.land.cultivatedAreaAcres = 0;
+    presented.land.cultivatedArea = 0;
     const result = decideFarmCredit(presented, policy);
     assert.equal(result.outcome, 'NOT_ELIGIBLE');
     assert.match(result.reason, /no cultivated area/);
@@ -155,7 +155,7 @@ describe('a verified business answer: NOT ELIGIBLE', () => {
 
   test('a business answer never carries a loan amount', () => {
     const presented = eligible();
-    presented.farmer.registeredFarmer = false;
+    presented.farmer.registrationStatus = false;
     const result = decideFarmCredit(presented, policy);
     assert.equal(result.maximumLoan, undefined);
     assert.equal(result.ratePerAcre, undefined);
@@ -165,7 +165,7 @@ describe('a verified business answer: NOT ELIGIBLE', () => {
 describe('a verification failure: REJECTED / UNABLE TO VERIFY', () => {
   test('the two credentials name different farmers', () => {
     const presented = eligible();
-    presented.land.farmerId = 'FRM-KA-0099';
+    presented.land.farmerReference = 'FRM-KA-0099';
     rejects(presented, 'CORRELATION_FAILED');
   });
 
@@ -174,20 +174,20 @@ describe('a verification failure: REJECTED / UNABLE TO VERIFY', () => {
     rejects({ farmer: undefined, land: eligible().land }, 'CORRELATION_FAILED');
   });
 
-  test('a farmerId that is absent or not a string', () => {
+  test('a farmerReference that is absent or not a string', () => {
     for (const bad of [undefined, '', 42, null, {}]) {
-      const a = eligible(); a.farmer.farmerId = bad; rejects(a, 'MALFORMED_CLAIM');
-      const b = eligible(); b.land.farmerId = bad; rejects(b, 'MALFORMED_CLAIM');
+      const a = eligible(); a.farmer.farmerReference = bad; rejects(a, 'MALFORMED_CLAIM');
+      const b = eligible(); b.land.farmerReference = bad; rejects(b, 'MALFORMED_CLAIM');
     }
   });
 
-  test('registeredFarmer that is not a boolean — including the string "false"', () => {
+  test('registrationStatus that is not a boolean — including the string "false"', () => {
     // "false" is truthy in JavaScript. A lending gate that funds on it is the
     // exact bug this showcase exists to prove absent, so it is refused rather
     // than read either way.
     for (const bad of ['false', 'true', 1, 0, null, undefined]) {
       const presented = eligible();
-      presented.farmer.registeredFarmer = bad;
+      presented.farmer.registrationStatus = bad;
       rejects(presented, 'MALFORMED_CLAIM');
     }
   });
@@ -203,7 +203,7 @@ describe('a verification failure: REJECTED / UNABLE TO VERIFY', () => {
   test('an acreage the schema could not have produced', () => {
     for (const bad of [4.005, '4', -1, null, Number.NaN]) {
       const presented = eligible();
-      presented.land.cultivatedAreaAcres = bad;
+      presented.land.cultivatedArea = bad;
       rejects(presented, 'MALFORMED_CLAIM');
     }
   });
@@ -213,8 +213,8 @@ describe('a verification failure: REJECTED / UNABLE TO VERIFY', () => {
     // NOT ELIGIBLE: the ordering in DESIGN §9 is what stops a verification
     // failure being reported as an ordinary business outcome.
     const presented = eligible();
-    presented.farmer.registeredFarmer = false;
-    presented.land.farmerId = 'FRM-KA-0099';
+    presented.farmer.registrationStatus = false;
+    presented.land.farmerReference = 'FRM-KA-0099';
     rejects(presented, 'CORRELATION_FAILED');
   });
 });

@@ -191,12 +191,15 @@ export const NEGATIVE_FARMER_FIXTURE = {
   schemaId: 'FarmerIdentityCredentialUnlisted',
   vctSlug: 'farmer-identity-credential',
   properties: {
-    farmerId: { type: 'string' },
-    registeredFarmer: { type: 'boolean' },
+    farmerReference: { type: 'string' },
+    registrationStatus: { type: 'boolean' },
     farmerCategory: { type: 'string' },
     district: { type: 'string' },
+    // Declared so a forged credential can still DISCLOSE the linkage claim and be
+    // refused at the trust check, which is the thing these fixtures exist to prove.
+    authorityCredentialId: { type: 'string' },
   },
-  required: ['farmerId'],
+  required: ['farmerReference'],
 };
 
 export const NEGATIVE_LAND_FIXTURE = {
@@ -204,15 +207,18 @@ export const NEGATIVE_LAND_FIXTURE = {
   schemaId: 'LandOwnershipCredentialUnlisted',
   vctSlug: 'land-ownership-credential',
   properties: {
-    landId: { type: 'string' },
-    farmerId: { type: 'string' },
+    parcelReference: { type: 'string' },
+    farmerReference: { type: 'string' },
     ownershipStatus: { type: 'string' },
     landAreaAcres: { type: 'number' },
     cropType: { type: 'string' },
-    cultivatedAreaAcres: { type: 'number' },
+    cultivatedArea: { type: 'number' },
     district: { type: 'string' },
+    // Declared so a forged credential can still DISCLOSE the linkage claim and be
+    // refused at the trust check, which is the thing these fixtures exist to prove.
+    authorityCredentialId: { type: 'string' },
   },
-  required: ['farmerId'],
+  required: ['farmerReference'],
 };
 
 /**

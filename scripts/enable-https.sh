@@ -22,8 +22,28 @@
 # pretending the switch is transparent.
 set -euo pipefail
 
-HOST="${1:-}"
-EMAIL="${2:-${LE_EMAIL:-}}"
+# A certificate may cover SEVERAL names, and the origin flip is separate from getting one.
+#
+#   ./scripts/enable-https.sh demo.example.org
+#   ./scripts/enable-https.sh demo.example.org ops@example.org
+#   ./scripts/enable-https.sh old.example.org --also new.example.org --cert-only
+#
+# `--also` adds subject alternative names. `--cert-only` issues and serves the certificate
+# but does NOT rewrite PUBLIC_URL, so nothing that is already issued stops verifying. Use
+# it to put a new name in front of a running deployment, then flip the origin deliberately
+# when you are ready to re-bootstrap.
+HOST=""
+EMAIL="${LE_EMAIL:-}"
+ALSO=()
+CERT_ONLY=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --also)      IFS=, read -r -a _n <<< "$2"; ALSO+=("${_n[@]}"); shift 2 ;;
+    --cert-only) CERT_ONLY=1; shift ;;
+    -*)          printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
+    *)           if [ -z "$HOST" ]; then HOST="$1"; else EMAIL="$1"; fi; shift ;;
+  esac
+done
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEPLOY="$ROOT/deploy"
 COMPOSE=(docker compose -f "$DEPLOY/docker-compose.yml")
@@ -52,18 +72,40 @@ command -v docker >/dev/null || die "docker is required"
 # Resolution is checked from HERE, which is not proof of what Let's Encrypt sees,
 # but it catches the common typo before an ACME failure counts against a rate
 # limit.
-resolved="$(getent hosts "$HOST" 2>/dev/null | awk '{print $1; exit}' || true)"
-[ -n "$resolved" ] || die "$HOST does not resolve"
-green "$HOST resolves to $resolved"
+NAMES=("$HOST" "${ALSO[@]}")
+for n in "${NAMES[@]}"; do
+  case "$n" in
+    *:*|http*) die "a hostname, not a URL and no port: $n" ;;
+  esac
+  r="$(getent hosts "$n" 2>/dev/null | awk '{print $1; exit}' || true)"
+  [ -n "$r" ] || die "$n does not resolve"
+  green "$n resolves to $r"
+done
 
 sudo_() { if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi; }
 
 say "2. Certificate"
 LIVE="/etc/letsencrypt/live/$HOST"
+DFLAGS=(); for n in "${NAMES[@]}"; do DFLAGS+=(-d "$n"); done
+
+# An existing lineage is left alone ONLY if it already covers every requested name.
+# Otherwise certbot is asked to expand it — without --expand it would refuse
+# non-interactively, which reads as an unexplained failure.
+covered=1
 if sudo_ test -f "$LIVE/fullchain.pem"; then
-  green "a certificate for $HOST already exists — leaving it alone"
+  have="$(sudo_ openssl x509 -in "$LIVE/fullchain.pem" -noout -ext subjectAltName 2>/dev/null || true)"
+  for n in "${NAMES[@]}"; do
+    printf '%s' "$have" | grep -q "DNS:$n\b" || covered=0
+  done
+else
+  covered=0
+fi
+
+if [ "$covered" = 1 ]; then
+  green "a certificate covering ${NAMES[*]} already exists — leaving it alone"
   info "renew with: $0 $HOST   (after it is within 30 days of expiry)"
 else
+  [ -f "$LIVE/fullchain.pem" ] && info "expanding the existing certificate to cover ${NAMES[*]}"
   # HTTP-01 needs port 80. The standalone authenticator runs its own listener,
   # so the gateway steps aside for the ~10 seconds the challenge takes. Renewals
   # do NOT need this: the TLS config below serves the challenge path from disk.
@@ -76,7 +118,8 @@ else
     -v /etc/letsencrypt:/etc/letsencrypt \
     -v /var/lib/letsencrypt:/var/lib/letsencrypt \
     "$CERTBOT_IMAGE" certonly --standalone \
-      -d "$HOST" --agree-tos --no-eff-email -n --keep-until-expiring \
+      "${DFLAGS[@]}" --cert-name "$HOST" --expand \
+      --agree-tos --no-eff-email -n --keep-until-expiring \
       $([ -n "$EMAIL" ] && printf -- '-m %s' "$EMAIL" || printf -- '--register-unsafely-without-email')
   rc=$?
   set -e
@@ -84,7 +127,7 @@ else
   # Whatever happened, the gateway goes back up.
   "${COMPOSE[@]}" up -d nginx >/dev/null 2>&1 || true
   [ "$rc" = 0 ] || die "certbot failed (exit $rc) — the stack is back on plain HTTP, nothing changed"
-  green "certificate issued for $HOST"
+  green "certificate issued for ${NAMES[*]}"
 fi
 
 # A stable path, so nginx-tls.conf carries no hostname and a renewal needs no
@@ -93,6 +136,12 @@ fi
 sudo_ ln -sfn "$LIVE" /etc/letsencrypt/live/current
 green "/etc/letsencrypt/live/current -> $LIVE"
 
+if [ "$CERT_ONLY" = 1 ]; then
+  say "3. Public origin — SKIPPED (--cert-only)"
+  info "PUBLIC_URL is unchanged, so every issued credential still verifies."
+  info "Flip it deliberately when you are ready to re-bootstrap:"
+  info "  ./scripts/enable-https.sh $HOST"
+else
 say "3. Public origin"
 # PUBLIC_URL is what gets stamped into issuer metadata, tokens and request
 # objects; PUBLIC_HOST is the bare host the did:web is minted under.
@@ -107,6 +156,7 @@ set_env() {
 set_env PUBLIC_URL "https://$HOST"
 set_env PUBLIC_HOST "$HOST"
 green "PUBLIC_URL=https://$HOST"
+fi
 
 say "4. Local name resolution"
 # So that curling the public name from this machine works at all. Without it the
@@ -114,25 +164,34 @@ say "4. Local name resolution"
 # many clouds disable — the check below would fail even though the gateway is
 # fine. (Setup scripts do not need this: they use the loopback operator listener
 # on 127.0.0.1:8088.)
-if grep -qE "^127\.0\.0\.1[[:space:]]+$HOST\b" /etc/hosts 2>/dev/null; then
-  green "/etc/hosts already resolves $HOST locally"
-else
-  printf '127.0.0.1 %s\n' "$HOST" | sudo_ tee -a /etc/hosts >/dev/null \
-    && green "/etc/hosts now resolves $HOST to 127.0.0.1" \
-    || die "could not add $HOST to /etc/hosts"
-fi
+for n in "${NAMES[@]}"; do
+  if grep -qE "^127\.0\.0\.1[[:space:]]+$n\b" /etc/hosts 2>/dev/null; then
+    green "/etc/hosts already resolves $n locally"
+  else
+    printf '127.0.0.1 %s\n' "$n" | sudo_ tee -a /etc/hosts >/dev/null \
+      && green "/etc/hosts now resolves $n to 127.0.0.1" \
+      || die "could not add $n to /etc/hosts"
+  fi
+done
 
 say "5. Gateway with TLS"
 "${TLS_COMPOSE[@]}" up -d --force-recreate --no-deps nginx >/dev/null 2>&1 \
   || die "nginx would not start with the TLS configuration"
-for i in $(seq 1 20); do
-  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "https://$HOST/gateway-health" || true)"
-  [ "$code" = "200" ] && { green "https://$HOST/gateway-health -> 200"; break; }
-  sleep 2
+# Every name on the certificate is checked, not just the primary: a SAN that was issued
+# but is not served is exactly the failure this script exists to catch, and it is invisible
+# if only the first name is probed.
+for n in "${NAMES[@]}"; do
+  code=""
+  for i in $(seq 1 20); do
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "https://$n/gateway-health" || true)"
+    [ "$code" = "200" ] && break
+    sleep 2
+  done
+  [ "$code" = "200" ] || die "$n did not answer over https (last: ${code:-none})"
+  green "https://$n/gateway-health -> 200"
+  redirect="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://$n/gateway-health" || true)"
+  info "http://$n -> $redirect (301 expected: everything moves to https)"
 done
-[ "${code:-}" = "200" ] || die "the gateway did not answer over https (last: ${code:-none})"
-redirect="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://$HOST/gateway-health" || true)"
-info "http://$HOST -> $redirect (301 expected: everything moves to https)"
 
 say "Next"
 cat <<NEXT

@@ -24,3 +24,7 @@ services/verifier-mobile/android/
 # the cloud by EAS:
 vendor/paradym-wallet/**/*.apk
 vendor/paradym-wallet/**/*.aab
+
+# Local development compose overlay. Machine-specific: it names locally-built image tags and
+# credential profile ids that are generated per environment and change on every stack reset.
+deploy/compose.arm64.yml

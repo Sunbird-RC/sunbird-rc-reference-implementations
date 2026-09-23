@@ -56,10 +56,14 @@ export const SD_JWT_DCQL_FORMAT = 'dc+sd-jwt';
  * would quietly turn a three-credential request into a one-of-three.
  */
 function credentialSets(requests, purpose) {
-  // Absent is a use case that declares no purpose — Age and Agriculture, whose
-  // accepted requests must stay byte-identical. Present-but-blank is a bug in a
-  // policy, and swallowing it would ship the "Be cautious" screen this exists to
-  // remove while looking like it had been fixed.
+  // Absent is a use case that declares no purpose — now Age only. Agriculture
+  // declared none until 22 September 2026, to keep its accepted request
+  // byte-identical; Anand's film review reversed that, because the farmer was being
+  // shown "no purpose was provided, be cautious" while applying for a loan. Age is
+  // unchanged: its request asks one question and the consent screen says so.
+  //
+  // Present-but-blank is a bug in a policy, and swallowing it would ship the
+  // "Be cautious" screen this exists to remove while looking like it had been fixed.
   if (purpose === undefined || purpose === null) return {};
   if (typeof purpose !== 'string' || purpose.trim() === '') {
     throw new Error('a credential request purpose must be a non-empty string');

@@ -273,7 +273,10 @@ if [ -d "$FORK/.git" ]; then
   # request did not ask for, rather than dropping it downstream. The seventh
   # fixes the wiring that made the second of those inert on the keyed vp_token
   # path — see the commit, which explains why the unit tests missed it.
-  check "port branch is 7 commits off v2.1.0 (port, alg, narrowing, issuer display, own credentials, own issuance + disclosure, wiring)" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "7" ]'
+  # Counted from the patch series rather than restated as a literal. The literal was
+  # wrong before this iteration — it said 7 while the branch already carried 8 — and a
+  # number kept in two places drifts silently the first time a patch is added.
+  check "the port branch has one commit per committed patch" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "$(ls patches/oid4vc-service/000*.patch | wc -l | tr -d " ")" ]'
   # The tag compose asks for, whatever it currently is: reading it from compose
   # rather than repeating it here is what stops this check drifting into
   # asserting a build nothing uses.
@@ -288,7 +291,7 @@ if [ -d "$FORK/.git" ]; then
   # shared source. The fork branch cannot be published — its only remote is
   # upstream Sunbird RC — so the commits travel as patches on this branch, and
   # these checks are what stop that copy drifting from the image we actually run.
-  check "the oid4vc patch series is committed" '[ "$(ls patches/oid4vc-service/000*.patch 2>/dev/null | wc -l | tr -d " ")" = "7" ]'
+  check "the oid4vc patch series is committed" '[ "$(ls patches/oid4vc-service/000*.patch 2>/dev/null | wc -l | tr -d " ")" = "9" ]'
   check "the patch series has apply-and-build instructions" 'grep -q "docker build --platform linux/amd64" patches/oid4vc-service/README.md && grep -q "^git am " patches/oid4vc-service/README.md'
   # The tag compose pins must BE the last patch's commit, not merely look like a
   # sha: a patch series that stops one commit short of the running image is the
@@ -306,11 +309,76 @@ sys.exit(0 if sha and sha.startswith(pinned) else 1)"'
   check "the patch series records the shared upstream base" 'grep -q "2ade66c24afc2d5da7d05121e9cbbd082ba83cd1" patches/oid4vc-service/README.md'
   # Committed patches are source, and source is where a credential gets pasted by
   # accident. The repo-wide secret backstop does not know this directory exists.
-  gone "no private key or credential value in the patches" 'grep -rqE "BEGIN [A-Z ]*PRIVATE KEY|(password|secret|api[_-]?key)[\"'"'"' ]*[:=][\"'"'"' ]*[A-Za-z0-9+/]{12,}" patches/oid4vc-service/'
+  # The value must be a QUOTED literal. Unquoted, the pattern matches ordinary source
+  # such as `client_secret: clientSecret` — a variable reference, not a pasted
+  # credential — and a backstop that cries wolf is one people start ignoring.
+  gone "no private key or credential value in the patches" 'grep -rqE "BEGIN [A-Z ]*PRIVATE KEY|(password|secret|api[_-]?key)[\"'"'"' ]*[:=][[:space:]]*[\"'"'"'][A-Za-z0-9+/]{12,}" patches/oid4vc-service/'
   check "the ported build is pinned by source commit in its tag" 'grep -qE "sunbird-rc-oid4vc-service:v2.1.0-authcode\.[0-9a-f]{7,}" deploy/docker-compose.yml'
 else
   skip "fork checks" "no checkout at $FORK — set SUNBIRD_RC_CORE_PATH"
 fi
+
+head_ '9b. Authority Service: authentication and the public boundary'
+# Anand's two acceptance conditions for Iteration 3, asserted as invariants rather
+# than as a one-off observation in an evidence file.
+
+# --- authentication -------------------------------------------------------
+check "the authority realm is defined" '[ -f deploy/keycloak/realm-authority.json ] && python3 -c "import json;json.load(open(\"deploy/keycloak/realm-authority.json\"))"'
+check "the realm is imported by the stack" 'grep -q "realm-authority.json:/opt/keycloak/data/import/" deploy/docker-compose.yml'
+# Keycloak's realm parser rejects unknown top-level fields and crash-loops the
+# container on start. A _comment key here costs a full stack restart to discover.
+gone "no unparseable comment keys in the realm files" 'python3 -c "
+import json, glob, sys
+known = {\"realm\",\"displayName\",\"enabled\",\"sslRequired\",\"registrationAllowed\",\"resetPasswordAllowed\",\"loginWithEmailAllowed\",\"duplicateEmailsAllowed\",\"editUsernameAllowed\",\"bruteForceProtected\",\"failureFactor\",\"permanentLockout\",\"maxDeltaTimeSeconds\",\"maxFailureWaitSeconds\",\"minimumQuickLoginWaitSeconds\",\"quickLoginCheckMilliSeconds\",\"waitIncrementSeconds\",\"accessTokenLifespan\",\"accessTokenLifespanForImplicitFlow\",\"ssoSessionIdleTimeout\",\"ssoSessionMaxLifespan\",\"requiredActions\",\"defaultDefaultClientScopes\",\"clientScopes\",\"clients\",\"users\",\"roles\",\"attributes\",\"groups\",\"identityProviders\"}
+bad = []
+for f in glob.glob(\"deploy/keycloak/realm-*.json\"):
+    for key in json.load(open(f)):
+        if key not in known: bad.append(f+\":\"+key)
+sys.exit(0 if bad else 1)"'
+# The realm pins its own issuer. Without this, a token fetched through the gateway
+# and one fetched over the container network carry different `iss`, and the service
+# compares against exactly one value — so one caller is always rejected as invalid.
+check "the authority realm pins its issuer" 'python3 -c "
+import json, sys
+r = json.load(open(\"deploy/keycloak/realm-authority.json\"))
+sys.exit(0 if r.get(\"attributes\",{}).get(\"frontendUrl\") else 1)"'
+# /auth, not /realms: every other service in this compose file addresses Keycloak
+# with the relative path it actually runs under, and the Authority once did not.
+check "the Authority OIDC settings carry Keycloak's /auth prefix" 'grep -q "OIDC_ISSUER:.*keycloak:8080/auth/realms/authority" deploy/docker-compose.yml && grep -q "OIDC_JWKS_URI:.*keycloak:8080/auth/realms/authority" deploy/docker-compose.yml'
+gone "no client secret is committed with the realm" 'grep -qE "\"secret\"[[:space:]]*:" deploy/keycloak/realm-authority.json'
+# The committed default must stay authentication-ON. A demo host inherits this file.
+check "authentication is on by default" 'grep -q "ENABLE_AUTH: .\${ENABLE_AUTH:-true}" deploy/docker-compose.yml'
+# The issuing services hold credentials, not a token. A static token cannot outlive
+# its own expiry, and issuance then stops with a 401 that reads like a permissions fault.
+check "the issuers authenticate with client credentials" 'python3 -c "
+import re, sys
+text = open(\"deploy/docker-compose.yml\").read()
+for service in (\"oid4vc-farmer\", \"oid4vc-land\"):
+    match = re.search(r\"^  %s:\\n(.*?)(?=^  [a-z0-9-]+:|\\Z)\" % service, text, re.S | re.M)
+    if not match or \"AUTHORITY_CLIENT_SECRET\" not in match.group(1):
+        sys.exit(1)
+"'
+check "the scripts share one authentication helper" '[ -f scripts/lib/authority-auth.sh ] && [ -f tests/e2e/lib/authority-auth.mjs ]'
+gone "no dev auth headers remain in the Authority scripts" 'grep -lE "^[^#]*x-dev-(issuer|subject)" scripts/bootstrap-agriculture-authority.sh scripts/seed-agriculture-authority.sh scripts/lifecycle-agriculture.sh'
+
+# --- the public boundary --------------------------------------------------
+check "the public trust routes are defined" '[ -f deploy/nginx/routes-trust.conf ]'
+# Mounted in BOTH compose files: the TLS overlay REPLACES the volume list rather
+# than adding to it, so a mount added to one and not the other is absent over HTTPS.
+check "the trust routes are mounted over HTTP and HTTPS" 'grep -q "routes-trust.conf:/etc/nginx/routes-trust.conf" deploy/docker-compose.yml && grep -q "routes-trust.conf:/etc/nginx/routes-trust.conf" deploy/docker-compose.tls.yml'
+check "both gateways include them" 'grep -q "include /etc/nginx/routes-trust.conf" deploy/nginx/nginx.conf && grep -q "include /etc/nginx/routes-trust.conf" deploy/nginx/nginx-tls.conf'
+# The whole point of the file. One prefix location would publish tenants, records,
+# profiles, issuance and revocation in a single line.
+gone "the gateway does not proxy the Authority administrative API" 'grep -qE "location[^~]*/api/v1/?[[:space:]]*\{" deploy/nginx/routes-trust.conf'
+check "only the two trust routes are exposed" 'python3 -c "
+import re, sys
+conf = open(\"deploy/nginx/routes-trust.conf\").read()
+locations = re.findall(r\"^location\\s+(.+?)\\s*\\{\", conf, re.M)
+sys.exit(0 if len(locations) == 1 and \"trust/\" in locations[0] else 1)"'
+check "the trust location is anchored, not a prefix" 'grep -qE "location +~ +\^/trust/.*\\$ +\{" deploy/nginx/routes-trust.conf'
+check "the boundary has an acceptance test" '[ -f tests/e2e/authority-gateway-boundary.test.mjs ]'
+# The administrative API stays on loopback whatever the gateway does.
+check "the Authority admin port is published to loopback only" 'grep -q "127.0.0.1:3334:3334" deploy/docker-compose.yml'
 
 head_ '10. Committed secrets'
 # These used to live inside the fork section above, which meant a checkout
@@ -349,38 +417,33 @@ gone "Animo's release identity is not carried" 'git ls-files -z $W | xargs -0 gr
 check "building the wallet is a script, not a runbook" '[ -x scripts/build-wallet.sh ]'
 check "the importer is re-runnable for the next upstream bump" '[ -x scripts/vendor-wallet.sh ]'
 
-# The wallet's trust entries are build-time constants compiled into an APK, so a
-# re-bootstrap mints a new verifier DID and the installed wallet silently reverts
-# to "Organization not verified" with nothing in any log to say why. That failure
-# is invisible until someone points a phone at a QR, on camera.
+# The wallet's showcase trust entries are supplied at BUILD TIME and must not be pinned in
+# committed source. They carry the deployment's host and a uuid that changes on every
+# re-bootstrap, so pinning them did two kinds of damage: it put a sandbox address into a
+# public repository, and it went stale invisibly — the prefix lookup falls through to the
+# host-scoped entry, the party is still named, and only the logo is wrong. That is how an
+# 18+ roundel reached a farmer's crop-credit consent screen.
+#
+# These checks assert the ABSENCE of deployment detail, which is the inverse of what they
+# checked before the trust list moved to configuration.
 C="$W/apps/wallet/src/constants.ts"
-# Env first, deploy/.env second — the same override the e2e suite takes, so this
-# can be pointed at the deployment the APK was actually built for rather than
-# only at whatever stack this checkout last bootstrapped.
-# Each falls back INDEPENDENTLY. The earlier `[ -z "$VDID$PURL" ]` meant setting
-# only PUBLIC_URL suppressed the fallback for both, so the DID check failed with
-# "the wallet pins THIS deployment's verifier DID" when the real cause was an
-# unset variable — a failure message pointing at the wrong thing entirely.
-VDID="${VERIFIER_DID:-}"; PURL="${PUBLIC_URL:-}"
-if [ -f deploy/.env ]; then
-  [ -n "$VDID" ] || VDID="$(grep '^VERIFIER_DID=' deploy/.env | cut -d= -f2-)"
-  [ -n "$PURL" ] || PURL="$(grep '^PUBLIC_URL=' deploy/.env | cut -d= -f2-)"
+check "no IP address is pinned in the wallet's trust list" \
+  '! grep -qE "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}" "$C"'
+check "the wallet takes its showcase trust from configuration" \
+  'grep -q "showcaseDeployment" "$C" && grep -q "SHOWCASE_DEPLOYMENT" "$W/apps/wallet/app.config.js"'
+
+# And, when this checkout knows which deployment it describes, that the host is absent too.
+# A hostname is not an IP and would slip past the check above.
+PURL="${PUBLIC_URL:-}"
+if [ -z "$PURL" ] && [ -f deploy/.env ]; then
+  PURL="$(grep '^PUBLIC_URL=' deploy/.env | cut -d= -f2-)"
 fi
 if [ -n "$PURL" ]; then
-  # The host the wallet was built for, taken from the logo URLs, which only this
-  # repository serves. A local .env legitimately describes a different deployment
-  # from the one the installed APK targets, and comparing the two then reports a
-  # failure that says nothing about the code - so compare only when they agree.
-  WHOST="$(grep -oE 'https://[^/]+/assets/logos/' "$C" | head -1 | sed -E 's|https://||; s|/assets/logos/||')"
   EHOST="$(printf '%s' "$PURL" | sed -E 's|^https?://||; s|/.*$||')"
-  if [ -n "$WHOST" ] && [ "$WHOST" = "$EHOST" ]; then
-    check "the wallet pins THIS deployment's verifier DID" 'test -n "$VDID" && grep -q "$VDID" "$C"'
-    check "the wallet pins THIS deployment's issuer origin" 'grep -q "$PURL" "$C"'
-  else
-    skip "wallet trust pinning" "the wallet is built for ${WHOST:-an unknown host}; this deploy/.env describes ${EHOST:-nothing}"
-  fi
+  check "this deployment's host is not pinned in the wallet's trust list" \
+    '! grep -q "$EHOST" "$C"'
 else
-  skip "wallet trust pinning" "no PUBLIC_URL in the environment or deploy/.env"
+  skip "wallet host absence" "no PUBLIC_URL in the environment or deploy/.env"
 fi
 
 # Drift: when the fork is still around, every vendored blob must match it apart

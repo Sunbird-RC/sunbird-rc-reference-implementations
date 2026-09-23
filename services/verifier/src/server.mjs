@@ -16,7 +16,8 @@ import { oid4vcClient } from './core/oid4vc-client.mjs';
 import { loadAlgorithmPolicy } from './core/algorithms.mjs';
 import { buildDcqlQuery, expectedClaimNames, ISSUER_CLAIM } from './core/dcql.mjs';
 import { evaluateChecks } from './core/checks.mjs';
-import { loadTrustPolicy } from './core/trust.mjs';
+import { resolveTrustPolicy } from './core/trust.mjs';
+import { credentialStatusChecker } from './core/credential-status.mjs';
 import { assertExactClaims } from './core/claim-policy.mjs';
 import { sessionStore } from './core/sessions.mjs';
 import { ageCredentialRequest, decideAge, AGE_CLAIM } from './domains/age/index.mjs';
@@ -46,6 +47,29 @@ const SCHOOL_VCT = process.env.SCHOOL_VCT || `${PUBLIC_URL}/vct/school-record-cr
 const COLLEGE_VCT = process.env.COLLEGE_VCT || `${PUBLIC_URL}/vct/college-record-credential`;
 const UNIVERSITY_VCT = process.env.UNIVERSITY_VCT || `${PUBLIC_URL}/vct/university-record-credential`;
 const TRUST_POLICY_FILE = process.env.TRUST_POLICY_FILE || '/app/config/trust/issuers.json';
+// Where to resolve issuers the trust policy names rather than spells out. Unset
+// is fine for a policy of literal DIDs; an entry that needs it will say so and
+// refuse to start.
+const AUTHORITY_BASE_URL = process.env.AUTHORITY_BASE_URL || '';
+
+// Asks the issuing Authority whether a credential is still one it stands behind. The
+// endpoint is not configured here: it comes from the trust policy entry for the issuer that
+// signed the credential, so a credential can never point this at somewhere of its choosing.
+const credentialStatus = credentialStatusChecker();
+// The claim carrying an Agriculture credential's identifier at the issuing Authority.
+//
+// Checking live status is the DEFAULT for this journey, not an option. A lender deciding on
+// a credential whose source may since have been suspended is the failure this iteration
+// exists to remove, and a check that ships off by default is a check most deployments will
+// never turn on.
+//
+// Set AGRICULTURE_STATUS_CLAIM='' to disable it deliberately. A credential that carries no
+// such identifier is then refused rather than waved through — an unlinked credential has
+// unknown standing, which is not the same as good standing.
+const AGRICULTURE_STATUS_CLAIM =
+  process.env.AGRICULTURE_STATUS_CLAIM === undefined
+    ? 'authorityCredentialId'
+    : process.env.AGRICULTURE_STATUS_CLAIM;
 const CROP_POLICY_FILE = process.env.CROP_POLICY_FILE || '/app/config/policy/crop-rates.json';
 const ALG_POLICY_FILE = process.env.ALG_POLICY_FILE || '/app/config/policy/algorithms.json';
 // Mirrors oid4vc-service's VP_TXN_TTL default. A verifier session outliving the
@@ -92,9 +116,14 @@ const signers = {
 const oid4vc = signers.age;
 const sessions = sessionStore({ ttlSeconds: SESSION_TTL_SECONDS });
 
-// Loaded once, at boot, and deliberately allowed to throw: a verifier that
-// cannot tell which issuers it trusts must not start and accept presentations.
-const trust = loadTrustPolicy({ file: TRUST_POLICY_FILE });
+// Resolved once, at boot, before the listener opens — see the bottom of this
+// file. Deliberately allowed to throw: a verifier that cannot tell which issuers
+// it trusts must not start and accept presentations.
+//
+// Assigned rather than const because resolution reads the Authority Service for
+// any issuer the policy names instead of spelling out, and that is asynchronous.
+// Nothing reads it before listen(), which is the ordering that matters.
+let trust;
 
 // Same rule as the trust allowlist: a verifier that cannot read the lending
 // policy must not start and then quote a rupee figure it made up.
@@ -226,6 +255,20 @@ function educationUseCase(policyId, signer) {
  * disclosure policy, issuer trust — is shared, which is the entire reason this
  * service is reusable rather than copied.
  */
+// The claim lists the Agriculture journey ACTUALLY requests, derived from the requests
+// themselves rather than restated. When the status check is enabled the identifier is
+// appended to each request, and a policy that still published the base list would tell a
+// wallet to disclose less than the query demands — which fails as "DCQL not satisfied",
+// several services away from the mismatch.
+const agricultureRequestedClaims = () => {
+  const requests = agricultureCredentialRequests({
+    farmerVct: FARMER_VCT,
+    landVct: LAND_VCT,
+    statusClaim: AGRICULTURE_STATUS_CLAIM,
+  });
+  return Object.fromEntries(requests.map((r) => [r.role, r.claims]));
+};
+
 const USE_CASES = {
   age: {
     signer: 'age',
@@ -255,9 +298,23 @@ const USE_CASES = {
     // The bank is a different party from the age-restricted service, so it signs
     // with its own DID and the wallet names it correctly.
     signer: 'bank',
-    requests: () => agricultureCredentialRequests({ farmerVct: FARMER_VCT, landVct: LAND_VCT }),
+    requests: () =>
+      agricultureCredentialRequests({
+        farmerVct: FARMER_VCT,
+        landVct: LAND_VCT,
+        statusClaim: AGRICULTURE_STATUS_CLAIM,
+      }),
+    // The purpose the wallet shows the farmer BEFORE they consent. Without it Paradym
+    // renders "No information was provided on the purpose of the data request. Be
+    // cautious" — which is accurate, and is exactly the wrong thing to show someone
+    // being asked to share credentials for a loan they came to apply for. It travels
+    // in `credential_sets[].purpose`; see core/dcql.mjs for why not client_metadata.
+    //
+    // Worded as the applicant's own goal, not the bank's internal one: they are
+    // applying for crop credit, not "undergoing eligibility assessment".
+    purpose: () => 'Applying for crop credit',
     describe: () => 'requesting the farmer and land credentials',
-    requestedClaims: () => ({ farmer: FARMER_CLAIMS, land: LAND_CLAIMS }),
+    requestedClaims: () => agricultureRequestedClaims(),
     decide: (verified) => decideFarmCredit({ farmer: verified.farmer, land: verified.land }, cropPolicy),
     respond: (outcome, { status, issuer, verified }) => ({
       state: 'decided',
@@ -272,18 +329,25 @@ const USE_CASES = {
       // request actually made. It listed three claims of the five distinct
       // ones that arrived until this was fixed.
       //
-      // farmerId is taken from the FARMER credential specifically, and the
-      // land credential's copy is not spread over it: when the two disagree
+      // farmerReference is taken from the FARMER credential specifically, and
+      // the land credential's copy is not spread over it: when the two disagree
       // the decision is CORRELATION_FAILED, and a merge would quietly display
-      // one farmer id for a presentation that carried two.
+      // one reference for a presentation that carried two.
       disclosed: {
-        farmerId: verified.farmer.farmerId,
-        registeredFarmer: verified.farmer.registeredFarmer,
+        farmerReference: verified.farmer.farmerReference,
+        registrationStatus: verified.farmer.registrationStatus,
+        // Reported because the farmer disclosed it. It is technical linkage rather than a
+        // business claim, and it is still something they handed over — a "shared with us"
+        // list that quietly omitted it would understate what travelled, which is the same
+        // dishonesty as overstating what was withheld.
+        ...(AGRICULTURE_STATUS_CLAIM && verified.farmer[AGRICULTURE_STATUS_CLAIM] !== undefined
+          ? { [AGRICULTURE_STATUS_CLAIM]: verified.farmer[AGRICULTURE_STATUS_CLAIM] }
+          : {}),
         ...(verified.land
           ? {
               ownershipStatus: verified.land.ownershipStatus,
               cropType: verified.land.cropType,
-              cultivatedAreaAcres: verified.land.cultivatedAreaAcres,
+              cultivatedArea: verified.land.cultivatedArea,
             }
           : {}),
       },
@@ -306,7 +370,7 @@ const USE_CASES = {
     }),
     policy: () => ({
       credentialTypes: { farmer: FARMER_VCT, land: LAND_VCT },
-      requestedClaims: { farmer: FARMER_CLAIMS, land: LAND_CLAIMS },
+      requestedClaims: agricultureRequestedClaims(),
       protocolClaims: [ISSUER_CLAIM],
       cropRates: Object.fromEntries(cropPolicy.crops.map((crop) => [crop, cropPolicy.rate(crop)])),
       maxRatePerAcre: cropPolicy.maxRatePerAcre,
@@ -365,6 +429,10 @@ async function createSession(useCaseName = 'age') {
       id: request.id,
       role: request.role,
       expectedClaims: expectedClaimNames(request),
+      // Carried into the session, or the status check silently does not happen: the
+      // decision reads the session's copy of the request, not the one the query was built
+      // from, and a field dropped here is a check that looks configured and never runs.
+      statusClaim: request.statusClaim,
     })),
     qrData: vp.qr_data,
   });
@@ -516,6 +584,32 @@ async function readSession(sessionId) {
       return reject(trusted.reason);
     }
 
+    // 3b. Is the credential still one its Authority stands behind?
+    //
+    //     Sunbird RC's `revocation` check reports OK without consulting anything, so a
+    //     credential whose source record was suspended still verifies. This asks the
+    //     issuing Authority, which answers from the credential's own state combined with
+    //     the current lifecycle of the record it came from.
+    //
+    //     Opt-in per request, via the claim that carries the credential's identifier.
+    //     Journeys whose credentials carry no such identifier are unchanged rather than
+    //     being failed for a check they cannot satisfy — and because the check refuses a
+    //     missing identifier, declaring statusClaim on a request whose credential does not
+    //     carry one fails closed rather than silently passing.
+    if (request.statusClaim) {
+      // Resolved against the Authority that vouched for THIS issuer, taken from the trust
+      // policy — never from anything the credential carries. The credential supplies only
+      // an identifier; where that identifier is looked up is configuration.
+      const standing = await credentialStatus.check(
+        claims[request.statusClaim],
+        trusted.issuer.authorityBaseUrl,
+      );
+      if (!standing.ok) {
+        console.log(`[verifier] session ${sessionId} rejected: ${standing.reason}`);
+        return reject(standing.reason);
+      }
+    }
+
     verified[request.role || request.id] = claims;
     issuerNames.push(trusted.issuer.name);
   }
@@ -528,7 +622,7 @@ async function readSession(sessionId) {
   //    asserted in step 1: oid4vc-service checks the Key Binding JWT for the
   //    presentation, so two or three credentials arriving in one VP token are
   //    held by one wallet key. That is what lets a domain module treat a matching
-  //    farmerId or learnerId as correlation rather than coincidence.
+  //    farmerReference or learnerId as correlation rather than coincidence.
   const useCase = USE_CASES[session.useCase] || USE_CASES.age;
   let outcome;
   try {
@@ -616,6 +710,19 @@ const server = createServer(async (req, res) => {
     return send(500, { error: 'verifier_error' });
   }
 });
+
+// Resolve trust first, then listen. The order is the safety property: a verifier
+// that opened its port and resolved afterwards would accept presentations during
+// the gap with no allowlist, and answer them.
+//
+// A failure here exits non-zero rather than serving in a degraded state. There is
+// no useful degraded state for this — every branch below refuses everything.
+try {
+  trust = await resolveTrustPolicy({ file: TRUST_POLICY_FILE, baseUrl: AUTHORITY_BASE_URL });
+} catch (err) {
+  console.error(`[verifier] refusing to start: ${err.message}`);
+  process.exit(1);
+}
 
 server.listen(PORT, () => {
   console.log(

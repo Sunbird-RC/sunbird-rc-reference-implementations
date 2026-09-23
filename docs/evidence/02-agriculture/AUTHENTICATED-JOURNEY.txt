@@ -1,0 +1,171 @@
+Iteration 3 — Agriculture, with Authority authentication on and a public trust boundary
+captured 2026-09-21 from a sandbox deployment reset to empty
+
+WHY THIS FILE REPLACES PUBLIC-DID-JOURNEY.txt
+  That capture proved the credentials are issued from authorities with publicly
+  resolvable DIDs. It also recorded two things that were not done: the Authority's
+  administrative API ran with authentication disabled, and its public trust routes were
+  not reachable through the gateway. Both are now closed, and this is the same journey
+  with both closed.
+
+A NOTE ON THE DIDs, which the previous capture stated too strongly
+  The sslip.io identifiers below are publicly resolvable SANDBOX DIDs. They are not
+  permanent production identities: sslip.io maps the hostname to this sandbox's IP
+  address, so they resolve for exactly as long as the sandbox keeps that address. What
+  they demonstrate is that the issuance path produces DIDs a real wallet can resolve over
+  HTTPS, rather than localhost references that can only ever be development fixtures.
+
+A NOTE ON TWO DIFFERENT ROUTES, which the previous note conflated
+  The three-field JSON reported previously is CREDENTIAL STATUS, not issuer trust
+  metadata. They are separate routes answering separate questions:
+
+    GET /trust/issuers/{issuerId}                 who is this issuer, and which keys
+                                                  are theirs
+    GET /trust/credentials/{credentialId}/status  is this credential still to be
+                                                  relied on
+
+Deployment
+  public origin      https://135.235.192.9.sslip.io  (Let's Encrypt, HTTP -> 301)
+  Authority Service  ghcr.io/pallakartheekreddy/sunbird-rc-authority-service
+                     @sha256:56333d4561bff7222db34c6089d0cf857a69cb6a156037d25c1650e14e2b70e3
+  oid4vc-service     v2.1.0-authcode.714a8464 (patch series 0001-0009), built natively
+                     on the amd64 host from the same tree
+  context            https://w3id.org/sunbird-rc/agriculture/v1
+
+-----------------------------------------------------------------------------
+1. AUTHENTICATION IS ON
+-----------------------------------------------------------------------------
+  no token:        401
+  dev headers:     401
+  bogus bearer:    401
+  ENABLE_AUTH:     true
+  OIDC_ISSUER:     http://keycloak:8080/auth/realms/authority
+
+  The administrative API accepts only an OAuth2 bearer token from the `authority` realm.
+  The x-dev headers that a development stack accepts are refused here. `ENABLE_AUTH` is
+  the committed default rather than an override, and the sandbox no longer carries a
+  compose overlay that disables it — that file was deleted as part of this deployment.
+
+-----------------------------------------------------------------------------
+2. THE ISSUING SERVICES HOLD CREDENTIALS, NOT A TOKEN
+-----------------------------------------------------------------------------
+  --- oid4vc-farmer ---
+    CLAIM_SOURCE_DEFAULT: authority
+    AUTHORITY_TOKEN_URL:  http://keycloak:8080/auth/realms/authority/protocol/openid-connect/token
+    AUTHORITY_CLIENT_ID:  agri-farmer-officer
+    AUTHORITY_TOKEN set:  no
+    secret present:       yes
+  --- oid4vc-land ---
+    CLAIM_SOURCE_DEFAULT: authority
+    AUTHORITY_TOKEN_URL:  http://keycloak:8080/auth/realms/authority/protocol/openid-connect/token
+    AUTHORITY_CLIENT_ID:  agri-land-officer
+    AUTHORITY_TOKEN set:  no
+    secret present:       yes
+
+  Each issuer has a client id and secret for its own service account and exchanges them
+  for a token. AUTHORITY_TOKEN — the static token of the previous design — is unset.
+  A token in an environment variable cannot outlive its own expiry: a deployment
+  configured on Monday stops issuing on Monday plus the token lifetime, with a 401 that
+  reads like a permissions fault rather than an expiry.
+
+-----------------------------------------------------------------------------
+3. RENEWAL IS PROVEN BY THE RUN, NOT ASSERTED
+-----------------------------------------------------------------------------
+  --- oid4vc-farmer ---
+    acquisitions: 2
+    09/21/2026, 10:30:48 AM     LOG [AuthorityTokenProvider] acquired an Authority token for agri-farmer-officer, valid 60s, renewing in 50s
+    09/21/2026, 10:32:44 AM     LOG [AuthorityTokenProvider] acquired an Authority token for agri-farmer-officer, valid 60s, renewing in 50s
+  --- oid4vc-land ---
+    acquisitions: 2
+    09/21/2026, 10:30:50 AM     LOG [AuthorityTokenProvider] acquired an Authority token for agri-land-officer, valid 60s, renewing in 50s
+    09/21/2026, 10:32:45 AM     LOG [AuthorityTokenProvider] acquired an Authority token for agri-land-officer, valid 60s, renewing in 50s
+
+  The `authority` realm issues 60-second tokens deliberately — shorter than a full
+  journey run. More than one acquisition per issuer during the suite is the evidence
+  that renewal works, rather than that the first token happened to outlast the test.
+
+-----------------------------------------------------------------------------
+4. THE PUBLIC BOUNDARY, FROM OUTSIDE THE SERVICE NETWORK
+-----------------------------------------------------------------------------
+  --- the two trust routes ---
+  farmer issuer id: e6344fd5-c204-465e-b0da-71b89ed66356
+    GET /trust/issuers/e6344fd5-c204-465e-b0da-71b89ed66356 -> 200
+    body:
+      {"issuer":"did:web:135.235.192.9.sslip.io:d8ea776d-1d84-459d-b343-faa536aba7b0","name":{"en":"Farmer Authority"},"verificationMethods":[{"id":"key-0","type":"IDENTITY_SERVICE_DID","algorithm":"Ed25519","reference":"did:web:135.235.192.9.sslip.io:d8ea776d-1d84-459d-b343-faa536aba7b0"}]}
+  --- the administrative API, same listener ---
+    /api/v1/tenants                      -> 404
+    /api/v1/authorities                  -> 404
+    /api/v1/credential-profiles          -> 404
+    /api/v1/configuration-history        -> 404
+    /api/v1/record-history               -> 404
+  --- issuance and revocation ---
+    POST /api/v1/.../issue               -> 404
+    POST /api/v1/credentials/x/revoke    -> 404
+  --- traversal out of the trust prefix ---
+    /trust/../api/v1/tenants                     -> 404
+    /trust/tenants                               -> 404
+    /trust/issuers/e6344fd5-c204-465e-b0da-71b89ed66356/keys -> 404
+  --- the trust routes are read-only ---
+    POST   /trust/issuers/... -> 403
+    PUT    /trust/issuers/... -> 403
+    PATCH  /trust/issuers/... -> 403
+    DELETE /trust/issuers/... -> 403
+
+  Tested from a workstation over the public origin, not from inside the container
+  network. Two routes answer; the administrative API, issuance and revocation do not
+  exist through that listener. A 401 from those would itself be a failure — it would mean
+  the gateway forwarded the request and only the service refused it.
+
+  The gateway matches a single anchored regular expression admitting exactly the two
+  trust shapes. There is deliberately no `location /api/v1/`: one prefix line would
+  publish tenants, records, profiles, issuance and revocation at once.
+
+-----------------------------------------------------------------------------
+5. THE OPERATOR SURFACES ARE NOT ON ANY PUBLIC INTERFACE
+-----------------------------------------------------------------------------
+    tcp/3334  from the internet: refused/filtered
+    tcp/8088  from the internet: refused/filtered
+    tcp/8080  from the internet: refused/filtered
+    authority-service 3334 published as: 127.0.0.1:3334
+    nginx published as:                  80/tcp -> 0.0.0.0:80 80/tcp -> [::]:80 443/tcp -> 0.0.0.0:443 443/tcp -> [::]:443 8088/tcp -> 127.0.0.1:8088 
+    operator endpoints through the PUBLIC origin (must be refused):
+      /auth/admin                  -> 403
+      /oid4vc/offer                -> 403
+      /farmer/oid4vc/offer         -> 403
+      /land/oid4vc/offer           -> 403
+
+  Two separate things, and the distinction matters: the Authority administrative API on
+  3334, and the gateway's own operator listener on 8088 which deliberately serves
+  unauthenticated setup endpoints. Both are bound to loopback.
+
+-----------------------------------------------------------------------------
+6. THE JOURNEY ITSELF
+-----------------------------------------------------------------------------
+  Farmer Authority  did:web:135.235.192.9.sslip.io:d8ea776d-1d84-459d-b343-faa536aba7b0
+  Land Authority    did:web:135.235.192.9.sslip.io:2e797e7a-b9e3-480f-947e-f407656c2ce5
+
+  Both resolve over HTTPS, which is what did:web requires and what a real wallet is
+  entitled to insist on. The qualified references the Authority mints are rooted in these
+  DIDs, so they identify the same resource from outside the deployment rather than
+  pointing at a localhost address that only ever resolves on the machine that made it.
+
+-----------------------------------------------------------------------------
+SUITE RESULTS AGAINST THIS DEPLOYMENT
+-----------------------------------------------------------------------------
+  e2e    162/162 pass, 0 failures, 0 skipped
+         Run from a workstation over the public origin, with the Authority Service
+         authenticated. Includes tests/e2e/authority-gateway-boundary.test.mjs, the six
+         tests asserting the boundary above.
+  unit   203/203 pass
+  fork   192/192 pass, 17 suites (services/oid4vc-service)
+
+-----------------------------------------------------------------------------
+WHAT IS STILL NOT DONE
+-----------------------------------------------------------------------------
+  - Trust resolution still happens at the verifier's startup. Deactivating an issuer does
+    not reach a running verifier until it restarts. That is no worse than a configuration
+    file, but it is not revocation and should not be relied on as such.
+  - The issuing service authenticates as itself and may issue for its own tenant. A
+    compromised issuer can issue within that tenant — the same blast radius as the signing
+    key it already holds. Per-holder authorisation is not part of this design.
+  - All data here is synthetic and the policies are simplified reference patterns.

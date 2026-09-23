@@ -22,7 +22,24 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEPLOY="$ROOT/deploy"
 ENV_FILE="$DEPLOY/.env"
+# COMPOSE_EXTRA lets a local overlay ride along — an arm64 development machine needs one,
+# because the compose file pins platform: linux/amd64 on every Sunbird RC service. That pin
+# is correct for the demo host, but on Apple silicon it makes compose treat a present local
+# image as missing and try to pull it, surfacing as a misleading "pull access denied".
+#
+# Step 6 recreates services. Without this, it would recreate them from the base file alone
+# and undo whatever the stack was actually started with.
+#
+#   COMPOSE_EXTRA=deploy/compose.arm64.yml scripts/bootstrap.sh
 COMPOSE=(docker compose -f "$DEPLOY/docker-compose.yml")
+if [ -n "${COMPOSE_EXTRA:-}" ]; then
+  # Not die(): the helpers are defined below this point.
+  [ -f "$COMPOSE_EXTRA" ] || {
+    printf '  \033[31m✗\033[0m COMPOSE_EXTRA=%s does not exist\n' "$COMPOSE_EXTRA" >&2
+    exit 1
+  }
+  COMPOSE+=(-f "$COMPOSE_EXTRA")
+fi
 
 green() { printf '  \033[32m✓\033[0m %s\n' "$1"; }
 info()  { printf '  \033[2m·\033[0m %s\n' "$1"; }
@@ -459,10 +476,51 @@ for u in citizen.meera citizen.arjun citizen.nikhil citizen.sana citizen.unmappe
   fi
 done
 
+# Every realm whose users carry an attribute has to ALLOW unmanaged attributes, and
+# none of them does by default.
+#
+# Keycloak's declarative user profile defaults unmanagedAttributePolicy to DISABLED, and
+# realm IMPORT bypasses the policy while the admin API does not. So the seeded users have
+# their citizenId/nationalId and anything added later silently loses it — no error, no
+# warning, the attribute is simply dropped. Issuance resolves a holder's claims BY that
+# attribute, so such a user gets a credential with no link to its source record, and the
+# first sign of it is a presentation the verifier cannot satisfy.
+#
+# One PUT per realm, and it is idempotent.
+for r in age agriculture education; do
+  if kcadm get users/profile -r "$r" > /tmp/kc-profile-$r.json 2>/dev/null \
+     && python3 -c '
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+if d.get("unmanagedAttributePolicy") == "ENABLED":
+    sys.exit(3)                      # already set; nothing to do
+d["unmanagedAttributePolicy"] = "ENABLED"
+json.dump(d, open(p, "w"))
+' "/tmp/kc-profile-$r.json"; then
+    if "${COMPOSE[@]}" exec -T keycloak sh -c 'cat > /tmp/kc-profile-in.json' < "/tmp/kc-profile-$r.json" \
+       && kcadm update users/profile -r "$r" -f /tmp/kc-profile-in.json >/dev/null 2>&1; then
+      green "$r allows unmanaged user attributes"
+    else
+      warn "could not allow unmanaged user attributes on $r"
+    fi
+  fi
+  rm -f "/tmp/kc-profile-$r.json"
+done
+
 # Iteration 02's farmers, in their own realm. The same generated password: it is
 # a demo secret that lives only in deploy/.env, and a second one would be a
 # second thing to keep out of Git for no gain.
-for u in farmer.ravi farmer.lakshmi farmer.suresh farmer.geeta farmer.unregistered farmer.noland farmer.norecord farmer.unmapped; do
+# The two terminal.* accounts exist so the inactivation and revocation cases have
+# subjects of their own. Neither state can be undone — the Authority refuses
+# INACTIVE -> ACTIVE, and idempotent issuance means a revoked credential stays the one
+# that subject gets — so spending a shared fixture on either would spend it for the
+# life of the deployment.
+# farmer.film is reserved for the same reason: the showcase ends on a revocation, so
+# each take spends its subject. See scripts/seed-agriculture-authority.sh.
+for u in farmer.ravi farmer.lakshmi farmer.suresh farmer.geeta farmer.unregistered \
+         farmer.noland farmer.norecord farmer.unmapped \
+         farmer.terminal.inactive farmer.terminal.revoked farmer.film farmer.film2; do
   if kcadm set-password -r agriculture --username "$u" --new-password "$CITIZEN_PASSWORD" >/dev/null 2>&1; then
     green "$u ready"
   else
@@ -484,6 +542,43 @@ done
 
 # --- 6. apply the new configuration -----------------------------------------
 say "6. Applying configuration"
+
+# An Authority-resolved trust policy survives a stack reset in deploy/.env; the issuers it
+# names do not. The verifier resolves them at boot and REFUSES TO START when one is
+# missing — correctly — so recreating it below would crash-loop, and the `wait_for` that
+# follows would hang until it gave up. The whole bootstrap then fails at the last step,
+# reporting a verifier problem, when what actually happened is that the Authority
+# Service's database was emptied and has not been re-bootstrapped yet.
+#
+# So: if the selected policy names issuers this Authority does not publish, fall back to
+# the default policy for THIS boot only. deploy/.env is left alone —
+# bootstrap-agriculture-authority.sh rewrites the policy with live identifiers and the
+# verifier is recreated again there.
+authority_policy_is_stale() {
+  local policy="$ROOT/config/trust/issuers.authority.json" base ids id code
+  [ "$(envval VERIFIER_TRUST_POLICY_FILE)" = /app/config/trust/issuers.authority.json ] || return 1
+  [ -f "$policy" ] || return 1
+  ids="$(python3 -c '
+import json, sys
+policy = json.load(open(sys.argv[1]))
+print(" ".join(i["authorityIssuer"] for i in policy.get("issuers", []) if i.get("authorityIssuer")))
+' "$policy" 2>/dev/null)" || return 1
+  [ -n "$ids" ] || return 1
+  base="${AUTHORITY_URL:-http://localhost:3334}"
+  for id in $ids; do
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$base/api/v1/trust/issuers/$id" 2>/dev/null || echo 000)"
+    [ "$code" = 200 ] || return 0
+  done
+  return 1
+}
+
+if authority_policy_is_stale; then
+  warn "the Agriculture trust policy names issuers this Authority does not publish"
+  info "using the default trust policy for this boot; run scripts/bootstrap-agriculture-authority.sh"
+  # Exported, so it beats deploy/.env for the compose commands below without editing it.
+  export VERIFIER_TRUST_POLICY_FILE=/app/config/trust/issuers.json
+fi
+
 # oid4vc-service reads VERIFIER_DID/ISSUER_DID and the verifier reads
 # AGE_ISSUER_DID at boot, so both need recreating now that .env has them.
 "${COMPOSE[@]}" up -d --force-recreate --no-deps \

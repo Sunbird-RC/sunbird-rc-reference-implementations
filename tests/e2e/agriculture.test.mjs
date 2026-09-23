@@ -37,9 +37,11 @@ import {
   NEGATIVE_LAND_FIXTURE,
   json,
 } from './lib/stack.mjs';
+import { signIn } from './lib/keycloak.mjs';
 import {
   createHolder,
   collectCredential,
+  requestCredential,
   presentSdJwt,
   parseSdJwt,
   disclosableClaims,
@@ -48,17 +50,21 @@ import {
   declinePresentation,
 } from './lib/wallet.mjs';
 
-const { base, opsBase } = deployEnv();
+const { base, opsBase, demoPassword } = deployEnv();
+
+// The credential configurations each registry advertises, discovered once. The wallet needs
+// the configuration id to ask for a credential and the scope to ask Keycloak for a token.
+const advertised = { farmer: {}, land: {} };
 const FARMER_ID = 'farmer_cred';
 const LAND_ID = 'land_cred';
 
 /** The fixtures scripts/seed-agriculture.sh seeds, by the case they exercise. */
 const FIXTURES = {
-  eligiblePaddy: { nationalId: 'NAT-90018472', farmerId: 'FRM-KA-0041' },
-  eligibleWheat: { nationalId: 'NAT-90023815', farmerId: 'FRM-PB-0117' },
-  inactiveOwner: { nationalId: 'NAT-90031164', farmerId: 'FRM-KA-0058' },
-  unfundedCrop: { nationalId: 'NAT-90042093', farmerId: 'FRM-MH-0203' },
-  unregistered: { nationalId: 'NAT-90066021', farmerId: 'FRM-KA-0088' },
+  eligiblePaddy: { username: 'farmer.ravi', nationalId: 'NAT-90018472', farmerId: 'FRM-KA-0041' },
+  eligibleWheat: { username: 'farmer.lakshmi', nationalId: 'NAT-90023815', farmerId: 'FRM-PB-0117' },
+  inactiveOwner: { username: 'farmer.suresh', nationalId: 'NAT-90031164', farmerId: 'FRM-KA-0058' },
+  unfundedCrop: { username: 'farmer.geeta', nationalId: 'NAT-90042093', farmerId: 'FRM-MH-0203' },
+  unregistered: { username: 'farmer.unregistered', nationalId: 'NAT-90066021', farmerId: 'FRM-KA-0088' },
 };
 
 let skip = null;
@@ -79,6 +85,24 @@ before(async () => {
     skip = 'the Agriculture credential schemas are not published — run scripts/bootstrap.sh';
   } else if (farmerIssuerDid === landIssuerDid) {
     skip = 'the Farmer and Land registries share an issuer DID, so they are not independent';
+  }
+  if (skip) return;
+
+  if (!demoPassword) {
+    skip = 'no DEMO_CITIZEN_PASSWORD in deploy/.env — run ./scripts/bootstrap.sh';
+    return;
+  }
+  // What each registry advertises, asked of the deployment rather than assumed. A wallet
+  // needs the configuration id to request a credential and the scope to get a token for it.
+  for (const which of ['farmer', 'land']) {
+    const meta = await json(`${base}/${which}/.well-known/openid-credential-issuer`);
+    const entries = Object.entries(meta.body?.credential_configurations_supported || {});
+    if (entries.length === 0) {
+      skip = `the ${which} registry advertises no credential — run ./scripts/bootstrap.sh`;
+      return;
+    }
+    const [id, cfg] = entries[0];
+    advertised[which] = { issuerBase: `${base}/${which}`, configurationId: id, scope: cfg.scope };
   }
 });
 
@@ -104,50 +128,46 @@ async function registryRecord(entity, field, value) {
  * test with it rather than leaving it asserting stale values.
  */
 async function walletWithBothCredentials(fixture, { holder: existing } = {}) {
+  // The customer journey, not a stand-in for it. The farmer signs in and each registry
+  // issues to their wallet through the authorization-code flow, which is the only path that
+  // reaches the Authority Service — so these credentials carry the linkage a bank needs to
+  // ask whether the record behind them still stands.
+  //
+  // This used to mint credentials through POST /oid4vc/offer with claims supplied by the
+  // test. That path never consults a claim source, so the credentials it produced could not
+  // be status-checked, and an acceptance suite built on them proved the wrong thing.
   const holder = existing || (await createHolder());
   const farmerRecord = await registryRecord('FarmerRecord', 'farmerId', fixture.farmerId);
   const landRecord = await registryRecord('LandRecord', 'farmerId', fixture.farmerId);
   assert.ok(farmerRecord, `no seeded FarmerRecord for ${fixture.farmerId}`);
 
-  const farmerOffer = await issueAgricultureCredential({
-    base,
-    which: 'farmer',
-    issuerDid: farmerIssuerDid,
-    claims: {
-      farmerId: farmerRecord.farmerId,
-      registeredFarmer: farmerRecord.registeredFarmer,
-      farmerCategory: farmerRecord.farmerCategory,
-      district: farmerRecord.district,
-    },
+  const auth = await signIn({
+    authorizationServer: `${base}/auth/realms/agriculture`,
+    redirectUri: `${base}/wallet/redirect`,
+    username: fixture.username,
+    password: demoPassword,
+    scope: ['openid', advertised.farmer.scope, advertised.land.scope].filter(Boolean).join(' '),
   });
-  const farmer = await collectCredential({ base: farmerOffer.issuerBase, offer: farmerOffer, holder });
+  assert.ok(auth.accessToken, `sign-in failed for ${fixture.username}: ${auth.error}`);
 
-  let land = null;
-  let landOffer = null;
-  if (landRecord) {
-    landOffer = await issueAgricultureCredential({
-      base,
-      which: 'land',
-      issuerDid: landIssuerDid,
-      claims: {
-        landId: landRecord.landId,
-        farmerId: landRecord.farmerId,
-        ownershipStatus: landRecord.ownershipStatus,
-        landAreaAcres: landRecord.landAreaAcres,
-        cropType: landRecord.cropType,
-        cultivatedAreaAcres: landRecord.cultivatedAreaAcres,
-        district: landRecord.district,
-      },
+  const collect = (which) =>
+    requestCredential({
+      base: advertised[which].issuerBase,
+      token: { access_token: auth.accessToken },
+      holder,
+      extra: { credential_configuration_id: advertised[which].configurationId },
     });
-    land = (await collectCredential({ base: landOffer.issuerBase, offer: landOffer, holder })).credential;
-  }
+
+  const farmer = await collect('farmer');
+  // A farmer with no parcel gets no land credential, and the issuer says so rather than
+  // minting an empty one — which is the "fails safely" case this fixture set exists for.
+  const land = landRecord ? (await collect('land')).credential : null;
 
   return {
     holder,
     farmer: farmer.credential,
     land,
     records: { farmer: farmerRecord, land: landRecord },
-    vcts: { farmer: farmerOffer.vct, land: landOffer?.vct },
   };
 }
 
@@ -159,7 +179,7 @@ async function applyForCredit({ holder, farmer, land, landHolder, disclose }) {
   const presentations = {};
   presentations[FARMER_ID] = await presentSdJwt({
     credential: farmer,
-    disclose: disclose?.farmer || ['farmerId', 'registeredFarmer'],
+    disclose: disclose?.farmer || ['farmerReference', 'registrationStatus', 'authorityCredentialId'],
     nonce: request.nonce,
     audience: request.client_id,
     holder,
@@ -167,7 +187,9 @@ async function applyForCredit({ holder, farmer, land, landHolder, disclose }) {
   if (land) {
     presentations[LAND_ID] = await presentSdJwt({
       credential: land,
-      disclose: disclose?.land || ['farmerId', 'ownershipStatus', 'cropType', 'cultivatedAreaAcres'],
+      disclose:
+        disclose?.land ||
+        ['farmerReference', 'ownershipStatus', 'cropType', 'cultivatedArea', 'authorityCredentialId'],
       nonce: request.nonce,
       audience: request.client_id,
       // Defaults to the same holder. A different one is how "two credentials
@@ -185,12 +207,20 @@ describe('what the bank asks for', () => {
   test('one request, two credentials, and only the permitted claims', async () => {
     guard();
     const policy = await farmCreditPolicy(base);
-    assert.deepEqual(policy.requestedClaims.farmer, ['farmerId', 'registeredFarmer']);
+    // authorityCredentialId is part of the request because this journey checks live status.
+    // It is technical linkage, not a business claim: it names the Authority credential this
+    // one is anchored to, and carries nothing about the farmer.
+    assert.deepEqual(policy.requestedClaims.farmer, [
+      'farmerReference',
+      'registrationStatus',
+      'authorityCredentialId',
+    ]);
     assert.deepEqual(policy.requestedClaims.land, [
-      'farmerId',
+      'farmerReference',
       'ownershipStatus',
       'cropType',
-      'cultivatedAreaAcres',
+      'cultivatedArea',
+      'authorityCredentialId',
     ]);
     // The claims a bank must never receive are not merely undisclosed — they are
     // never asked for, which is the stronger guarantee.
@@ -331,7 +361,11 @@ describe('the credentials', () => {
     // Without this, "only four claims travelled" would just mean the credential
     // had nothing else in it.
     const claims = disclosableClaims(wallet.land);
-    for (const extra of ['landId', 'landAreaAcres', 'district']) {
+    // parcelReference only. The Authority-issued credential carries exactly the seven terms
+    // its published context defines, so the parcel reference is the one thing in this card
+    // that the bank never asks for — the loan is decided on cultivated area, and which parcel
+    // it is stays with the farmer.
+    for (const extra of ['parcelReference']) {
       assert.ok(claims.includes(extra), `${extra} must be in the credential but not requested`);
     }
   });
@@ -350,7 +384,7 @@ describe('an eligible farmer', () => {
     }
     const acres = wallet.records.land.cultivatedAreaAcres;
     assert.equal(result.disclosed.cropType, 'PADDY');
-    assert.equal(result.disclosed.cultivatedAreaAcres, acres);
+    assert.equal(result.disclosed.cultivatedArea, acres);
     assert.equal(result.loan.ratePerAcre, 30000);
     assert.equal(result.loan.maximumLoan, acres * 30000);
     assert.equal(result.loan.maximumLoanFormatted, '₹1,20,000');
@@ -496,7 +530,7 @@ describe('verification failures: REJECTED / UNABLE TO VERIFY', () => {
     const request = await fetchRequestObject({ requestUri: requestUriFromQr(session.qrData) });
     const swapped = await presentSdJwt({
       credential: wallet.land,
-      disclose: ['farmerId'],
+      disclose: ['farmerReference'],
       nonce: request.nonce,
       audience: request.client_id,
       holder: wallet.holder,
@@ -540,14 +574,14 @@ describe('no data shared', () => {
     const presentations = {
       [FARMER_ID]: await presentSdJwt({
         credential: wallet.farmer,
-        disclose: ['farmerId', 'registeredFarmer'],
+        disclose: ['farmerReference', 'registrationStatus', 'authorityCredentialId'],
         nonce: request.nonce,
         audience: request.client_id,
         holder: wallet.holder,
       }),
       [LAND_ID]: await presentSdJwt({
         credential: wallet.land,
-        disclose: ['farmerId', 'ownershipStatus', 'cropType', 'cultivatedAreaAcres'],
+        disclose: ['farmerReference', 'ownershipStatus', 'cropType', 'cultivatedArea', 'authorityCredentialId'],
         nonce: request.nonce,
         audience: request.client_id,
         holder: wallet.holder,
@@ -579,14 +613,14 @@ describe('the endpoints the bank page itself uses', () => {
     const presentations = {
       [FARMER_ID]: await presentSdJwt({
         credential: wallet.farmer,
-        disclose: ['farmerId', 'registeredFarmer'],
+        disclose: ['farmerReference', 'registrationStatus', 'authorityCredentialId'],
         nonce: request.nonce,
         audience: request.client_id,
         holder: wallet.holder,
       }),
       [LAND_ID]: await presentSdJwt({
         credential: wallet.land,
-        disclose: ['farmerId', 'ownershipStatus', 'cropType', 'cultivatedAreaAcres'],
+        disclose: ['farmerReference', 'ownershipStatus', 'cropType', 'cultivatedArea', 'authorityCredentialId'],
         nonce: request.nonce,
         audience: request.client_id,
         holder: wallet.holder,
@@ -665,14 +699,25 @@ describe('trust: a valid credential from an issuer outside the allowlist', () =>
         const good = await walletWithBothCredentials(FIXTURES.eligiblePaddy);
 
         // The same claims, the same vct, a real signature — from the wrong issuer.
+        // An identifier that looks the part and belongs to nobody. It lets the forged
+        // credential DISCLOSE the linkage claim, so the presentation is well-formed and the
+        // refusal comes from the trust check — which is what these fixtures exist to prove.
+        // A credential that failed merely because it could not disclose would prove nothing
+        // about whether an unlisted issuer is accepted.
+        const forgedLinkage = 'did:rcw:00000000-0000-4000-8000-000000000000';
         const forgedClaims =
           role === 'farmer'
-            ? { farmerId: good.records.farmer.farmerId, registeredFarmer: true }
+            ? {
+                farmerReference: good.records.farmer.farmerId,
+                registrationStatus: true,
+                authorityCredentialId: forgedLinkage,
+              }
             : {
-                farmerId: good.records.land.farmerId,
+                farmerReference: good.records.land.farmerId,
                 ownershipStatus: 'ACTIVE',
                 cropType: good.records.land.cropType,
-                cultivatedAreaAcres: good.records.land.cultivatedAreaAcres,
+                cultivatedArea: good.records.land.cultivatedAreaAcres,
+                authorityCredentialId: forgedLinkage,
               };
         // Issued through the REGISTRY's own instance, so the vct is minted under
         // that registry's path and matches what the bank's query pins. Only the

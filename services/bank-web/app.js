@@ -92,7 +92,7 @@ function showCalculation({ disclosed, loan }) {
   }
   const lines = [
     ['Crop', disclosed.cropType],
-    ['Cultivated area', `${disclosed.cultivatedAreaAcres} acres`],
+    ['Cultivated area', `${disclosed.cultivatedArea} acres`],
     // Formatted by the service, like the total: one implementation of money.
     ['Applicable rate', `${loan.ratePerAcreFormatted} per acre`],
   ];

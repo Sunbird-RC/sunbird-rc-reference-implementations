@@ -1,0 +1,13 @@
+flowchart TD
+  L[Learner] --> S[School issuer]
+  L --> C[College issuer]
+  L --> U[University issuer]
+  S -->|School Record Credential| W[Learner wallet]
+  C -->|College Record Credential| W
+  U -->|University Record Credential| W
+  M[University admissions] -->|Requests three credentials| W
+  J[Employer] -->|Requests three credentials| W
+  W -->|Consented presentation| M
+  W -->|Consented presentation| J
+  M --> MA[Admission-pool eligibility]
+  J --> JA[Interview-round eligibility]

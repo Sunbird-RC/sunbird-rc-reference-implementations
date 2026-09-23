@@ -32,17 +32,23 @@ curl -fksS -o /dev/null --max-time 10 -X POST "$REG/AgeCitizen/search" \
   -H 'content-type: application/json' -d '{"filters":{}}' \
   || die "the registry API is not answering at $REG/AgeCitizen/search — is the stack up and AgeCitizen.json mounted?"
 
-# Boundary dates, computed against today in UTC so they mean the same thing
-# wherever this runs.
+# Boundary dates, computed against today IN UTC so they mean the same thing wherever this
+# runs — and, more to the point, so they mean the same thing as the issuer.
+#
+# date.today() is the LOCAL date, and the age-issuer derives age in UTC. Anywhere east of
+# Greenwich that is a different day for the hours between local midnight and 00:00Z: the
+# seed writes a date of birth that is "18 today" locally while the issuer still reads it as
+# 17, and both boundary fixtures land on the same side of 18. The suite catches it and
+# reports stale fixtures, which sends you to re-seed rather than to the timezone.
 TURNS_18_TODAY="$(python3 -c "
-from datetime import date
-t = date.today()
-print(date(t.year - 18, t.month, t.day).isoformat())
+from datetime import datetime, timezone
+t = datetime.now(timezone.utc).date()
+print(t.replace(year=t.year - 18).isoformat())
 ")"
 TURNS_18_TOMORROW="$(python3 -c "
-from datetime import date, timedelta
-t = date.today() + timedelta(days=1)
-print(date(t.year - 18, t.month, t.day).isoformat())
+from datetime import datetime, timedelta, timezone
+t = datetime.now(timezone.utc).date() + timedelta(days=1)
+print(t.replace(year=t.year - 18).isoformat())
 ")"
 
 # Returns the existing record for a citizen as JSON, or empty when absent.

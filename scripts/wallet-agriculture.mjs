@@ -128,8 +128,10 @@ const farmerOffer = await issueAgricultureCredential({
   which: 'farmer',
   issuerDid: farmerIssuerDid,
   claims: {
-    farmerId: farmerRecord.farmerId,
-    registeredFarmer: farmerRecord.registeredFarmer,
+    // Credential claim names; the values still come from the registry record, whose own
+    // field names did not change.
+    farmerReference: farmerRecord.farmerId,
+    registrationStatus: farmerRecord.registeredFarmer,
     farmerCategory: farmerRecord.farmerCategory,
     district: farmerRecord.district,
   },
@@ -144,12 +146,12 @@ if (landRecord) {
     which: 'land',
     issuerDid: landIssuerDid,
     claims: {
-      landId: landRecord.landId,
-      farmerId: landRecord.farmerId,
+      parcelReference: landRecord.landId,
+      farmerReference: landRecord.farmerId,
       ownershipStatus: landRecord.ownershipStatus,
       landAreaAcres: landRecord.landAreaAcres,
       cropType: landRecord.cropType,
-      cultivatedAreaAcres: landRecord.cultivatedAreaAcres,
+      cultivatedArea: landRecord.cultivatedAreaAcres,
       district: landRecord.district,
     },
   });

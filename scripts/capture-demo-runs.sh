@@ -21,7 +21,7 @@
 #   DEMO_SSH_KEY=~/.ssh/key.pem \
 #   DEMO_DIR=/home/user/age-demo \
 #   DEMO_ORIGIN=https://1.2.3.4.sslip.io \
-#     ./scripts/capture-demo-runs.sh [--expect-image c8beec27]
+#     ./scripts/capture-demo-runs.sh [--expect-image 4b36d54d]
 #
 # Writes docs/evidence/03-education/runs/*-deployment.txt.
 set -euo pipefail

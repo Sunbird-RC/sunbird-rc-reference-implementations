@@ -43,18 +43,35 @@ SPECS = {
             "selectively-disclosable claims a bank does not request."
         ),
         "properties": {
-            "farmerId": {
+            "farmerReference": {
                 "type": "string",
-                "description": "Agriculture correlation identifier, e.g. FRM-KA-0041.",
+                "description": (
+                    "Canonical reference to the farmer record, qualified by the issuing "
+                    "Authority and the jurisdiction. A bare local number would not do: two "
+                    "jurisdictions may each hold FRM-KA-0041, and a credential carrying the "
+                    "bare value would present them as the same person."
+                ),
             },
-            "registeredFarmer": {
+            "registrationStatus": {
                 "type": "boolean",
-                "description": "Whether the registry lists this person as a registered farmer.",
+                "description": "Whether the Authority lists this person as a registered farmer.",
+            },
+            # Technical linkage, not an Agriculture business term. It names the Authority
+            # Service credential this one was issued against, so a verifier can ask that
+            # Authority whether the record still stands. Disclosed only in journeys that
+            # need live status; a lender checking eligibility alone never requests it.
+            "authorityCredentialId": {
+                "type": "string",
+                "description": (
+                    "Identifier of the Authority Service credential this one is anchored to. "
+                    "Set by the issuer from the Authority's issuance response; never supplied "
+                    "by a holder or caller."
+                ),
             },
             "farmerCategory": {"type": "string", "description": "Landholding category."},
             "district": {"type": "string"},
         },
-        "required": ["farmerId", "registeredFarmer"],
+        "required": ["farmerReference", "registrationStatus"],
     },
     "land": {
         "name": "Land Ownership Credential",
@@ -70,21 +87,42 @@ SPECS = {
             "holding size stays with the farmer."
         ),
         "properties": {
-            "landId": {"type": "string", "description": "Land parcel identifier, e.g. LAND-MYS-820137."},
-            "farmerId": {"type": "string", "description": "The owning farmer, for correlation."},
+            "parcelReference": {
+                "type": "string",
+                "description": "Canonical reference to the parcel, in the Land Authority namespace.",
+            },
+            "farmerReference": {
+                "type": "string",
+                "description": (
+                    "The owning farmer, in the FARMER Authority's namespace, so a lender can "
+                    "correlate this credential with the Farmer credential."
+                ),
+            },
             "ownershipStatus": {
                 "type": "string",
                 "description": "ACTIVE, INACTIVE, DISPUTED or TRANSFERRED. Only ACTIVE is fundable.",
             },
             "landAreaAcres": {"type": "number", "description": "Total parcel area."},
             "cropType": {"type": "string", "description": "Controlled vocabulary; the rate is looked up from policy."},
-            "cultivatedAreaAcres": {
+            "cultivatedArea": {
                 "type": "number",
-                "description": "The authoritative input to the loan calculation, at most two decimals.",
+                "description": (
+                    "Cultivated area in acres, the authoritative input to the loan calculation, "
+                    "at most two decimals. The unit is fixed by the term rather than restated."
+                ),
             },
             "district": {"type": "string"},
+            # Technical linkage, not an Agriculture business term — see the farmer spec.
+            "authorityCredentialId": {
+                "type": "string",
+                "description": (
+                    "Identifier of the Authority Service credential this one is anchored to. "
+                    "Set by the issuer from the Authority's issuance response; never supplied "
+                    "by a holder or caller."
+                ),
+            },
         },
-        "required": ["landId", "farmerId", "ownershipStatus", "cropType", "cultivatedAreaAcres"],
+        "required": ["parcelReference", "farmerReference", "ownershipStatus", "cropType", "cultivatedArea"],
     },
     # --- Iteration 03 -------------------------------------------------------
     #

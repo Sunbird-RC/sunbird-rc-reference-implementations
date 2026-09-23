@@ -1,0 +1,117 @@
+Iteration 3 — Agriculture, issued from authorities with stable public DIDs
+captured 2026-09-21 from a sandbox deployment reset to empty
+
+WHY THIS FILE EXISTS, beside STATUS-JOURNEY.txt
+  That journey was captured against localhost authority bases, so its qualified
+  references are permanently local and the credentials remain development
+  fixtures. This one is the same journey from a deployment whose authority bases
+  are publicly resolvable did:web identifiers, which is the acceptance gate.
+
+Deployment
+  public origin      https://135.235.192.9.sslip.io  (Let's Encrypt, HTTP -> 301)
+  Authority Service  ghcr.io/pallakartheekreddy/sunbird-rc-authority-service
+                     @sha256:56333d4561bff7222db34c6089d0cf857a69cb6a156037d25c1650e14e2b70e3
+  oid4vc-service     v2.1.0-authcode.4b36d54d (patch series 0001-0008), built
+                     natively on the amd64 host from the same tree
+  context            https://w3id.org/sunbird-rc/agriculture/v1
+
+Issuer DIDs, and that they resolve from the public internet
+  Farmer Authority   did:web:135.235.192.9.sslip.io:d68d32e6-e0d1-4c54-bb7c-fc60e4b4c7ba
+  Land Authority     did:web:135.235.192.9.sslip.io:e19ff237-3252-412c-8cb9-57e29a6a0500
+
+    $ curl https://135.235.192.9.sslip.io/d68d32e6-.../did.json
+    HTTP 200  content-type: application/json; charset=utf-8
+    id: did:web:135.235.192.9.sslip.io:d68d32e6-e0d1-4c54-bb7c-fc60e4b4c7ba
+    verificationMethod[0].type: Ed25519VerificationKey2020
+
+  Both resolve over HTTPS, which is what did:web requires and what a real wallet
+  is entitled to insist on.
+
+A qualified reference that now points somewhere permanent
+  farmerReference =
+    did:web:135.235.192.9.sslip.io:d68d32e6-e0d1-4c54-bb7c-fc60e4b4c7ba#farmer/Karnataka/FRM-KA-0041
+
+  The authority base is the public issuer DID rather than http://localhost:3334,
+  so the reference identifies the same resource from outside the deployment.
+
+The public trust response carries only public verification information
+    $ curl .../api/v1/trust/credentials/did:rcw:e289ae90-.../status     (no auth)
+    {"credentialId":"did:rcw:e289ae90-f48b-4380-af09-47702cb2ec33",
+     "status":"ACTIVE","effectiveAt":"2026-09-21T06:37:24.385Z"}
+
+  No tenant, no Authority relationship, no internal service location, no KMS
+  reference. Three fields, and the credential identifier was already known to
+  whoever is asking.
+
+Suite results against this deployment
+  e2e    156/156 pass, 0 skipped   (run from a workstation over the public origin,
+                                    operator and admin ports forwarded)
+  unit   203/203 pass
+
+TWO THINGS THAT ARE NOT DONE, recorded rather than left to be discovered
+  1. The Authority admin API runs here with ENABLE_AUTH=false. It is published on
+     127.0.0.1 only, so it is not reachable from the internet, but it is not the
+     authenticated surface it should be. Authenticated operation needs a Keycloak
+     `authority` realm, which does not exist, AND token acquisition in the oid4vc
+     claim source, which today reads a static AUTHORITY_TOKEN and cannot refresh
+     one. Neither is a large piece of work; neither is done.
+  2. The Authority's public trust routes are not published through the gateway.
+     The verifier reaches them on the internal network, which is why the suite is
+     green, but a relying party outside this deployment currently cannot check
+     status. Publishing them is a new public surface and was not taken
+     unilaterally.
+
+-----------------------------------------------------------------------------
+TAP version 13
+# Subtest: Agriculture — the bank consults live credential status
+    # Subtest: an active source: the credential is accepted and a loan is offered
+    ok 1 - an active source: the credential is accepted and a loan is offered
+      ---
+      duration_ms: 614.6475
+      type: 'test'
+      ...
+    # Subtest: the source is suspended: the SAME credential is refused
+    ok 2 - the source is suspended: the SAME credential is refused
+      ---
+      duration_ms: 990.394792
+      type: 'test'
+      ...
+    # Subtest: the source is reinstated: the same credential funds a loan again
+    ok 3 - the source is reinstated: the same credential funds a loan again
+      ---
+      duration_ms: 734.696333
+      type: 'test'
+      ...
+    # Subtest: an inactivated source: refused, and it stays refused
+    ok 4 - an inactivated source: refused, and it stays refused
+      ---
+      duration_ms: 775.509666
+      type: 'test'
+      ...
+    # Subtest: a revoked credential: refused, and not resurrected by a healthy record
+    ok 5 - a revoked credential: refused, and not resurrected by a healthy record
+      ---
+      duration_ms: 649.796375
+      type: 'test'
+      ...
+    # Subtest: an unlinked credential is refused, however well-formed it is
+    ok 6 - an unlinked credential is refused, however well-formed it is
+      ---
+      duration_ms: 1968.9105
+      type: 'test'
+      ...
+    1..6
+ok 1 - Agriculture — the bank consults live credential status
+  ---
+  duration_ms: 7314.458833
+  type: 'suite'
+  ...
+1..1
+# tests 6
+# suites 1
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7780.203875

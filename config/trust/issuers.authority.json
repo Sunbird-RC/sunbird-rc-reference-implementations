@@ -1,0 +1,68 @@
+{
+  "allowedAlgorithms": [
+    "ES256"
+  ],
+  "issuers": [
+    {
+      "name": "National Identity Authority",
+      "did": "${AGE_ISSUER_DID}",
+      "credentials": [
+        "Age Verification Credential"
+      ]
+    },
+    {
+      "name": "Farmer Registry",
+      "credentials": [
+        "Farmer Identity Credential"
+      ],
+      "roles": [
+        "farmer"
+      ],
+      "authorityIssuer": "214c0663-17d5-43f2-9958-36890315a8a1"
+    },
+    {
+      "name": "Land Registry",
+      "credentials": [
+        "Land Ownership Credential"
+      ],
+      "roles": [
+        "land"
+      ],
+      "authorityIssuer": "f55e80fb-760e-4379-8d46-c1c1ed7dedf9"
+    },
+    {
+      "name": "State School Board",
+      "did": "${SCHOOL_ISSUER_DID}",
+      "credentials": [
+        "School Record Credential"
+      ],
+      "roles": [
+        "school"
+      ]
+    },
+    {
+      "name": "Regional Polytechnic College",
+      "did": "${COLLEGE_ISSUER_DID}",
+      "credentials": [
+        "College Record Credential"
+      ],
+      "roles": [
+        "college"
+      ]
+    },
+    {
+      "name": "State University",
+      "did": "${UNIVERSITY_ISSUER_DID}",
+      "credentials": [
+        "University Record Credential"
+      ],
+      "roles": [
+        "university"
+      ]
+    }
+  ],
+  "_comment": [
+    "LOCAL: Farmer and Land resolve from the Authority Service.",
+    "Issuer ids are environment-specific and change on every stack reset."
+  ]
+}
