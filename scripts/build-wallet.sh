@@ -102,6 +102,42 @@ export PATH="$JAVA_HOME/bin:$PATH"
 # and the build fails in javac with "package does not exist".
 export APP_VARIANT=preview
 export CREDENTIAL_ISSUER_URLS="$ISSUER"
+
+# The showcase deployment this build trusts, assembled from deploy/.env rather than pinned
+# in the wallet's source. Those DIDs carry the deployment's host and a uuid that changes on
+# every re-bootstrap; committing them put a sandbox address in a public repository and went
+# stale silently, which is how an 18+ badge reached a crop-credit consent screen.
+#
+# Override wholesale with SHOWCASE_DEPLOYMENT='{"baseUrl":...}' when building against a
+# deployment whose .env is not on this machine.
+if [ -z "${SHOWCASE_DEPLOYMENT:-}" ] && [ -f deploy/.env ]; then
+  SHOWCASE_DEPLOYMENT="$(python3 - <<'PYEOF'
+import json, re, pathlib
+env = {}
+for line in pathlib.Path("deploy/.env").read_text().splitlines():
+    m = re.match(r"^([A-Z0-9_]+)=(.*)$", line)
+    if m:
+        env[m.group(1)] = m.group(2).strip().strip('"').strip("'")
+base = env.get("PUBLIC_URL", "").rstrip("/")
+dids = {k: env.get(v) for k, v in (
+    ("age", "VERIFIER_DID"),
+    ("bank", "BANK_VERIFIER_DID"),
+    ("university", "UNIVERSITY_VERIFIER_DID"),
+    ("employer", "EMPLOYER_VERIFIER_DID"),
+) if env.get(v)}
+print(json.dumps({"baseUrl": base, "verifierDids": dids}) if base else "")
+PYEOF
+)"
+fi
+export SHOWCASE_DEPLOYMENT="${SHOWCASE_DEPLOYMENT:-}"
+if [ -n "$SHOWCASE_DEPLOYMENT" ]; then
+  # Names and the base url only. The DIDs are long and say nothing useful on a terminal.
+  printf '  showcase  %s (%s verifier DIDs)\n' \
+    "$(printf '%s' "$SHOWCASE_DEPLOYMENT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["baseUrl"])')" \
+    "$(printf '%s' "$SHOWCASE_DEPLOYMENT" | python3 -c 'import json,sys; print(len(json.load(sys.stdin).get("verifierDids",{})))')" >&2
+else
+  printf '  showcase  none configured — the wallet will name no showcase organisation\n' >&2
+fi
 # Falls back to the app scheme, which needs no App Link verification — the right
 # choice against a demo host whose assetlinks.json cannot list a locally signed
 # certificate.
