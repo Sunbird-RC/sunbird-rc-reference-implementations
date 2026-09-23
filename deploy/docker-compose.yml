@@ -880,7 +880,10 @@ services:
   # Multi-architecture (linux/amd64 and linux/arm64), so it needs no platform pin
   # and runs natively on the demo host and on a development machine alike.
   authority-service:
-    image: ghcr.io/pallakartheekreddy/sunbird-rc-authority-service@sha256:56333d4561bff7222db34c6089d0cf857a69cb6a156037d25c1650e14e2b70e3
+    # Pinned by DIGEST in a deployment's own .env, not here. A tag can be moved; a digest
+    # cannot, and a reference implementation must not name one person's registry.
+    # Set AUTHORITY_SERVICE_IMAGE to the digest the deployment was accepted against.
+    image: ${AUTHORITY_SERVICE_IMAGE:-ghcr.io/sunbird-rc/sunbird-rc-authority-service:v0.3.0}
     restart: unless-stopped
     depends_on:
       db:
