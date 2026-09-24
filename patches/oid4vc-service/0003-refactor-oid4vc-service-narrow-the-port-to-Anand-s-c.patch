@@ -1,7 +1,7 @@
-From ab9be9284691870b329a39bee70f6b34a52e64d0 Mon Sep 17 00:00:00 2001
+From dabc75b926efda721cb4700abd6961f26292636c Mon Sep 17 00:00:00 2001
 From: Kartheek Palla <palla.kartheekreddy@gmail.com>
 Date: Tue, 25 Aug 2026 16:42:39 +0530
-Subject: [PATCH 3/7] refactor(oid4vc-service): narrow the port to Anand's
+Subject: [PATCH 3/9] refactor(oid4vc-service): narrow the port to Anand's
  controls
 
 Two changes, both from his conditions on approving this capability.

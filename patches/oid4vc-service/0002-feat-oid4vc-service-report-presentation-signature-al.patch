@@ -1,7 +1,7 @@
-From 1583b7bde6a383949fbc77913d44c26bf71f61d5 Mon Sep 17 00:00:00 2001
+From 5dd7b6c5c81140919610d4d47d8cbbebaa572bbb Mon Sep 17 00:00:00 2001
 From: Kartheek Palla <palla.kartheekreddy@gmail.com>
 Date: Mon, 24 Aug 2026 18:20:40 +0530
-Subject: [PATCH 2/7] feat(oid4vc-service): report presentation signature
+Subject: [PATCH 2/9] feat(oid4vc-service): report presentation signature
  algorithms in /vp/status
 
 A relying party enforcing an algorithm allowlist currently cannot: `alg`

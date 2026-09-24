@@ -3,7 +3,7 @@
 Everything needed to reconstruct the exact image this showcase runs, from source
 anyone can fetch, and to check that what you built is what we ran.
 
-The image is `sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464`. Its tag suffix
+The image is `sunbird-rc-oid4vc-service:v2.1.0-authcode.32b4a1c6`. Its tag suffix
 is the source commit it was built from — patch `0009` below.
 
 ## Why patches and not a branch
@@ -51,15 +51,15 @@ are 29 files, +5041 / −42.
 
 | # | Commit | What it does |
 |---|---|---|
-| 0001 | `bc892456` | Keycloak-as-authorization-server issuance — the port itself |
-| 0002 | `1583b7bd` | reports presentation signature algorithms in `/vp/status`, so an algorithm allowlist can be enforced at all (finding 15) |
-| 0003 | `ab9be928` | narrows the port to the controls Anand approved |
-| 0004 | `4889fbdb` | publishes the issuer's own display metadata |
-| 0005 | `9caf3c2b` | `ADVERTISE_OWN_CREDENTIALS_ONLY` — an issuer advertises only what it authored (finding 14) |
-| **0006** | **`1147b904`** | **refuses another issuer's credential type, and refuses an unrequested disclosure** — review items 2 and 4 (findings 16, 17) |
-| **0007** | **`c8beec27`** | **fixes the wiring that made the disclosure check inert on the keyed `vp_token` path** — the path every SD-JWT presentation here takes |
-| **0008** | **`4b36d54d`** | **issues through a Sunbird RC Authority Service and carries `authorityCredentialId` into the SD-JWT**, so a presented credential can be resolved against Authority lifecycle and revocation status |
-| **0009** | **`714a8464`** | **acquires Authority tokens by client credentials and renews them before they expire**, so issuance does not stop silently once a static token ages out |
+| 0001 | `239d9c38` | Keycloak-as-authorization-server issuance — the port itself |
+| 0002 | `5dd7b6c5` | reports presentation signature algorithms in `/vp/status`, so an algorithm allowlist can be enforced at all (finding 15) |
+| 0003 | `dabc75b9` | narrows the port to the controls Anand approved |
+| 0004 | `2a75cefa` | publishes the issuer's own display metadata |
+| 0005 | `6bc0946d` | `ADVERTISE_OWN_CREDENTIALS_ONLY` — an issuer advertises only what it authored (finding 14) |
+| **0006** | **`8b99b55a`** | **refuses another issuer's credential type, and refuses an unrequested disclosure** — review items 2 and 4 (findings 16, 17) |
+| **0007** | **`3674eeb5`** | **fixes the wiring that made the disclosure check inert on the keyed `vp_token` path** — the path every SD-JWT presentation here takes |
+| **0008** | **`6ce90150`** | **issues through a Sunbird RC Authority Service and carries `authorityCredentialId` into the SD-JWT**, so a presented credential can be resolved against Authority lifecycle and revocation status |
+| **0009** | **`32b4a1c6`** | **acquires Authority tokens by client credentials and renews them before they expire**, so issuance does not stop silently once a static token ages out |
 
 The two in bold are the ones the Education review asked for. The five before them
 are the pre-existing port, unchanged by this review, and are included because the
@@ -93,7 +93,7 @@ Then point the deployment at it:
 
 ```bash
 # deploy/docker-compose.yml pins this tag in all nine oid4vc-* services
-grep -c 'v2.1.0-authcode.4b36d54d' deploy/docker-compose.yml     # expect 9
+grep -c 'v2.1.0-authcode.32b4a1c6' deploy/docker-compose.yml     # expect 9
 cd deploy && docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
 ```
 
@@ -107,7 +107,6 @@ cd services/oid4vc-service && npm ci && npx jest
 follow-up (`src/claims/authority.claim-source.spec.ts`), and 19 for patch `0009`
 (`src/claims/authority-token.spec.ts`). The 154-test run is captured
 verbatim at
-[`../../docs/evidence/03-education/runs/test-fork.txt`](../../docs/evidence/03-education/runs/test-fork.txt).
 The two review fixes are covered by `src/oid4vci/own-credentials-issuance.spec.ts`
 (7) and `src/oid4vp/unrequested-disclosure.spec.ts` (11).
 
@@ -118,23 +117,34 @@ commit id — `git am` records a new committer and date, so the commit hashes wi
 differ from ours even though the content is identical:
 
 ```bash
-git rev-parse HEAD^{tree}   # 2b73272db46b0547b2c125f11a598da75562ccea
+git rev-parse HEAD^{tree}   # fd189aae28961728f4ac250caaf6a7f54ae3605f
                             # the tree the image was built from
-git rev-parse HEAD          # WILL DIFFER from c8beec27 — see below
+git rev-parse HEAD          # WILL DIFFER from 3674eeb5 — see below
 ```
 
-`4b36d54d1e70...` is the commit id in the authoring checkout, and it is what the
-image tag names. A fresh `git am` of this series
+`32b4a1c6...` is the tip of the series in the authoring checkout, and it is what
+the image tag names. A fresh `git am` of this series
 produces the same tree under a different commit id, because a commit hashes its
 committer identity and timestamps as well as its content. An earlier version of
-this file told you to expect `c8beec27` from `git rev-parse HEAD`, which is only
+this file told you to expect `3674eeb5` from `git rev-parse HEAD`, which is only
 true if you happen to reproduce the committer too.
 
-Verified again on 20 September 2026, with patch `0008` in the series, by applying it
-to a pristine `v2.1.0` clone and comparing `HEAD^{tree}` against the authoring
-checkout's branch tip: **identical** (`2b73272d`). Patch `0009` was added on
-21 September 2026; the authoring checkout's tree is now `6659f10a`. The commit ids differed, as this
-section explains they must. `scripts/verify.sh` re-checks the cheap half of this on every run —
+Verified on 20 September 2026 with patch `0008`, and again after `0009` was added on
+21 September, by applying the series to a pristine `v2.1.0` clone and comparing
+`HEAD^{tree}` against the authoring checkout's branch tip: **identical** each time. The
+commit ids differed, as this section explains they must.
+
+**Re-issued on 24 September 2026.** The series was regenerated from the same `v2.1.0`
+base to remove a live personal sandbox hostname that appeared as an illustrative example
+in patch `0004` — in its commit message and in one code comment. Nothing else changed:
+the only difference between the two series is that single line, and the authoring tree is
+now `fd189aae`.
+
+The **previous series and the image built from it are kept as historical artifacts** and
+were not altered: the earlier branch still exists at its original commits, and
+`sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464` remains valid for anything already
+pinned to it. Nothing was force-pushed. This repository pins the new image, built from
+this series. `scripts/verify.sh` re-checks the cheap half of this on every run —
 that the series is present, that its length matches, and that the LAST patch's
 commit is the one `deploy/docker-compose.yml` pins.
 

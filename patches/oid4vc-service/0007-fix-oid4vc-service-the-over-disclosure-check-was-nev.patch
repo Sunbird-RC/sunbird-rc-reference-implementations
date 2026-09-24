@@ -1,7 +1,7 @@
-From c8beec279cfa63fd98eefdf04a063eb9040f4a9f Mon Sep 17 00:00:00 2001
+From 3674eeb5950382ab27ff724d29636fe862e54313 Mon Sep 17 00:00:00 2001
 From: Kartheek Palla <kartheek@sanketika.in>
 Date: Wed, 2 Sep 2026 10:50:58 +0530
-Subject: [PATCH 7/7] fix(oid4vc-service): the over-disclosure check was never
+Subject: [PATCH 7/9] fix(oid4vc-service): the over-disclosure check was never
  reached in practice
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8

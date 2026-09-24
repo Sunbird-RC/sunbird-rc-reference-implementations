@@ -1,7 +1,7 @@
-From 1147b9045e97ee1648beb73b5521d9962c5c5521 Mon Sep 17 00:00:00 2001
+From 8b99b55a4b1e67f9d22174bdc7226793c501448c Mon Sep 17 00:00:00 2001
 From: Kartheek Palla <kartheek@sanketika.in>
 Date: Wed, 2 Sep 2026 10:36:17 +0530
-Subject: [PATCH 6/7] feat(oid4vc-service): refuse another issuer's type, and
+Subject: [PATCH 6/9] feat(oid4vc-service): refuse another issuer's type, and
  unrequested disclosure
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -45,7 +45,7 @@ refused where the same presentation without it is accepted.
  create mode 100644 services/oid4vc-service/src/oid4vp/unrequested-disclosure.spec.ts
 
 diff --git a/services/oid4vc-service/src/config/configuration.ts b/services/oid4vc-service/src/config/configuration.ts
-index 7962ac29..e8024be3 100644
+index 2dcaeb34..e957c690 100644
 --- a/services/oid4vc-service/src/config/configuration.ts
 +++ b/services/oid4vc-service/src/config/configuration.ts
 @@ -178,6 +178,21 @@ export interface Oid4vcConfig {

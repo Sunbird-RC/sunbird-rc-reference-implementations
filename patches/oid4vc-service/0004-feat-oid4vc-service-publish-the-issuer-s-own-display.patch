@@ -1,7 +1,7 @@
-From 4889fbdbf439ac2a2a51009dca531f1110e49d41 Mon Sep 17 00:00:00 2001
+From 2a75cefa136475a2ee61add7fefbd21461879d37 Mon Sep 17 00:00:00 2001
 From: Kartheek Palla <palla.kartheekreddy@gmail.com>
-Date: Tue, 25 Aug 2026 22:34:07 +0530
-Subject: [PATCH 4/7] feat(oid4vc-service): publish the issuer's own display
+Date: Thu, 24 Sep 2026 10:21:41 +0530
+Subject: [PATCH 4/9] feat(oid4vc-service): publish the issuer's own display
  metadata
 
 Needed by wallet-driven issuance, and separate from the authorization_code
@@ -9,7 +9,7 @@ work, so it is its own commit rather than folded into the port.
 
 A wallet that lists issuers has nothing but the credential issuer's
 `display` to label the entry. Without it the citizen is asked to choose
-'98.70.36.106.sslip.io' instead of 'National Identity Authority' - which
+'issuer.example.org' instead of 'National Identity Authority' - which
 is the exact step the charter describes as 'the citizen selects the
 National Identity Authority'. The service published display per credential
 configuration but never for the issuer itself.
@@ -33,7 +33,7 @@ way the service does, from the environment at construction.
  create mode 100644 services/oid4vc-service/src/oid4vci/issuer-display.spec.ts
 
 diff --git a/services/oid4vc-service/src/config/configuration.ts b/services/oid4vc-service/src/config/configuration.ts
-index 12d3ba3a..8af05d50 100644
+index 12d3ba3a..7aca89a6 100644
 --- a/services/oid4vc-service/src/config/configuration.ts
 +++ b/services/oid4vc-service/src/config/configuration.ts
 @@ -197,6 +197,17 @@ export interface Oid4vcConfig {
@@ -46,7 +46,7 @@ index 12d3ba3a..8af05d50 100644
 +   *
 +   * Matters for wallet-driven issuance: a wallet showing a directory of issuers
 +   * has nothing but this to label the entry, and falls back to the bare
-+   * hostname without it — so the citizen is asked to pick "98.70.36.106.sslip.io"
++   * hostname without it — so the citizen is asked to pick "issuer.example.org"
 +   * rather than "National Identity Authority". Empty name omits `display`
 +   * entirely rather than publishing a blank one.
 +   */
