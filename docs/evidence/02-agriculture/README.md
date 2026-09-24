@@ -51,3 +51,14 @@ behave as described, that test would have failed first.
 [Agriculture-Rural-Credit-Showcase-31Aug.mp4](Agriculture-Rural-Credit-Showcase-31Aug.mp4)
 predates the Authority Service: no status check, nothing suspended, no lifecycle linkage.
 It remains accurate for what it covers.
+
+## What was removed, and where it went
+
+The raw evidence, the production script, the superseded 21 September cut and the
+evidence-capture tooling were removed from this directory: they were internal working
+material and were never intended to be published.
+
+**They remain in this repository's history and can still be retrieved from it.** Removal
+stops them being presented, not stored. Rewriting shared history was considered and
+rejected — it is disruptive and does not reliably remove copies already fetched, and none
+of this material is a secret.

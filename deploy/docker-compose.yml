@@ -880,10 +880,13 @@ services:
   # Multi-architecture (linux/amd64 and linux/arm64), so it needs no platform pin
   # and runs natively on the demo host and on a development machine alike.
   authority-service:
-    # Pinned by DIGEST in a deployment's own .env, not here. A tag can be moved; a digest
-    # cannot, and a reference implementation must not name one person's registry.
-    # Set AUTHORITY_SERVICE_IMAGE to the digest the deployment was accepted against.
-    image: ${AUTHORITY_SERVICE_IMAGE:-ghcr.io/sunbird-rc/sunbird-rc-authority-service:v0.3.0}
+    # REQUIRED, and by digest. There is deliberately no default: a fallback to a mutable
+    # tag lets a deployment silently run something other than the artefact it was verified
+    # against, and a tag can be moved at any time by whoever owns the registry. Compose
+    # refuses to start with the message below when it is unset.
+    #
+    #   AUTHORITY_SERVICE_IMAGE=ghcr.io/sunbird-rc/sunbird-rc-authority-service@sha256:...
+    image: ${AUTHORITY_SERVICE_IMAGE:?set this to a verified image DIGEST, not a tag}
     restart: unless-stopped
     depends_on:
       db:
