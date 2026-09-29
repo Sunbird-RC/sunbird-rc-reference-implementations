@@ -66,19 +66,28 @@ function checksNode(checks) {
  */
 function claimsNode(disclosed) {
   const wrap = document.createElement('div');
-  wrap.className = 'chips';
+  // One row per credential, same shape as the request screen. The old flat run
+  // put the next institution's label inline among the previous one's chips, so
+  // where one card ended and the next began was a matter of reading carefully.
+  wrap.className = 'policy';
   for (const [role, claims] of Object.entries(disclosed)) {
     if (!claims) continue;
+    const line = document.createElement('div');
+    line.className = 'policy-row';
     const label = document.createElement('span');
-    label.className = 'chip-group';
+    label.className = 'policy-role';
     label.appendChild(text(role));
-    wrap.appendChild(label);
+    line.appendChild(label);
+    const chips = document.createElement('div');
+    chips.className = 'policy-chips';
     for (const [name, value] of Object.entries(claims)) {
       const chip = document.createElement('span');
       chip.className = 'chip ask';
       chip.appendChild(text(`${name} = ${value}`));
-      wrap.appendChild(chip);
+      chips.appendChild(chip);
     }
+    line.appendChild(chips);
+    wrap.appendChild(line);
   }
   return wrap;
 }

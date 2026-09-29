@@ -978,3 +978,17 @@ body.qr-large h1 {
 }
 .stage .alt-actions .open-wallet,
 .stage .alt-actions .ghost { margin: 0 0.5rem; }
+
+/* On the result screen the rows sit inside a <dl> cell, so they need no top
+   margin of their own. */
+.detail .policy { gap: 0.55rem; margin-top: 0; }
+
+/* The disclosed claims are the widest thing on the result screen, and they were
+   landing in the narrow value column of a `max-content 1fr` grid — the "Learner
+   (correlated across all three)" label sets that first column, so every chip
+   wrapped to two lines. Give this one pair the full card width. */
+.detail dt:has(+ dd > .policy) {
+  grid-column: 1 / -1;
+  margin-bottom: -0.35rem;
+}
+.detail dd:has(> .policy) { grid-column: 1 / -1; }
