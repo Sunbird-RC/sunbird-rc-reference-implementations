@@ -3,7 +3,7 @@
 **Date:** 2026-07-31
 **Repos analyzed:**
 - Wallet: `paradym-wallet` (this repo, branch `v1.0.3`)
-- Server: `/Users/sanketikam4/July/sunbird-rc-core` (Sunbird RC core with the `services/oid4vc-service` layer)
+- Server: `<path-to>/sunbird-rc-core` (Sunbird RC core with the `services/oid4vc-service` layer)
 
 **Target flow:**
 1. The wallet shows a list of available issuers.

@@ -1,7 +1,7 @@
-From bc892456f21eee65aec5b702d02ac766df2ed9ef Mon Sep 17 00:00:00 2001
+From 239d9c38af43b86138e469bc4b11eed75d0820c0 Mon Sep 17 00:00:00 2001
 From: Kartheek Palla <palla.kartheekreddy@gmail.com>
 Date: Mon, 24 Aug 2026 18:17:58 +0530
-Subject: [PATCH 1/7] feat(oid4vc-service): Keycloak-as-authorization-server
+Subject: [PATCH 1/9] feat(oid4vc-service): Keycloak-as-authorization-server
  issuance on v2.1.0
 
 Ports the wallet self-service issuance capability from the fork's

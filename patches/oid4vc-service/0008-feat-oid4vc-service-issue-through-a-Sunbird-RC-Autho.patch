@@ -1,8 +1,8 @@
-From 4b36d54dfe4a21fc4c11cc6554afce2bbe8e8487 Mon Sep 17 00:00:00 2001
+From 6ce901504c78aebe3bd77402fb8488cadf4d1764 Mon Sep 17 00:00:00 2001
 From: Kartheek Palla <palla.kartheekreddy@gmail.com>
 Date: Sun, 20 Sep 2026 19:17:40 +0530
-Subject: [PATCH] feat(oid4vc-service): issue through a Sunbird RC Authority
- Service and carry the linkage
+Subject: [PATCH 8/9] feat(oid4vc-service): issue through a Sunbird RC
+ Authority Service and carry the linkage
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -589,7 +589,7 @@ index 425d3b97..513ad927 100644
        if (!this.registrySource.available) {
          // Distinguished from `none` deliberately: this deployment asked for the
 diff --git a/services/oid4vc-service/src/config/configuration.ts b/services/oid4vc-service/src/config/configuration.ts
-index e8024be3..d51642a5 100644
+index e957c690..a7749c8e 100644
 --- a/services/oid4vc-service/src/config/configuration.ts
 +++ b/services/oid4vc-service/src/config/configuration.ts
 @@ -109,7 +109,35 @@ export interface ClaimSourceSpec {
@@ -662,6 +662,3 @@ index e8024be3..d51642a5 100644
    claimSources: parseClaimSources(process.env, (m) => console.warn(`[configuration] ${m}`)),
    claimSourceMap: parseStringMap(
      process.env.CLAIM_SOURCE_MAP || '',
--- 
-2.39.5 (Apple Git-154)
-

@@ -1,7 +1,7 @@
-From 9caf3c2b44a5ebf5d0b94f6a0d2718a7be32ff8a Mon Sep 17 00:00:00 2001
+From 6bc0946d98a7975ace75b5bc28156da2fecdcaa9 Mon Sep 17 00:00:00 2001
 From: Kartheek Palla <palla.kartheekreddy@gmail.com>
 Date: Fri, 28 Aug 2026 15:46:07 +0530
-Subject: [PATCH 5/7] feat(oid4vc-service): let an issuer advertise only its
+Subject: [PATCH 5/9] feat(oid4vc-service): let an issuer advertise only its
  own credentials
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -40,7 +40,7 @@ dependency.
  create mode 100644 services/oid4vc-service/src/oid4vci/own-credentials.spec.ts
 
 diff --git a/services/oid4vc-service/src/config/configuration.ts b/services/oid4vc-service/src/config/configuration.ts
-index 8af05d50..7962ac29 100644
+index 7aca89a6..2dcaeb34 100644
 --- a/services/oid4vc-service/src/config/configuration.ts
 +++ b/services/oid4vc-service/src/config/configuration.ts
 @@ -165,6 +165,19 @@ export interface Oid4vcConfig {

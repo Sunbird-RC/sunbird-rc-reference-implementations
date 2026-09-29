@@ -1,7 +1,7 @@
-From 714a8464ab7811244b06ca43ae5cb8589bfe20f0 Mon Sep 17 00:00:00 2001
+From 32b4a1c65f759ffc87af3386b9e5d0babdfce7fc Mon Sep 17 00:00:00 2001
 From: Kartheek Palla <palla.kartheekreddy@gmail.com>
 Date: Mon, 21 Sep 2026 12:59:47 +0530
-Subject: [PATCH] feat(oid4vc-service): acquire Authority tokens, and renew
+Subject: [PATCH 9/9] feat(oid4vc-service): acquire Authority tokens, and renew
  them before they expire
 
 The Authority claim source read a bearer token from AUTHORITY_TOKEN and sent it
@@ -650,7 +650,7 @@ index f677510f..233549d8 100644
        // A 404 here is a profile or binding that does not exist, which is a
        // configuration fault. "No record for this subject" is decided in findRecord
 diff --git a/services/oid4vc-service/src/config/configuration.ts b/services/oid4vc-service/src/config/configuration.ts
-index d51642a5..daf2eadf 100644
+index a7749c8e..cecedbaf 100644
 --- a/services/oid4vc-service/src/config/configuration.ts
 +++ b/services/oid4vc-service/src/config/configuration.ts
 @@ -122,8 +122,22 @@ const RESERVED_SOURCE_NAMES = new Set(['registry', 'none', 'authority']);
@@ -688,6 +688,3 @@ index d51642a5..daf2eadf 100644
      profileMap: parseStringMap(
        process.env.AUTHORITY_PROFILE_MAP || '',
        'AUTHORITY_PROFILE_MAP',
--- 
-2.39.5 (Apple Git-154)
-

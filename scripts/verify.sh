@@ -49,14 +49,32 @@ head_ '1. Branch and working tree'
 # That trap has now bitten twice, so the rule is a prefix test on a precomputed
 # variable.
 BRANCH="$(git branch --show-current)"
-check "on an iteration branch, not main ($BRANCH)" '[ -n "$BRANCH" ] && [ "${BRANCH#iteration/}" != "$BRANCH" ]'
+# Widened from `iteration/` to "any working branch". The invariant stated above is
+# that this never stands in for review ON main; the test was narrower than the
+# invariant, and cleanup work travels on chore/ — PRs #1 and #2 both shipped that
+# way and both were reviewed and merged. A check that fails a branch the project
+# actually uses trains the reader to skip the first line of the summary.
+check "on a working branch, not main ($BRANCH)" '[ -n "$BRANCH" ] && [ "$BRANCH" != "main" ]'
 check "working tree clean (ignoring node_modules)" '[ -z "$(git status --porcelain | grep -vE "^\?\? ([^ ]*/)?node_modules")" ]'
 
 head_ '2. Revised baseline is the authoritative input'
-check "CLAUDE.md carries the scripted-client rule" 'grep -q "scripted protocol client" CLAUDE.md'
-check "CLAUDE.md forbids substituting a QR/issuer page" 'grep -q "Do not substitute a QR or issuer web page" CLAUDE.md'
-check "charter is the revised, three-journey one" 'grep -q "Do not use a QR code for issuance" iterations/01-age/CHARTER.md'
-check "review feedback is on the branch" '[ -f docs/reviews/ITERATION-01-FEEDBACK.md ]'
+# These four asserted the working agreement and the Iteration 01 review trail:
+# CLAUDE.md, iterations/01-age/CHARTER.md and two files under docs/reviews/.
+# 0ced44c ("docs: focus official repo on runnable reference applications")
+# removed all of them, because governance between a contributor and a reviewer is
+# not what an adopter clones. The checks outlived the files and had been failing
+# on main ever since, which is worse than not checking: a run that always ends in
+# "something regressed" teaches the reader to ignore the summary.
+#
+# Skipped rather than deleted. The rule they encoded still binds this work — the
+# journeys must be driven by a scripted protocol client, not a QR or issuer web
+# page — and section 12's suites are what actually enforce it. Losing the line
+# entirely would lose the record that it was ever checked.
+INTERNAL='not in the public tree since 0ced44c; enforced by the suites in section 12'
+skip "CLAUDE.md carries the scripted-client rule" "$INTERNAL"
+skip "CLAUDE.md forbids substituting a QR/issuer page" "$INTERNAL"
+skip "charter is the revised, three-journey one" "$INTERNAL"
+skip "review feedback is on the branch" "$INTERNAL"
 
 head_ '3. Branch hygiene (review item)'
 gone "docs/start/CLAUDE-START.md removed" '[ -f docs/start/CLAUDE-START.md ]'
@@ -72,11 +90,16 @@ gone "age-issuer dropped the QR dependency" 'grep -q "qrcode-svg" services/age-i
 gone "verifier page no longer prints wallet.sh" 'grep -q "wallet.sh" services/verifier-web/app.js'
 
 head_ '5. Escalation and plan'
-check "escalation raised for the Flow 1 gap" '[ -f docs/reviews/ESCALATION-01-oid4vc-authorization-code.md ]'
-check "escalation records the Age-database deviation" 'grep -q "Age database deviation" docs/reviews/ESCALATION-01-oid4vc-authorization-code.md'
-check "implementation plan reflects Anand's answers" 'grep -q "Decisions now settled" iterations/01-age/IMPLEMENTATION.md'
-check "his answers are on the branch" '[ -f docs/reviews/ANSWERS-01-age-from-anand.md ]'
-check "escalation is marked resolved" 'grep -q "RESOLVED, 25 August 2026" docs/reviews/ESCALATION-01-oid4vc-authorization-code.md'
+# Same removal, same reason: the escalation, the answers it drew, and the plan
+# they settled were the record of one decision between two people, not a
+# deliverable. What that escalation actually produced — authorization-code
+# issuance with PKCE — is asserted where it is testable, in section 9 and in the
+# suites, not by the existence of the memo that asked for it.
+skip "escalation raised for the Flow 1 gap" "$INTERNAL"
+skip "escalation records the Age-database deviation" "$INTERNAL"
+skip "implementation plan reflects Anand's answers" "$INTERNAL"
+skip "his answers are on the branch" "$INTERNAL"
+skip "escalation is marked resolved" "$INTERNAL"
 
 head_ '6. Running stack reflects the removals'
 if curl -fsS -o /dev/null --max-time 5 "$BASE/gateway-health" 2>/dev/null; then
@@ -276,10 +299,31 @@ if [ -d "$FORK/.git" ]; then
   # Counted from the patch series rather than restated as a literal. The literal was
   # wrong before this iteration — it said 7 while the branch already carried 8 — and a
   # number kept in two places drifts silently the first time a patch is added.
-  check "the port branch has one commit per committed patch" '[ "$(git -C "$FORK" log --oneline v2.1.0..oid4vc-keycloak-as-v2.1.0 | wc -l | tr -d " ")" = "$(ls patches/oid4vc-service/000*.patch | wc -l | tr -d " ")" ]'
+  # The branch named here must be the one the committed patches were generated
+  # from, which since 24 September 2026 is the SANITIZED series. The old branch is
+  # kept, unaltered, as a historical artifact — and it still has nine commits, so
+  # this check passed against it by coincidence rather than because it was looking
+  # at the right thing. A check that cannot fail is not a check.
+  PORT_BRANCH=oid4vc-keycloak-as-v2.1.0-sanitized
+  check "the port branch the patches came from exists" 'git -C "$FORK" rev-parse --verify --quiet "$PORT_BRANCH^{commit}"'
+  check "the port branch has one commit per committed patch" '[ "$(git -C "$FORK" log --oneline "v2.1.0..$PORT_BRANCH" | wc -l | tr -d " ")" = "$(ls patches/oid4vc-service/000*.patch | wc -l | tr -d " ")" ]'
+  # The patches must reproduce the authoring tree, not merely apply. Compares the
+  # tree the branch tip carries against the tree recorded in the patch README, so
+  # a regenerated series that quietly changed content is caught here.
+  check "the port branch carries the tree the patch README records" '[ "$(git -C "$FORK" rev-parse "$PORT_BRANCH^{tree}")" = "$(grep -oE "fd189aae[0-9a-f]*" patches/oid4vc-service/README.md | head -1)" ]'
+  # The superseded series must still be there, unaltered. Anand asked that no
+  # shared history be rewritten; this is what notices if it ever is.
+  check "the superseded series is preserved, not rewritten" 'git -C "$FORK" rev-parse --verify --quiet 714a8464^{commit}'
   # The tag compose asks for, whatever it currently is: reading it from compose
   # rather than repeating it here is what stops this check drifting into
   # asserting a build nothing uses.
+  # These three interrogate Docker: one asks the local image store, two ask
+  # RUNNING containers. With no daemon they were reporting FAIL, which says "this
+  # was checked and it is broken" when the truth is "this was never checked".
+  # Section 6 already guards its container checks this way; section 9 did not, so
+  # every run on a machine with Docker stopped ended in "something regressed".
+  # An unrunnable check must skip, or the summary stops meaning anything.
+  if docker info >/dev/null 2>&1; then
   check "the image compose pins is actually built" 'docker images -q "$(python3 -c "import re,sys; print(re.search(r\"sunbird-rc-oid4vc-service:v2\\.1\\.0-authcode\\.[0-9a-f]+\", open(\"deploy/docker-compose.yml\").read()).group(0))")" | grep -q .'
   # The two guarantees the Education review sent back, asserted on the RUNNING
   # containers rather than on the source: both are single flags, and a flag that
@@ -287,6 +331,12 @@ if [ -d "$FORK/.git" ]; then
   # failure this catches.
   check "an issuer is restricted to its own credential type" 'for c in school college university; do docker compose -f deploy/docker-compose.yml exec -T "oid4vc-$c" printenv ADVERTISE_OWN_CREDENTIALS_ONLY 2>/dev/null | grep -qx true || exit 1; done'
   check "an unrequested disclosure is refused, not dropped" 'for c in oid4vc-service oid4vc-bank oid4vc-university-vp oid4vc-employer-vp; do docker compose -f deploy/docker-compose.yml exec -T "$c" printenv REJECT_UNREQUESTED_DISCLOSURES 2>/dev/null | grep -qx true || exit 1; done'
+  else
+    D='no Docker daemon — start Docker Desktop, then cd deploy && docker compose up -d'
+    skip "the image compose pins is actually built" "$D"
+    skip "an issuer is restricted to its own credential type" "$D"
+    skip "an unrequested disclosure is refused, not dropped" "$D"
+  fi
   # Anand's review asked that a reviewer be able to rebuild the pinned image from
   # shared source. The fork branch cannot be published — its only remote is
   # upstream Sunbird RC — so the commits travel as patches on this branch, and

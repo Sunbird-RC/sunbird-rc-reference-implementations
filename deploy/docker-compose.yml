@@ -247,7 +247,7 @@ services:
   # The OpenID4VCI / OpenID4VP protocol façade. Native to v2.1.0 — this is why
   # the architecture needs no standards adapter.
   oid4vc-service:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.32b4a1c6}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -339,7 +339,7 @@ services:
   # could also issue would be a fifth issuer nobody asked for, and it would appear
   # in wallet issuer directories.
   oid4vc-bank:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.32b4a1c6}
     restart: unless-stopped
     depends_on:
       identity:
@@ -397,7 +397,7 @@ services:
   # read a land record (DESIGN §4).
 
   oid4vc-farmer:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.32b4a1c6}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -465,7 +465,7 @@ services:
       retries: 30
 
   oid4vc-land:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.32b4a1c6}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -544,7 +544,7 @@ services:
   # the request_uri inside a QR resolves back to the instance that signed it.
 
   oid4vc-university-vp:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.32b4a1c6}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -585,7 +585,7 @@ services:
       retries: 30
 
   oid4vc-employer-vp:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.32b4a1c6}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -640,7 +640,7 @@ services:
   # the learner's own access token. None of them is handed a learnerId by anyone.
 
   oid4vc-school:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.32b4a1c6}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -684,7 +684,7 @@ services:
       retries: 30
 
   oid4vc-college:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.32b4a1c6}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -728,7 +728,7 @@ services:
       retries: 30
 
   oid4vc-university:
-    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.714a8464}
+    image: ${OID4VC_IMAGE:-sunbird-rc-oid4vc-service:v2.1.0-authcode.32b4a1c6}
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -880,7 +880,13 @@ services:
   # Multi-architecture (linux/amd64 and linux/arm64), so it needs no platform pin
   # and runs natively on the demo host and on a development machine alike.
   authority-service:
-    image: ghcr.io/pallakartheekreddy/sunbird-rc-authority-service@sha256:56333d4561bff7222db34c6089d0cf857a69cb6a156037d25c1650e14e2b70e3
+    # REQUIRED, and by digest. There is deliberately no default: a fallback to a mutable
+    # tag lets a deployment silently run something other than the artefact it was verified
+    # against, and a tag can be moved at any time by whoever owns the registry. Compose
+    # refuses to start with the message below when it is unset.
+    #
+    #   AUTHORITY_SERVICE_IMAGE=ghcr.io/sunbird-rc/sunbird-rc-authority-service@sha256:...
+    image: ${AUTHORITY_SERVICE_IMAGE:?set this to a verified image DIGEST, not a tag}
     restart: unless-stopped
     depends_on:
       db:
