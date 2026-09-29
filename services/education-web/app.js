@@ -282,6 +282,12 @@ async function start() {
   el('enlarge').hidden = false;
   el('cancel').hidden = false;
   el('hint').hidden = false;
+  // The three steps are read once, before pressing the button. After it, the
+  // code is the whole task — and the column had scrolled far enough that the
+  // thing you are meant to scan was above the viewport.
+  el('request-eyebrow').textContent = 'Scan this with your wallet';
+  document.querySelector('.steps')?.setAttribute('hidden', '');
+  document.querySelector('.stage')?.scrollTo({ top: 0, behavior: 'smooth' });
   el('start').hidden = true;
   el('request-eyebrow').textContent = 'Scan with your wallet';
 
@@ -305,37 +311,76 @@ async function showPolicy() {
   state.withheld = withheldNode(body.neverRequested, body.notRequested);
   const wrap = el('policy');
   wrap.textContent = '';
-  wrap.appendChild(text('Requests'));
+  wrap.className = 'policy';
+
+  /** A labelled block: a heading, then whatever rows the caller adds. */
+  const block = (label) => {
+    const section = document.createElement('section');
+    section.className = 'policy-block';
+    const h = document.createElement('h3');
+    h.className = 'policy-label';
+    h.appendChild(text(label));
+    section.appendChild(h);
+    wrap.appendChild(section);
+    return section;
+  };
+  // Returns the CHIP container, not the row: the row is a two-column grid whose
+  // first column is the label, so chips appended straight to it would each land
+  // on their own grid line instead of flowing.
+  const row = (parent, role) => {
+    const r = document.createElement('div');
+    r.className = 'policy-row';
+    const name = document.createElement('span');
+    name.className = 'policy-role';
+    if (role) name.appendChild(text(role));
+    r.appendChild(name);
+    const chips = document.createElement('div');
+    chips.className = 'policy-chips';
+    r.appendChild(chips);
+    parent.appendChild(r);
+    return chips;
+  };
+  // camelCase keys are what the protocol calls these. A person reading the page
+  // is not the protocol.
+  const human = (k) => k.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\bId\b/, 'ID').toLowerCase()
+    .replace(/\bid\b/, 'ID');
+  const chip = (parent, label, kind) => {
+    const c = document.createElement('span');
+    c.className = kind ? `chip ${kind}` : 'chip';
+    c.appendChild(text(label));
+    parent.appendChild(c);
+  };
+
+  // One row per credential: learnerId arriving three times IS the correlation
+  // the verifier checks, and merging them into one run hides that.
+  const asks = block('What this portal will ask for');
   for (const [role, claims] of Object.entries(body.requestedClaims)) {
-    for (const claim of claims) {
-      const chip = document.createElement('span');
-      chip.className = 'chip ask';
-      chip.appendChild(text(`${role}: ${claim}`));
-      wrap.appendChild(chip);
+    const r = row(asks, role);
+    for (const claim of claims) chip(r, human(claim), 'ask');
+  }
+
+  // Only the issuers that can satisfy a role in THIS request. The Age and
+  // Agriculture issuers are on the same allowlist and are not among them.
+  const accepted = (body.trustedIssuers || []).filter(
+    (i) => i.roles && i.roles.some((role) => role in body.requestedClaims),
+  );
+  if (accepted.length) {
+    const r = row(block('Issuers it accepts'));
+    for (const issuer of accepted) chip(r, issuer.name, 'issuer');
+  }
+
+  const thresholds = Object.entries(body.thresholds || {});
+  const fields = body.acceptedFieldsOfStudy || [];
+  if (thresholds.length || fields.length) {
+    const rule = block('The published rule');
+    if (thresholds.length) {
+      const r = row(rule);
+      for (const [role, required] of thresholds) chip(r, `${role} \u2265 ${required}%`, 'rule');
     }
-  }
-  wrap.appendChild(text('· accepts'));
-  for (const issuer of body.trustedIssuers || []) {
-    // Only the issuers that can satisfy a role in THIS request. The Age and
-    // Agriculture issuers are on the same allowlist and are not among them.
-    if (!issuer.roles || !issuer.roles.some((role) => role in body.requestedClaims)) continue;
-    const chip = document.createElement('span');
-    chip.className = 'chip';
-    chip.appendChild(text(issuer.name));
-    wrap.appendChild(chip);
-  }
-  wrap.appendChild(text('· requires'));
-  for (const [role, required] of Object.entries(body.thresholds || {})) {
-    const chip = document.createElement('span');
-    chip.className = 'chip';
-    chip.appendChild(text(`${role} ≥ ${required}%`));
-    wrap.appendChild(chip);
-  }
-  for (const field of body.acceptedFieldsOfStudy || []) {
-    const chip = document.createElement('span');
-    chip.className = 'chip';
-    chip.appendChild(text(field));
-    wrap.appendChild(chip);
+    if (fields.length) {
+      const r = row(rule, 'fields');
+      for (const field of fields) chip(r, field.replace(/_/g, ' ').toLowerCase(), 'rule');
+    }
   }
 }
 
